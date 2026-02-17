@@ -134,7 +134,7 @@ const AuditBrain = () => {
             <Brain className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-cream">Audit Brain</h1>
+            <h1 className="text-2xl font-bold text-cream">Oddit Brain</h1>
             <p className="text-[13px] text-muted-foreground">Central AI knowledge base & operational assistant</p>
           </div>
         </div>

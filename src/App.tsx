@@ -46,7 +46,7 @@ const App = () => (
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<Index />} />
-          <Route path="/audit-brain" element={<AuditBrain />} />
+          <Route path="/oddit-brain" element={<AuditBrain />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/dev-pipeline" element={<DevPipeline />} />
           <Route path="/slack-agent" element={<SlackAgent />} />

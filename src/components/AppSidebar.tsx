@@ -18,7 +18,7 @@ import { useState } from "react";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Audit Brain", url: "/audit-brain", icon: Brain },
+  { title: "Oddit Brain", url: "/oddit-brain", icon: Brain },
   { title: "Reports", url: "/reports", icon: FileText },
   { title: "Dev Pipeline", url: "/dev-pipeline", icon: Code2 },
   { title: "Slack Agent", url: "/slack-agent", icon: MessageSquare },
