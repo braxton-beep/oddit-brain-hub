@@ -20,8 +20,8 @@ const knowledgeSources = [
   { name: "Meeting Notes", icon: FileText, count: 142, status: "synced" },
   { name: "Client Calls", icon: Phone, count: 87, status: "synced" },
   { name: "Sales KPIs", icon: TrendingUp, count: 23, status: "synced" },
-  { name: "Audit Reports", icon: FileText, count: 1243, status: "synced" },
-  { name: "Slack Messages", icon: MessageSquare, count: 3420, status: "pending" },
+  { name: "Oddit Reports", icon: FileText, count: 11000, status: "synced" },
+  { name: "Slack Messages", icon: MessageSquare, count: 3420, status: "synced" },
   { name: "CRO Playbooks", icon: Database, count: 56, status: "synced" },
 ];
 
