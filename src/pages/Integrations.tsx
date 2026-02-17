@@ -11,34 +11,30 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useIntegrationCredentials } from "@/hooks/useIntegrationCredentials";
 
-type ConnectionStatus = "connected" | "disconnected" | "syncing";
-
-interface Integration {
+interface IntegrationDef {
   id: string;
   name: string;
   emoji: string;
   description: string;
   category: "communication" | "storage" | "meetings" | "design" | "analytics" | "development";
-  status: ConnectionStatus;
-  lastSync?: string;
-  itemsSynced?: number;
-  connectedBy?: string;
 }
 
-const initialIntegrations: Integration[] = [
-  { id: "slack", name: "Slack", emoji: "💬", description: "Import messages, channels, and conversations for the Brain to learn from team context.", category: "communication", status: "connected", lastSync: "2m ago", itemsSynced: 3420, connectedBy: "Taylor" },
-  { id: "google-drive", name: "Google Drive", emoji: "📁", description: "Connect docs, sheets, and presentations. Brain indexes content for instant retrieval.", category: "storage", status: "disconnected" },
-  { id: "fireflies", name: "Fireflies.ai", emoji: "🔥", description: "Auto-import meeting transcripts and summaries. Brain learns from every client call.", category: "meetings", status: "connected", lastSync: "1h ago", itemsSynced: 87, connectedBy: "Shaun" },
-  { id: "notion", name: "Notion", emoji: "📝", description: "Sync pages, databases, and wikis. Brain uses your knowledge base as context.", category: "storage", status: "disconnected" },
-  { id: "figma", name: "Figma", emoji: "🎨", description: "Connect design files for the dev pipeline. Brain references designs in audits.", category: "design", status: "disconnected" },
-  { id: "google-analytics", name: "Google Analytics", emoji: "📊", description: "Import traffic and conversion data. Brain provides data-backed CRO insights.", category: "analytics", status: "disconnected" },
-  { id: "shopify", name: "Shopify", emoji: "🛒", description: "Connect client stores for real-time performance data and A/B test results.", category: "analytics", status: "connected", lastSync: "15m ago", itemsSynced: 156, connectedBy: "Ryan" },
-  { id: "gmail", name: "Gmail", emoji: "📧", description: "Index client emails and threads. Brain surfaces relevant context from conversations.", category: "communication", status: "disconnected" },
-  { id: "loom", name: "Loom", emoji: "🎥", description: "Import video transcripts from async updates. Brain summarizes and indexes.", category: "meetings", status: "disconnected" },
-  { id: "github", name: "GitHub", emoji: "🐙", description: "Connect repos for code context. Brain tracks commits, PRs, and pipeline status.", category: "development", status: "connected", lastSync: "5m ago", itemsSynced: 842, connectedBy: "Ryan" },
-  { id: "linear", name: "Linear", emoji: "🔷", description: "Sync issues and project boards. Brain tracks development progress across teams.", category: "development", status: "disconnected" },
-  { id: "hubspot", name: "HubSpot", emoji: "🟠", description: "Import CRM data, deals, and client pipelines. Brain enhances sales intelligence.", category: "analytics", status: "disconnected" },
+const integrationDefs: IntegrationDef[] = [
+  { id: "slack", name: "Slack", emoji: "💬", description: "Import messages, channels, and conversations for the Brain to learn from team context.", category: "communication" },
+  { id: "google-drive", name: "Google Drive", emoji: "📁", description: "Connect docs, sheets, and presentations. Brain indexes content for instant retrieval.", category: "storage" },
+  { id: "fireflies", name: "Fireflies.ai", emoji: "🔥", description: "Auto-import meeting transcripts and summaries. Brain learns from every client call.", category: "meetings" },
+  { id: "notion", name: "Notion", emoji: "📝", description: "Sync pages, databases, and wikis. Brain uses your knowledge base as context.", category: "storage" },
+  { id: "figma", name: "Figma", emoji: "🎨", description: "Connect design files for the dev pipeline. Brain references designs in audits.", category: "design" },
+  { id: "google-analytics", name: "Google Analytics", emoji: "📊", description: "Import traffic and conversion data. Brain provides data-backed CRO insights.", category: "analytics" },
+  { id: "shopify", name: "Shopify", emoji: "🛒", description: "Connect client stores for real-time performance data and A/B test results.", category: "analytics" },
+  { id: "gmail", name: "Gmail", emoji: "📧", description: "Index client emails and threads. Brain surfaces relevant context from conversations.", category: "communication" },
+  { id: "loom", name: "Loom", emoji: "🎥", description: "Import video transcripts from async updates. Brain summarizes and indexes.", category: "meetings" },
+  { id: "github", name: "GitHub", emoji: "🐙", description: "Connect repos for code context. Brain tracks commits, PRs, and pipeline status.", category: "development" },
+  { id: "linear", name: "Linear", emoji: "🔷", description: "Sync issues and project boards. Brain tracks development progress across teams.", category: "development" },
+  { id: "hubspot", name: "HubSpot", emoji: "🟠", description: "Import CRM data, deals, and client pipelines. Brain enhances sales intelligence.", category: "analytics" },
+  { id: "openai", name: "OpenAI", emoji: "🤖", description: "Power the Brain's AI capabilities with GPT models for audits, reports, and insights.", category: "development" },
 ];
 
 const categories = [
@@ -51,49 +47,20 @@ const categories = [
   { id: "development", label: "Development" },
 ];
 
-const statusStyles: Record<ConnectionStatus, string> = {
-  connected: "bg-accent/15 text-accent border-accent/30",
-  disconnected: "bg-muted-foreground/15 text-muted-foreground border-muted-foreground/30",
-  syncing: "bg-primary/15 text-primary border-primary/30",
-};
-
 const Integrations = () => {
-  const [integrations, setIntegrations] = useState(initialIntegrations);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
+  const { data: credentials, isLoading } = useIntegrationCredentials();
 
-  const filtered = integrations.filter((i) => {
+  const connectedIds = new Set((credentials ?? []).map((c) => c.integration_id));
+
+  const filtered = integrationDefs.filter((i) => {
     const matchesSearch = i.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = activeCategory === "all" || i.category === activeCategory;
     return matchesSearch && matchesCategory;
   });
 
-  const connectedCount = integrations.filter((i) => i.status === "connected").length;
-  const totalItems = integrations.filter((i) => i.status === "connected").reduce((sum, i) => sum + (i.itemsSynced ?? 0), 0);
-
-  const handleToggle = (id: string) => {
-    const integration = integrations.find((i) => i.id === id);
-    if (!integration) return;
-
-    if (integration.status === "connected") {
-      setIntegrations((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, status: "disconnected" as ConnectionStatus, lastSync: undefined, itemsSynced: undefined, connectedBy: undefined } : i))
-      );
-      toast.success(`${integration.name} disconnected`, { description: "Data sync has been paused" });
-    } else if (integration.status === "disconnected") {
-      setIntegrations((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, status: "syncing" as ConnectionStatus, lastSync: "Just now", itemsSynced: 0, connectedBy: "You" } : i))
-      );
-      toast.loading(`Connecting ${integration.name}...`, { id: `sync-${id}`, description: "Authenticating and starting initial sync" });
-
-      setTimeout(() => {
-        setIntegrations((prev) =>
-          prev.map((i) => (i.id === id ? { ...i, status: "connected" as ConnectionStatus, itemsSynced: Math.floor(Math.random() * 500) + 50 } : i))
-        );
-        toast.success(`${integration.name} connected!`, { id: `sync-${id}`, description: "Brain is now indexing data from this source" });
-      }, 2500);
-    }
-  };
+  const connectedCount = integrationDefs.filter((i) => connectedIds.has(i.id)).length;
 
   return (
     <DashboardLayout>
@@ -116,11 +83,13 @@ const Integrations = () => {
       <div className="grid gap-4 sm:grid-cols-3 mb-8">
         <div className="glow-card rounded-xl bg-card p-5">
           <p className="text-xs text-muted-foreground uppercase tracking-wider">Connected Tools</p>
-          <p className="mt-2 text-2xl font-bold text-cream">{connectedCount} <span className="text-sm font-normal text-muted-foreground">/ {integrations.length}</span></p>
+          <p className="mt-2 text-2xl font-bold text-cream">
+            {isLoading ? "…" : connectedCount} <span className="text-sm font-normal text-muted-foreground">/ {integrationDefs.length}</span>
+          </p>
         </div>
         <div className="glow-card rounded-xl bg-card p-5">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider">Items Indexed</p>
-          <p className="mt-2 text-2xl font-bold text-cream">{totalItems.toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">API Keys Configured</p>
+          <p className="mt-2 text-2xl font-bold text-cream">{isLoading ? "…" : credentials?.length ?? 0}</p>
         </div>
         <div className="glow-card rounded-xl bg-card p-5">
           <div className="flex items-center gap-2 mb-2">
@@ -128,7 +97,7 @@ const Integrations = () => {
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Data Status</p>
           </div>
           <p className="text-sm font-bold text-accent">Encrypted & Secure</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">All connections use OAuth 2.0</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Keys stored server-side with RLS</p>
         </div>
       </div>
 
@@ -163,79 +132,67 @@ const Integrations = () => {
 
       {/* Integration Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 stagger-children">
-        {filtered.map((integration) => (
-          <div
-            key={integration.id}
-            className={`glow-card rounded-xl bg-card p-5 transition-all ${
-              integration.status === "connected" ? "border border-accent/10" : ""
-            }`}
-          >
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{integration.emoji}</span>
-                <div>
-                  <h3 className="text-sm font-bold text-cream">{integration.name}</h3>
-                  <span
-                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider mt-1 ${
-                      statusStyles[integration.status]
-                    }`}
-                  >
-                    {integration.status === "syncing" && (
-                      <RefreshCw className="h-2.5 w-2.5 mr-1 animate-spin" />
-                    )}
-                    {integration.status}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <p className="text-xs text-muted-foreground leading-relaxed mb-4">
-              {integration.description}
-            </p>
-
-            {integration.status === "connected" && (
-              <div className="flex items-center gap-3 text-[11px] text-muted-foreground mb-4 border-t border-border pt-3">
-                <span className="flex items-center gap-1">
-                  <CheckCircle2 className="h-3 w-3 text-accent" />
-                  {integration.itemsSynced?.toLocaleString()} items
-                </span>
-                <span>•</span>
-                <span>Synced {integration.lastSync}</span>
-                <span>•</span>
-                <span>by {integration.connectedBy}</span>
-              </div>
-            )}
-
-            <button
-              onClick={() => handleToggle(integration.id)}
-              disabled={integration.status === "syncing"}
-              className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all disabled:opacity-50 ${
-                integration.status === "connected"
-                  ? "bg-secondary border border-border text-muted-foreground hover:text-destructive hover:border-destructive/30"
-                  : integration.status === "syncing"
-                  ? "bg-primary/10 text-primary border border-primary/30"
-                  : "bg-accent text-accent-foreground hover:opacity-90"
+        {filtered.map((integration) => {
+          const isConnected = connectedIds.has(integration.id);
+          return (
+            <div
+              key={integration.id}
+              className={`glow-card rounded-xl bg-card p-5 transition-all ${
+                isConnected ? "border border-accent/10" : ""
               }`}
             >
-              {integration.status === "connected" ? (
-                <>
-                  <Unlink className="h-3.5 w-3.5" />
-                  Disconnect
-                </>
-              ) : integration.status === "syncing" ? (
-                <>
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <Link2 className="h-3.5 w-3.5" />
-                  Connect to Brain
-                </>
-              )}
-            </button>
-          </div>
-        ))}
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{integration.emoji}</span>
+                  <div>
+                    <h3 className="text-sm font-bold text-cream">{integration.name}</h3>
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider mt-1 ${
+                        isConnected
+                          ? "bg-accent/15 text-accent border-accent/30"
+                          : "bg-muted-foreground/15 text-muted-foreground border-muted-foreground/30"
+                      }`}
+                    >
+                      {isConnected ? "Connected" : "Not configured"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+                {integration.description}
+              </p>
+
+              {isConnected ? (
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground mb-4 border-t border-border pt-3">
+                  <CheckCircle2 className="h-3 w-3 text-accent" />
+                  <span>API key configured</span>
+                </div>
+              ) : null}
+
+              <a
+                href="/settings"
+                className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-xs font-bold transition-all ${
+                  isConnected
+                    ? "bg-secondary border border-border text-muted-foreground hover:text-foreground"
+                    : "bg-accent text-accent-foreground hover:opacity-90"
+                }`}
+              >
+                {isConnected ? (
+                  <>
+                    <Link2 className="h-3.5 w-3.5" />
+                    Manage in Settings
+                  </>
+                ) : (
+                  <>
+                    <Link2 className="h-3.5 w-3.5" />
+                    Configure in Settings
+                  </>
+                )}
+              </a>
+            </div>
+          );
+        })}
       </div>
 
       {filtered.length === 0 && (
@@ -250,10 +207,10 @@ const Integrations = () => {
         <div>
           <p className="text-sm font-bold text-cream mb-1">How integrations work</p>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            When you connect a tool, the Brain begins indexing its content in real time. Data is encrypted,
-            processed through our AI pipeline, and made available for queries, reports, and automations.
-            The more sources you connect, the smarter the Brain becomes — enabling better CRO insights,
-            faster report generation, and more accurate recommendations.
+            Integration status is pulled live from your saved API keys in Settings.
+            When a key is configured, the card shows "Connected." Remove or update keys
+            anytime from the Settings page. All credentials are encrypted and protected
+            with row-level security.
           </p>
         </div>
       </div>

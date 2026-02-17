@@ -35,7 +35,7 @@ const steps: TourStep[] = [
   },
   {
     title: "Audit Brain",
-    description: "Ask the Brain anything about your clients, audits, or KPIs. It searches across 4,971+ indexed items from meetings, calls, reports, and Slack to give you instant answers.",
+    description: "Ask the Brain anything about your clients, audits, or KPIs. It searches across 11,000+ Oddit Reports, meetings, calls, and Slack to give you instant answers.",
     icon: Brain,
     highlight: "Natural language queries",
   },
@@ -61,7 +61,13 @@ const steps: TourStep[] = [
     title: "Integrations",
     description: "Connect your tools so the Brain learns in real time. Slack, Google Drive, Fireflies, Shopify, GitHub, and more — each connection makes the Brain smarter.",
     icon: Link2,
-    highlight: "12 integrations available",
+    highlight: "13 integrations available",
+  },
+  {
+    title: "Vision",
+    description: "See where Oddit Brain is headed — the roadmap, core pillars, and success metrics. From centralized intelligence to automated CRO at scale.",
+    icon: Rocket,
+    highlight: "The big picture",
   },
   {
     title: "You're all set!",
