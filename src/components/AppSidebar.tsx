@@ -11,6 +11,8 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Menu,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -27,13 +29,64 @@ const navItems = [
 
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <aside
-      className={`flex flex-col border-r border-border bg-sidebar transition-all duration-200 ${
-        collapsed ? "w-16" : "w-56"
-      }`}
-    >
+    <>
+      {/* Mobile hamburger */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="fixed top-3 left-3 z-50 flex h-10 w-10 items-center justify-center rounded-lg bg-sidebar border border-border text-muted-foreground md:hidden"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm md:hidden" onClick={() => setMobileOpen(false)}>
+          <aside
+            className="flex flex-col w-64 h-full bg-sidebar border-r border-border animate-fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex h-16 items-center justify-between border-b border-border px-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary animate-glow-pulse">
+                  <Brain className="h-4 w-4 text-primary-foreground" />
+                </div>
+                <div>
+                  <span className="text-sm font-bold tracking-tight text-cream">oddit</span>
+                  <span className="ml-1 text-xs font-medium text-accent">brain</span>
+                </div>
+              </div>
+              <button onClick={() => setMobileOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <nav className="flex-1 space-y-0.5 p-3">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.url}
+                  to={item.url}
+                  end={item.url === "/"}
+                  className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium text-sidebar-foreground transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  activeClassName="bg-primary/10 text-primary border border-primary/20 nav-glow"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  <span>{item.title}</span>
+                </NavLink>
+              ))}
+            </nav>
+          </aside>
+        </div>
+      )}
+
+      {/* Desktop sidebar */}
+      <aside
+        className={`hidden md:flex flex-col border-r border-border bg-sidebar transition-all duration-200 ${
+          collapsed ? "w-16" : "w-56"
+        }`}
+      >
       {/* Logo */}
       <div className="flex h-16 items-center gap-3 border-b border-border px-4">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary animate-glow-pulse">
@@ -74,5 +127,6 @@ export function AppSidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }
