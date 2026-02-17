@@ -46,7 +46,9 @@ interface FirefliesTranscript {
   sentences: Array<{ speaker_name: string; text: string }> | null;
 }
 
-async function fetchTranscripts(apiKey: string, limit = 50, skip = 0): Promise<FirefliesTranscript[]> {
+const PAGE_SIZE = 50;
+
+async function fetchTranscriptPage(apiKey: string, skip: number): Promise<FirefliesTranscript[]> {
   const resp = await fetch(FIREFLIES_API, {
     method: "POST",
     headers: {
@@ -55,7 +57,7 @@ async function fetchTranscripts(apiKey: string, limit = 50, skip = 0): Promise<F
     },
     body: JSON.stringify({
       query: TRANSCRIPTS_QUERY,
-      variables: { limit, skip },
+      variables: { limit: PAGE_SIZE, skip },
     }),
   });
 
@@ -70,6 +72,33 @@ async function fetchTranscripts(apiKey: string, limit = 50, skip = 0): Promise<F
   }
 
   return json.data?.transcripts ?? [];
+}
+
+async function fetchAllTranscripts(apiKey: string): Promise<FirefliesTranscript[]> {
+  const all: FirefliesTranscript[] = [];
+  let skip = 0;
+
+  while (true) {
+    console.log(`Fetching page at skip=${skip} (page ${Math.floor(skip / PAGE_SIZE) + 1})`);
+    const page = await fetchTranscriptPage(apiKey, skip);
+
+    if (page.length === 0) {
+      console.log(`No more transcripts at skip=${skip}, stopping.`);
+      break;
+    }
+
+    all.push(...page);
+    console.log(`Fetched ${page.length} transcripts (total so far: ${all.length})`);
+
+    if (page.length < PAGE_SIZE) {
+      // Last page — fewer results than page size means no more pages
+      break;
+    }
+
+    skip += PAGE_SIZE;
+  }
+
+  return all;
 }
 
 function buildTranscriptText(sentences: Array<{ speaker_name: string; text: string }> | null): string {
@@ -133,8 +162,8 @@ serve(async (req) => {
     for (const cred of creds) {
       try {
         console.log(`Syncing with key ...${cred.api_key.slice(-4)}`);
-        const transcripts = await fetchTranscripts(cred.api_key, 50, 0);
-        console.log(`Fetched ${transcripts.length} transcripts`);
+        const transcripts = await fetchAllTranscripts(cred.api_key);
+        console.log(`Fetched ${transcripts.length} total transcripts across all pages`);
 
         for (const t of transcripts) {
           const transcriptText = buildTranscriptText(t.sentences);
