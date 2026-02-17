@@ -34,7 +34,7 @@ const steps: TourStep[] = [
     highlight: "Real-time data from all sources",
   },
   {
-    title: "Audit Brain",
+    title: "Oddit Brain",
     description: "Ask the Brain anything about your clients, audits, or KPIs. It searches across 11,000+ Oddit Reports, meetings, calls, and Slack to give you instant answers.",
     icon: Brain,
     highlight: "Natural language queries",
