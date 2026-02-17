@@ -209,22 +209,22 @@ const Reports = () => {
 
   return (
     <DashboardLayout>
-      <div className="mb-8 flex items-start justify-between animate-fade-in">
+      <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-start justify-between gap-4 animate-fade-in pt-10 md:pt-0">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary animate-glow-pulse">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary animate-glow-pulse shrink-0">
             <FileText className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-cream">CRO Audit Reports</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-cream">CRO Audit Reports</h1>
             <p className="text-[13px] text-muted-foreground">
-              AI-powered conversion rate optimization audits with mockup concepts
+              AI-powered conversion rate optimization audits
             </p>
           </div>
         </div>
         <button
           onClick={() => setShowNewAudit(true)}
           disabled={generating}
-          className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+          className="flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50 w-full sm:w-auto"
         >
           {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           New Audit
@@ -281,16 +281,16 @@ const Reports = () => {
       )}
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-4 mb-8">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-4 mb-6 sm:mb-8">
         {[
           { label: "Total Audits", value: audits.length.toString() },
           { label: "Completed", value: completedAudits.length.toString() },
           { label: "Recommendations", value: totalRecs.toString() },
           { label: "AI Model", value: "Gemini 3" },
         ].map((s) => (
-          <div key={s.label} className="glow-card rounded-xl bg-card p-5">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">{s.label}</p>
-            <p className="mt-2 text-2xl font-bold text-cream">{s.value}</p>
+          <div key={s.label} className="glow-card rounded-xl bg-card p-4 sm:p-5">
+            <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider">{s.label}</p>
+            <p className="mt-1 sm:mt-2 text-xl sm:text-2xl font-bold text-cream">{s.value}</p>
           </div>
         ))}
       </div>
@@ -327,44 +327,48 @@ const Reports = () => {
               return (
                 <div
                   key={audit.id}
-                  className="flex items-center gap-4 rounded-lg border border-border bg-secondary p-4 hover:border-primary/20 transition-colors cursor-pointer"
+                  className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-lg border border-border bg-secondary p-3 sm:p-4 hover:border-primary/20 transition-colors cursor-pointer"
                   onClick={() => audit.status === "completed" && setViewingAudit(audit)}
                 >
-                  {audit.screenshot_url ? (
-                    <img
-                      src={audit.screenshot_url}
-                      alt=""
-                      className="h-10 w-16 rounded-md object-cover border border-border shrink-0"
-                    />
-                  ) : (
-                    <div className="h-10 w-16 rounded-md bg-muted flex items-center justify-center shrink-0">
-                      <Globe className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                    {audit.screenshot_url ? (
+                      <img
+                        src={audit.screenshot_url}
+                        alt=""
+                        className="h-10 w-16 rounded-md object-cover border border-border shrink-0"
+                      />
+                    ) : (
+                      <div className="h-10 w-16 rounded-md bg-muted flex items-center justify-center shrink-0">
+                        <Globe className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-cream truncate">
+                        {audit.client_name || new URL(audit.shop_url).hostname}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">{audit.shop_url}</p>
                     </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-cream truncate">
-                      {audit.client_name || new URL(audit.shop_url).hostname}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">{audit.shop_url}</p>
                   </div>
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                      audit.status === "completed"
-                        ? "bg-accent/15 text-accent border-accent/30"
-                        : audit.status === "failed"
-                        ? "bg-destructive/15 text-destructive border-destructive/30"
-                        : "bg-primary/15 text-primary border-primary/30"
-                    }`}
-                  >
-                    <Icon className={`h-3 w-3 ${isActive ? "animate-spin" : ""}`} />
-                    {audit.status}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {audit.recommendations.length} recs
-                  </span>
-                  {audit.status === "completed" && (
-                    <Eye className="h-4 w-4 text-muted-foreground" />
-                  )}
+                  <div className="flex items-center gap-2 pl-0 sm:pl-0 ml-[76px] sm:ml-0">
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                        audit.status === "completed"
+                          ? "bg-accent/15 text-accent border-accent/30"
+                          : audit.status === "failed"
+                          ? "bg-destructive/15 text-destructive border-destructive/30"
+                          : "bg-primary/15 text-primary border-primary/30"
+                      }`}
+                    >
+                      <Icon className={`h-3 w-3 ${isActive ? "animate-spin" : ""}`} />
+                      {audit.status}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {audit.recommendations.length} recs
+                    </span>
+                    {audit.status === "completed" && (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -374,8 +378,8 @@ const Reports = () => {
 
       {/* Audit Viewer Modal */}
       {viewingAudit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card border border-border p-6 sm:p-8 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
+          <div className="relative w-full sm:max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-card border border-border p-4 sm:p-6 md:p-8 shadow-2xl">
             <button
               onClick={() => {
                 setViewingAudit(null);
@@ -387,26 +391,26 @@ const Reports = () => {
             </button>
 
             {/* Header */}
-            <div className="flex items-start gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 mb-6">
               {viewingAudit.screenshot_url && (
                 <img
                   src={viewingAudit.screenshot_url}
                   alt="Site screenshot"
-                  className="w-40 h-24 rounded-lg object-cover border border-border shrink-0 hidden sm:block"
+                  className="w-full sm:w-40 h-32 sm:h-24 rounded-lg object-cover border border-border shrink-0"
                 />
               )}
-              <div>
-                <h2 className="text-xl font-bold text-cream">
+              <div className="min-w-0 w-full">
+                <h2 className="text-lg sm:text-xl font-bold text-cream">
                   {viewingAudit.client_name || new URL(viewingAudit.shop_url).hostname}
                 </h2>
                 <a
                   href={viewingAudit.shop_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-primary hover:underline flex items-center gap-1 mt-1"
+                  className="text-xs text-primary hover:underline flex items-center gap-1 mt-1 truncate"
                 >
-                  {viewingAudit.shop_url}
-                  <ExternalLink className="h-3 w-3" />
+                  <span className="truncate">{viewingAudit.shop_url}</span>
+                  <ExternalLink className="h-3 w-3 shrink-0" />
                 </a>
                 <p className="text-xs text-muted-foreground mt-1">
                   {viewingAudit.recommendations.length} recommendations •{" "}
@@ -420,7 +424,7 @@ const Reports = () => {
             </div>
 
             {/* Severity Summary */}
-            <div className="flex gap-3 mb-6">
+            <div className="flex flex-wrap gap-3 mb-6">
               {(["high", "medium", "low"] as const).map((sev) => {
                 const count = viewingAudit.recommendations.filter((r) => r.severity === sev).length;
                 return (
@@ -446,30 +450,30 @@ const Reports = () => {
                     {/* Collapsed header */}
                     <button
                       onClick={() => toggleRec(rec.id)}
-                      className="w-full flex items-center gap-3 p-4 text-left hover:bg-muted/50 transition-colors"
+                      className="w-full flex items-center gap-2 sm:gap-3 p-3 sm:p-4 text-left hover:bg-muted/50 transition-colors"
                     >
-                      <span className="text-sm font-bold text-muted-foreground w-6">#{rec.id}</span>
+                      <span className="text-sm font-bold text-muted-foreground w-6 shrink-0">#{rec.id}</span>
                       <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${sev.dot}`} />
-                      <span className="text-sm font-bold text-cream flex-1">{rec.section}</span>
-                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${sev.bg}`}>
+                      <span className="text-sm font-bold text-cream flex-1 truncate">{rec.section}</span>
+                      <span className={`hidden sm:inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${sev.bg}`}>
                         {rec.severity}
                       </span>
-                      {rec.mockup_url && <ImageIcon className="h-4 w-4 text-accent" />}
+                      {rec.mockup_url && <ImageIcon className="h-4 w-4 text-accent shrink-0" />}
                       {expanded ? (
-                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                        <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
                       ) : (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
                       )}
                     </button>
 
                     {/* Expanded content */}
                     {expanded && (
-                      <div className="px-4 pb-4 pt-0 space-y-4">
-                        <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="px-3 sm:px-4 pb-4 pt-0 space-y-3 sm:space-y-4">
+                        <div className="grid gap-3 sm:gap-4 sm:grid-cols-2">
                           {/* Before */}
-                          <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
+                          <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 sm:p-4">
                             <div className="flex items-center gap-2 mb-2">
-                              <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                              <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />
                               <span className="text-[11px] font-bold text-destructive uppercase tracking-wider">
                                 Current Issue
                               </span>
@@ -480,9 +484,9 @@ const Reports = () => {
                           </div>
 
                           {/* After */}
-                          <div className="rounded-lg border border-accent/20 bg-accent/5 p-4">
+                          <div className="rounded-lg border border-accent/20 bg-accent/5 p-3 sm:p-4">
                             <div className="flex items-center gap-2 mb-2">
-                              <CheckCircle2 className="h-3.5 w-3.5 text-accent" />
+                              <CheckCircle2 className="h-3.5 w-3.5 text-accent shrink-0" />
                               <span className="text-[11px] font-bold text-accent uppercase tracking-wider">
                                 Recommended Change
                               </span>
@@ -494,9 +498,11 @@ const Reports = () => {
                         </div>
 
                         {/* Impact */}
-                        <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-4 py-2.5">
-                          <BarChart3 className="h-3.5 w-3.5 text-primary shrink-0" />
-                          <span className="text-xs text-primary font-semibold">Expected Impact:</span>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 sm:px-4 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <BarChart3 className="h-3.5 w-3.5 text-primary shrink-0" />
+                            <span className="text-xs text-primary font-semibold">Expected Impact:</span>
+                          </div>
                           <span className="text-xs text-muted-foreground">{rec.expected_impact}</span>
                         </div>
 
