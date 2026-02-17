@@ -1,13 +1,12 @@
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Brain,
   FileText,
-  BarChart3,
+  Code2,
+  MessageSquare,
   Settings,
-  Zap,
-  Users,
+  Figma,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -15,17 +14,15 @@ import { useState } from "react";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "AI Agents", url: "/agents", icon: Brain },
-  { title: "Audits", url: "/audits", icon: FileText },
-  { title: "Analytics", url: "/analytics", icon: BarChart3 },
-  { title: "Automations", url: "/automations", icon: Zap },
-  { title: "Clients", url: "/clients", icon: Users },
+  { title: "Audit Brain", url: "/audit-brain", icon: Brain },
+  { title: "Reports", url: "/reports", icon: FileText },
+  { title: "Dev Pipeline", url: "/dev-pipeline", icon: Code2 },
+  { title: "Slack Agent", url: "/slack-agent", icon: MessageSquare },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const location = useLocation();
 
   return (
     <aside
@@ -33,7 +30,6 @@ export function AppSidebar() {
         collapsed ? "w-16" : "w-60"
       }`}
     >
-      {/* Logo */}
       <div className="flex h-14 items-center gap-2 border-b border-border px-4">
         <Brain className="h-6 w-6 shrink-0 text-primary" />
         {!collapsed && (
@@ -43,7 +39,6 @@ export function AppSidebar() {
         )}
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 space-y-1 p-2">
         {navItems.map((item) => (
           <NavLink
@@ -59,7 +54,6 @@ export function AppSidebar() {
         ))}
       </nav>
 
-      {/* Collapse toggle */}
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="flex h-10 items-center justify-center border-t border-border text-muted-foreground hover:text-foreground transition-colors"
