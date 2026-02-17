@@ -11,8 +11,11 @@ import {
   BarChart3,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
+
+const GENERATE_REPORT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-report`;
 
 type ReportStatus = "completed" | "generating" | "draft" | "failed";
 
@@ -23,6 +26,7 @@ interface Report {
   status: ReportStatus;
   date: string;
   pages: number;
+  content?: string;
 }
 
 const initialReports: Report[] = [
@@ -52,13 +56,14 @@ const statusStyles: Record<ReportStatus, { bg: string; icon: typeof CheckCircle2
 const Reports = () => {
   const [filter, setFilter] = useState<"all" | ReportStatus>("all");
   const [reports, setReports] = useState(initialReports);
+  const [viewingReport, setViewingReport] = useState<Report | null>(null);
   const [showNewReport, setShowNewReport] = useState(false);
   const [newClient, setNewClient] = useState("");
   const [newTemplate, setNewTemplate] = useState(templates[0].name);
 
   const filtered = filter === "all" ? reports : reports.filter((r) => r.status === filter);
 
-  const handleNewReport = () => {
+  const handleNewReport = async () => {
     if (!newClient.trim()) {
       toast.error("Enter a client name");
       return;
@@ -69,25 +74,89 @@ const Reports = () => {
       client: newClient,
       type: newTemplate,
       status: "generating",
-      date: "Feb 17, 2026",
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
       pages: 0,
+      content: "",
     };
     setReports((prev) => [newReport, ...prev]);
     setShowNewReport(false);
+    const clientName = newClient;
+    const templateName = newTemplate;
     setNewClient("");
-    toast.loading(`Generating "${newTemplate}" for ${newClient}...`, { id });
+    toast.loading(`Generating "${templateName}" for ${clientName}...`, { id });
 
-    // Simulate generation completing
-    setTimeout(() => {
+    try {
+      const resp = await fetch(GENERATE_REPORT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ client: clientName, template: templateName }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: "Request failed" }));
+        throw new Error(err.error || `Error ${resp.status}`);
+      }
+
+      if (!resp.body) throw new Error("No response body");
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = "";
+      let fullContent = "";
+      let streamDone = false;
+
+      while (!streamDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") { streamDone = true; break; }
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) {
+              fullContent += content;
+              const captured = fullContent;
+              setReports((prev) =>
+                prev.map((r) => (r.id === id ? { ...r, content: captured } : r))
+              );
+            }
+          } catch {
+            textBuffer = line + "\n" + textBuffer;
+            break;
+          }
+        }
+      }
+
+      const wordCount = fullContent.split(/\s+/).length;
+      const estimatedPages = Math.max(1, Math.round(wordCount / 250));
       setReports((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, status: "completed" as ReportStatus, pages: Math.floor(Math.random() * 30) + 15 } : r))
+        prev.map((r) => (r.id === id ? { ...r, status: "completed" as ReportStatus, pages: estimatedPages, content: fullContent } : r))
       );
-      toast.success(`Report for ${newClient} is ready!`, { id, description: `${newTemplate} completed` });
-    }, 4000);
+      toast.success(`Report for ${clientName} is ready!`, { id, description: `${templateName} completed` });
+    } catch (e: any) {
+      setReports((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, status: "failed" as ReportStatus, content: `Error: ${e.message}` } : r))
+      );
+      toast.error(`Failed to generate report`, { id, description: e.message });
+    }
   };
 
   const handleView = (report: Report) => {
-    toast.info(`Viewing: ${report.client} — ${report.type}`, { description: `${report.pages} pages • ${report.date}` });
+    setViewingReport(report);
   };
 
   const handleDownload = (report: Report) => {
@@ -277,6 +346,31 @@ const Reports = () => {
           </div>
         </div>
       </div>
+
+      {/* Report Viewer Modal */}
+      {viewingReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-3xl max-h-[80vh] overflow-y-auto rounded-2xl bg-card border border-border p-8 shadow-2xl">
+            <button
+              onClick={() => setViewingReport(null)}
+              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-cream">{viewingReport.client} — {viewingReport.type}</h2>
+              <p className="text-xs text-muted-foreground mt-1">{viewingReport.date} • {viewingReport.pages} pages</p>
+            </div>
+            {viewingReport.content ? (
+              <div className="prose prose-sm prose-invert max-w-none text-foreground">
+                <ReactMarkdown>{viewingReport.content}</ReactMarkdown>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No content available for this report. Generate a new report to see AI-powered content.</p>
+            )}
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 };
