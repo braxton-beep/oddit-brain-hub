@@ -14,7 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      integration_credentials: {
+        Row: {
+          api_key: string
+          created_at: string
+          created_by: string | null
+          id: string
+          integration_id: string
+          updated_at: string
+        }
+        Insert: {
+          api_key: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          integration_id: string
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          integration_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
