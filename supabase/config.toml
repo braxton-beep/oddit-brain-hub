@@ -1,1 +1,13 @@
 project_id = "ihvylnngpenyazafnsps"
+
+[functions.ask-brain]
+verify_jwt = false
+
+[functions.generate-report]
+verify_jwt = false
+
+[functions.generate-cro-audit]
+verify_jwt = false
+
+[functions.generate-audit-mockup]
+verify_jwt = false

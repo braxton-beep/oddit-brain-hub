@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      cro_audits: {
+        Row: {
+          client_name: string
+          created_at: string
+          created_by: string | null
+          id: string
+          recommendations: Json | null
+          screenshot_url: string | null
+          shop_url: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_name?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          recommendations?: Json | null
+          screenshot_url?: string | null
+          shop_url: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_name?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          recommendations?: Json | null
+          screenshot_url?: string | null
+          shop_url?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       integration_credentials: {
         Row: {
           api_key: string
