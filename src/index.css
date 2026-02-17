@@ -17,7 +17,7 @@
     --popover-foreground: 48 60% 92%;
 
     /* Oddit signature blue — brightened for visibility */
-    --primary: 245 85% 68%;
+    --primary: 245 80% 80%;
     --primary-foreground: 48 100% 95%;
 
     --secondary: 230 25% 14%;
@@ -70,7 +70,7 @@
     transition: box-shadow 0.2s ease, transform 0.2s ease;
   }
   .glow-card:hover {
-    box-shadow: 0 0 0 1px hsl(245 85% 68% / 0.35), 0 8px 32px -4px hsl(245 85% 68% / 0.12);
+    box-shadow: 0 0 0 1px hsl(245 80% 80% / 0.35), 0 8px 32px -4px hsl(245 80% 80% / 0.12);
     transform: translateY(-1px);
   }
   .text-gradient {
