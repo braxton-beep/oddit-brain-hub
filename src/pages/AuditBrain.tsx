@@ -9,13 +9,14 @@ import {
   Phone,
   TrendingUp,
   CheckCircle2,
-  Search,
   RefreshCw,
   Loader2,
   Sparkles,
   Download,
+  Send,
+  Trash2,
 } from "lucide-react";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
@@ -33,6 +34,8 @@ interface QueryEntry {
   answer: string;
 }
 
+const SUGGESTIONS = ["Conversion lifts", "Client status", "Top recommendations"];
+
 const AuditBrain = () => {
   const [queryInput, setQueryInput] = useState("");
   const [isQuerying, setIsQuerying] = useState(false);
@@ -41,6 +44,20 @@ const AuditBrain = () => {
   const { data: knowledgeSources, isLoading: ksLoading } = useKnowledgeSources();
   const abortRef = useRef<AbortController | null>(null);
   const qc = useQueryClient();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [queries]);
+
+  // Auto-resize textarea
+  const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setQueryInput(e.target.value);
+    e.target.style.height = "auto";
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+  };
 
   const handleSyncFireflies = async () => {
     setIsSyncing(true);
@@ -66,16 +83,14 @@ const AuditBrain = () => {
   };
 
   const handleQuery = async () => {
-    if (!queryInput.trim()) {
-      toast.error("Please enter a question");
-      return;
-    }
+    if (!queryInput.trim()) return;
     const question = queryInput;
     setQueryInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
     setIsQuerying(true);
 
-    // Add a placeholder entry
-    setQueries((prev) => [{ query: question, time: "Just now", answer: "" }, ...prev]);
+    // Append to bottom (newest last)
+    setQueries((prev) => [...prev, { query: question, time: "Just now", answer: "" }]);
 
     try {
       abortRef.current = new AbortController();
@@ -126,7 +141,7 @@ const AuditBrain = () => {
               const captured = fullAnswer;
               setQueries((prev) => {
                 const updated = [...prev];
-                updated[0] = { ...updated[0], answer: captured };
+                updated[updated.length - 1] = { ...updated[updated.length - 1], answer: captured };
                 return updated;
               });
             }
@@ -136,14 +151,12 @@ const AuditBrain = () => {
           }
         }
       }
-
-      toast.success("Brain responded");
     } catch (e: any) {
       if (e.name === "AbortError") return;
       toast.error("Brain error", { description: e.message });
       setQueries((prev) => {
         const updated = [...prev];
-        updated[0] = { ...updated[0], answer: `Error: ${e.message}` };
+        updated[updated.length - 1] = { ...updated[updated.length - 1], answer: `Error: ${e.message}` };
         return updated;
       });
     } finally {
@@ -151,9 +164,17 @@ const AuditBrain = () => {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleQuery();
+    }
+  };
+
   return (
     <DashboardLayout>
-      <div className="mb-8 animate-fade-in">
+      {/* Header */}
+      <div className="mb-6 animate-fade-in">
         <div className="flex items-center gap-3 mb-2">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary animate-glow-pulse">
             <Brain className="h-5 w-5 text-primary-foreground" />
@@ -165,76 +186,55 @@ const AuditBrain = () => {
         </div>
       </div>
 
-      {/* Query Bar */}
-      <div className="mb-4 glow-card glow-card-violet rounded-xl bg-card p-6 animate-scale-in">
-        <h2 className="text-sm font-bold text-gradient-cool uppercase tracking-wider mb-4">Ask the Brain</h2>
-        <div className="flex gap-3">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Ask anything about clients, audits, KPIs, calls..."
-              value={queryInput}
-              onChange={(e) => setQueryInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleQuery()}
-              disabled={isQuerying}
-              className="w-full rounded-lg border border-border bg-secondary pl-10 pr-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all disabled:opacity-50"
-            />
+      {/* Chat Thread */}
+      <div className="mb-8 glow-card glow-card-electric rounded-xl bg-card overflow-hidden flex flex-col animate-scale-in" style={{ minHeight: 480 }}>
+        {/* Chat header */}
+        <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border shrink-0">
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent/15">
+            <Brain className="h-3.5 w-3.5 text-accent" />
           </div>
-          <button
-            onClick={handleQuery}
-            disabled={isQuerying}
-            className="flex items-center gap-2 rounded-lg bg-accent px-5 py-3 text-sm font-bold text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {isQuerying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {isQuerying ? "Thinking..." : "Query"}
-          </button>
-        </div>
-        <div className="flex gap-2 mt-3">
-          {["Conversion lifts", "Client status", "Top recommendations"].map((suggestion) => (
-            <button
-              key={suggestion}
-              onClick={() => setQueryInput(suggestion)}
-              className="rounded-md border border-border bg-secondary px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
-            >
-              {suggestion}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Conversation — directly below the query bar */}
-      <div className="mb-10 glow-card glow-card-electric rounded-xl bg-card p-6">
-        <div className="flex items-center gap-2 mb-5">
-          <MessageSquare className="h-4 w-4 text-electric" />
-          <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Conversation</h2>
+          <span className="text-sm font-bold text-cream">Oddit Brain</span>
+          <span className="ml-1 flex h-2 w-2 rounded-full bg-accent animate-pulse" />
+          <span className="text-[11px] text-muted-foreground ml-0.5">online</span>
           {queries.length > 0 && (
-            <span className="ml-auto text-[11px] text-muted-foreground">{queries.length} {queries.length === 1 ? "query" : "queries"}</span>
+            <button
+              onClick={() => setQueries([])}
+              className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              title="Clear conversation"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Clear
+            </button>
           )}
         </div>
-        {queries.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-foreground">
-            <Brain className="h-8 w-8 opacity-20" />
-            <p className="text-sm">Ask a question above to start a conversation</p>
-          </div>
-        ) : (
-          <div className="space-y-5">
-            {queries.map((q, i) => (
+
+        {/* Messages area */}
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5" style={{ maxHeight: 420 }}>
+          {queries.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full py-16 gap-3 text-muted-foreground">
+              <Brain className="h-10 w-10 opacity-15" />
+              <p className="text-sm font-medium">Ask the Brain anything</p>
+              <p className="text-[12px] text-muted-foreground/70 text-center max-w-xs">
+                Query clients, audits, KPIs, calls, and more. Try a suggestion below to get started.
+              </p>
+            </div>
+          ) : (
+            queries.map((q, i) => (
               <div key={i} className="space-y-3">
-                {/* User message */}
+                {/* User bubble */}
                 <div className="flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl rounded-br-md bg-primary px-4 py-3">
+                  <div className="max-w-[78%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5">
                     <p className="text-sm font-medium text-primary-foreground">{q.query}</p>
                   </div>
                 </div>
-                {/* Brain response */}
-                <div className="flex gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/15 mt-0.5">
-                    <Brain className="h-4 w-4 text-accent" />
+                {/* Brain bubble */}
+                <div className="flex gap-2.5">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/15 mt-0.5">
+                    <Brain className="h-3.5 w-3.5 text-accent" />
                   </div>
-                  <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-secondary border border-border px-4 py-3">
+                  <div className="max-w-[84%] rounded-2xl rounded-bl-md bg-secondary border border-border px-4 py-3">
                     {q.answer ? (
-                      <div className="prose prose-sm prose-invert max-w-none text-sm text-foreground leading-relaxed [&_p]:mb-2 [&_ul]:mb-2 [&_ol]:mb-2 [&_li]:mb-0.5 [&_strong]:text-cream [&_h1]:text-cream [&_h2]:text-cream [&_h3]:text-cream [&_code]:bg-background [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs">
+                      <div className="prose prose-sm prose-invert max-w-none text-sm text-foreground leading-relaxed [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:mb-2 [&_ol]:mb-2 [&_li]:mb-0.5 [&_strong]:text-cream [&_h1]:text-cream [&_h2]:text-cream [&_h3]:text-cream [&_code]:bg-background [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs">
                         <ReactMarkdown>{q.answer}</ReactMarkdown>
                       </div>
                     ) : (
@@ -243,13 +243,59 @@ const AuditBrain = () => {
                         <span>Thinking...</span>
                       </div>
                     )}
-                    <span className="block text-[10px] text-muted-foreground mt-2">{q.time}</span>
+                    <span className="block text-[10px] text-muted-foreground/60 mt-2">{q.time}</span>
                   </div>
                 </div>
               </div>
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Suggestion chips */}
+        {queries.length === 0 && (
+          <div className="flex gap-2 px-5 pb-3 flex-wrap shrink-0">
+            {SUGGESTIONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => { setQueryInput(s); textareaRef.current?.focus(); }}
+                className="rounded-full border border-border bg-secondary px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+              >
+                {s}
+              </button>
             ))}
           </div>
         )}
+
+        {/* Input bar */}
+        <div className="shrink-0 border-t border-border px-4 py-3 bg-card/80 backdrop-blur-sm">
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              placeholder="Message the Brain... (Enter to send, Shift+Enter for new line)"
+              value={queryInput}
+              onChange={handleTextareaInput}
+              onKeyDown={handleKeyDown}
+              disabled={isQuerying}
+              className="flex-1 resize-none rounded-xl border border-border bg-secondary px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-all disabled:opacity-50 leading-relaxed"
+              style={{ minHeight: 40, maxHeight: 120 }}
+            />
+            <button
+              onClick={handleQuery}
+              disabled={isQuerying || !queryInput.trim()}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
+            >
+              {isQuerying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </button>
+          </div>
+          {isQuerying && (
+            <div className="flex items-center gap-1.5 mt-2 pl-1">
+              <Sparkles className="h-3 w-3 text-accent animate-pulse" />
+              <span className="text-[11px] text-muted-foreground">Brain is generating a response...</span>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -274,34 +320,34 @@ const AuditBrain = () => {
               ))}
             </div>
           ) : (
-          <div className="grid gap-3 sm:grid-cols-2 stagger-children">
-            {(knowledgeSources ?? []).map((src, idx) => {
-              const IconComponent = iconMap[src.icon] || FileText;
-              return (
-              <div key={src.id} className={`glow-card ${['glow-card-coral', 'glow-card-electric', 'glow-card-gold', 'glow-card-violet', 'glow-card-coral', 'glow-card-electric'][idx % 6]} rounded-xl bg-card p-4 flex items-center gap-4 cursor-pointer hover-scale`}
-                onClick={() => toast.info(`${src.name}`, { description: `${src.item_count.toLocaleString()} items indexed • ${src.status === "synced" ? "Up to date" : "Sync in progress..."}` })}
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <IconComponent className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-cream">{src.name}</p>
-                  <p className="text-xs text-muted-foreground">{src.item_count.toLocaleString()} items</p>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {src.status === "synced" ? (
-                    <CheckCircle2 className="h-4 w-4 text-accent" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4 text-warning animate-spin" />
-                  )}
-                  <span className={`text-[10px] font-semibold uppercase tracking-wider ${src.status === "synced" ? "text-accent" : "text-warning"}`}>
-                    {src.status}
-                  </span>
-                </div>
-              </div>
-              );
-            })}
-          </div>
+            <div className="grid gap-3 sm:grid-cols-2 stagger-children">
+              {(knowledgeSources ?? []).map((src, idx) => {
+                const IconComponent = iconMap[src.icon] || FileText;
+                return (
+                  <div key={src.id} className={`glow-card ${['glow-card-coral', 'glow-card-electric', 'glow-card-gold', 'glow-card-violet', 'glow-card-coral', 'glow-card-electric'][idx % 6]} rounded-xl bg-card p-4 flex items-center gap-4 cursor-pointer hover-scale`}
+                    onClick={() => toast.info(`${src.name}`, { description: `${src.item_count.toLocaleString()} items indexed • ${src.status === "synced" ? "Up to date" : "Sync in progress..."}` })}
+                  >
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                      <IconComponent className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-cream">{src.name}</p>
+                      <p className="text-xs text-muted-foreground">{src.item_count.toLocaleString()} items</p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {src.status === "synced" ? (
+                        <CheckCircle2 className="h-4 w-4 text-accent" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4 text-warning animate-spin" />
+                      )}
+                      <span className={`text-[10px] font-semibold uppercase tracking-wider ${src.status === "synced" ? "text-accent" : "text-warning"}`}>
+                        {src.status}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
@@ -338,7 +384,6 @@ const AuditBrain = () => {
           </div>
         </div>
       </div>
-
     </DashboardLayout>
   );
 };
