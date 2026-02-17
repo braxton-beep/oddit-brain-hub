@@ -1,5 +1,6 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useKnowledgeSources } from "@/hooks/useDashboardData";
+import ReactMarkdown from "react-markdown";
 import {
   Brain,
   Database,
@@ -289,25 +290,47 @@ const AuditBrain = () => {
         </div>
       </div>
 
-      {/* Recent Queries */}
-      <section className="mt-10 glow-card glow-card-electric rounded-xl bg-card p-5">
-        <div className="flex items-center gap-2 mb-5">
-          <Search className="h-4 w-4 text-electric" />
-          <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Recent Queries</h2>
-          <span className="ml-auto text-[11px] text-muted-foreground">{queries.length} queries</span>
-        </div>
-        <div className="space-y-3">
-          {queries.map((q, i) => (
-            <div key={i} className="rounded-lg border border-border bg-secondary p-4">
-              <div className="flex items-start justify-between mb-2">
-                <p className="text-sm font-bold text-cream">{q.query}</p>
-                <span className="text-[11px] text-muted-foreground shrink-0 ml-3">{q.time}</span>
+      {/* Chat Thread */}
+      {queries.length > 0 && (
+        <section className="mt-10 glow-card glow-card-electric rounded-xl bg-card p-6">
+          <div className="flex items-center gap-2 mb-6">
+            <MessageSquare className="h-4 w-4 text-electric" />
+            <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Conversation</h2>
+            <span className="ml-auto text-[11px] text-muted-foreground">{queries.length} {queries.length === 1 ? "query" : "queries"}</span>
+          </div>
+          <div className="space-y-5">
+            {[...queries].reverse().map((q, i) => (
+              <div key={i} className="space-y-3">
+                {/* User message */}
+                <div className="flex justify-end">
+                  <div className="max-w-[80%] rounded-2xl rounded-br-md bg-primary px-4 py-3">
+                    <p className="text-sm font-medium text-primary-foreground">{q.query}</p>
+                  </div>
+                </div>
+                {/* Brain response */}
+                <div className="flex gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/15 mt-0.5">
+                    <Brain className="h-4 w-4 text-accent" />
+                  </div>
+                  <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-secondary border border-border px-4 py-3">
+                    {q.answer ? (
+                      <div className="prose prose-sm prose-invert max-w-none text-sm text-foreground leading-relaxed [&_p]:mb-2 [&_ul]:mb-2 [&_ol]:mb-2 [&_li]:mb-0.5 [&_strong]:text-cream [&_h1]:text-cream [&_h2]:text-cream [&_h3]:text-cream [&_code]:bg-background [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs">
+                        <ReactMarkdown>{q.answer}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Thinking...</span>
+                      </div>
+                    )}
+                    <span className="block text-[10px] text-muted-foreground mt-2">{q.time}</span>
+                  </div>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">{q.answer}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
     </DashboardLayout>
   );
 };
