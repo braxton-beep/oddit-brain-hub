@@ -2,7 +2,7 @@ import type { BrainStatus, BrainHealth, ToolsResponse, Workflow, Agent, Project,
 
 export const mockBrainStatus: BrainStatus = {
   name: "Oddit Brain",
-  version: "2.4.1",
+  version: "1.0",
   status: "running",
   connected_tools: 8,
 };
