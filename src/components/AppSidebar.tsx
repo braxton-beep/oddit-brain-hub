@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { useEmailDrafts } from "@/hooks/useDashboardData";
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -30,6 +31,8 @@ const navItems = [
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: pendingDrafts } = useEmailDrafts("pending");
+  const pendingCount = pendingDrafts?.length ?? 0;
 
   return (
     <>
@@ -74,6 +77,11 @@ export function AppSidebar() {
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
                   <span>{item.title}</span>
+                  {item.url === "/" && pendingCount > 0 && (
+                    <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-gold/20 px-1 text-[10px] font-bold text-gold">
+                      {pendingCount}
+                    </span>
+                  )}
                 </NavLink>
               ))}
             </nav>
@@ -107,11 +115,19 @@ export function AppSidebar() {
             key={item.url}
             to={item.url}
             end={item.url === "/"}
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium text-sidebar-foreground transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:translate-x-0.5"
+            className="relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium text-sidebar-foreground transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:translate-x-0.5"
             activeClassName="bg-primary/10 text-primary border border-primary/20 nav-glow"
           >
             <item.icon className="h-4 w-4 shrink-0" />
             {!collapsed && <span>{item.title}</span>}
+            {item.url === "/" && pendingCount > 0 && !collapsed && (
+              <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-gold/20 px-1 text-[10px] font-bold text-gold">
+                {pendingCount}
+              </span>
+            )}
+            {item.url === "/" && pendingCount > 0 && collapsed && (
+              <span className="absolute top-1 right-1 flex h-2.5 w-2.5 rounded-full bg-gold" />
+            )}
           </NavLink>
         ))}
       </nav>

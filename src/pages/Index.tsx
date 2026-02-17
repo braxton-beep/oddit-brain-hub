@@ -4,6 +4,9 @@ import {
   useWorkflows,
   useActivityLog,
   useDashboardStats,
+  useEmailDrafts,
+  useUpdateEmailDraft,
+  type EmailDraft,
 } from "@/hooks/useDashboardData";
 import { useIntegrationCredentials } from "@/hooks/useIntegrationCredentials";
 import {
@@ -11,7 +14,6 @@ import {
   Zap,
   Users,
   Play,
-  Loader2,
   CheckCircle2,
   AlertCircle,
   Clock,
@@ -20,9 +22,15 @@ import {
   BarChart3,
   Activity,
   ArrowUpRight,
+  Mail,
+  Copy,
+  Check,
+  X,
+  CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
+import { useState } from "react";
 
 const statusBadge: Record<string, string> = {
   active:        "bg-accent/15 text-accent border-accent/30",
@@ -94,14 +102,96 @@ const toolDefs = [
   { id: "google-analytics", display: "Google Analytics", emoji: "📊" },
 ];
 
+// ── Draft Review Modal ────────────────────────────────
+function DraftModal({ draft, onClose, onDismiss }: { draft: EmailDraft; onClose: () => void; onDismiss: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(`Subject: ${draft.subject_line}\n\n${draft.draft_body}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success("Draft copied to clipboard");
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="relative w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl overflow-hidden animate-scale-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal header */}
+        <div className="flex items-start justify-between gap-3 border-b border-border px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/15">
+              <Mail className="h-4 w-4 text-accent" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-cream">{draft.client_name}</p>
+              {draft.call_date && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                  <CalendarDays className="h-3 w-3" />
+                  Call on {format(new Date(draft.call_date), "MMM d, yyyy")}
+                </p>
+              )}
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Subject line */}
+        <div className="px-6 pt-4 pb-2">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Subject</p>
+          <p className="text-sm font-semibold text-cream">{draft.subject_line}</p>
+        </div>
+
+        {/* Draft body */}
+        <div className="px-6 pt-2 pb-4">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Draft</p>
+          <div className="rounded-xl border border-border bg-secondary p-4 max-h-72 overflow-y-auto">
+            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{draft.draft_body}</p>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-3 border-t border-border px-6 py-4">
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-bold text-accent-foreground hover:opacity-90 transition-opacity"
+          >
+            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            {copied ? "Copied!" : "Review & Copy"}
+          </button>
+          <button
+            onClick={onDismiss}
+            className="flex items-center gap-2 rounded-xl border border-border bg-secondary px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Dismiss Draft
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const Index = () => {
   const { data: projects, isLoading: projLoading } = useProjects();
   const { data: workflows, isLoading: wfLoading } = useWorkflows();
   const { data: activity, isLoading: actLoading } = useActivityLog();
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: credentials } = useIntegrationCredentials();
+  const { data: pendingDrafts } = useEmailDrafts("pending");
+  const updateDraft = useUpdateEmailDraft();
+  const [selectedDraft, setSelectedDraft] = useState<EmailDraft | null>(null);
 
   const connectedIds = new Set((credentials ?? []).map((c) => c.integration_id));
+
+  const handleDismissDraft = (id: string) => {
+    updateDraft.mutate({ id, status: "dismissed" });
+    setSelectedDraft(null);
+    toast.success("Draft dismissed");
+  };
 
   return (
     <DashboardLayout>
@@ -255,6 +345,47 @@ const Index = () => {
         </div>
       </div>
 
+      {/* Pending Drafts */}
+      {pendingDrafts && pendingDrafts.length > 0 && (
+        <section className="mt-10 glow-card glow-card-gold rounded-xl bg-card p-5">
+          <div className="flex items-center gap-2 mb-5">
+            <Mail className="h-4 w-4 text-gold" />
+            <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Pending Drafts</h2>
+            <span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-gold/20 text-[10px] font-bold text-gold">
+              {pendingDrafts.length}
+            </span>
+          </div>
+          <div className="space-y-2.5">
+            {pendingDrafts.map((draft) => (
+              <div key={draft.id} className="flex items-center gap-4 rounded-xl border border-border bg-secondary px-4 py-3 hover:border-gold/40 transition-colors">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/10">
+                  <Mail className="h-4 w-4 text-gold" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-cream truncate">{draft.client_name}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {draft.call_date && (
+                      <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <CalendarDays className="h-3 w-3" />
+                        {format(new Date(draft.call_date), "MMM d")}
+                      </span>
+                    )}
+                    {draft.call_date && <span className="text-border text-[11px]">•</span>}
+                    <span className="text-[11px] text-muted-foreground truncate">{draft.subject_line}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedDraft(draft)}
+                  className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-accent-foreground hover:opacity-90 transition-opacity"
+                >
+                  Review & Copy
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Recent Activity */}
       {activity && activity.length > 0 && (
         <section className="mt-10 glow-card rounded-xl bg-card p-5">
@@ -279,6 +410,15 @@ const Index = () => {
             })}
           </div>
         </section>
+      )}
+
+      {/* Draft Modal */}
+      {selectedDraft && (
+        <DraftModal
+          draft={selectedDraft}
+          onClose={() => setSelectedDraft(null)}
+          onDismiss={() => handleDismissDraft(selectedDraft.id)}
+        />
       )}
     </DashboardLayout>
   );

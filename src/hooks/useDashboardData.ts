@@ -170,6 +170,45 @@ export const useActivityLog = () =>
     },
   });
 
+// ── Email Drafts ───────────────────────────────────────
+export interface EmailDraft {
+  id: string;
+  client_name: string;
+  call_date: string | null;
+  subject_line: string;
+  draft_body: string;
+  status: string;
+  transcript_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const useEmailDrafts = (status?: string) =>
+  useQuery({
+    queryKey: ["email-drafts", status],
+    queryFn: async () => {
+      let query = supabase
+        .from("email_drafts")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (status) query = query.eq("status", status);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as EmailDraft[];
+    },
+  });
+
+export const useUpdateEmailDraft = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<EmailDraft> & { id: string }) => {
+      const { error } = await supabase.from("email_drafts").update(updates).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["email-drafts"] }),
+  });
+};
+
 // ── Dashboard Stats (computed) ──────────────────────────
 export const useDashboardStats = () =>
   useQuery({
