@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Menu,
   X,
+  Telescope,
 } from "lucide-react";
 import { useState } from "react";
 import { useEmailDrafts } from "@/hooks/useDashboardData";
@@ -23,10 +24,12 @@ const navItems = [
   { title: "Reports", url: "/reports", icon: FileText },
   { title: "Dev Pipeline", url: "/dev-pipeline", icon: Code2 },
   { title: "Slack Agent", url: "/slack-agent", icon: MessageSquare },
+  { title: "Competitive Intel", url: "/competitive-intel", icon: Telescope },
   { title: "Integrations", url: "/integrations", icon: Link2 },
   { title: "Vision", url: "/vision", icon: Rocket },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
+
 
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
