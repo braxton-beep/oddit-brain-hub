@@ -8,6 +8,7 @@ import AuditBrain from "./pages/AuditBrain";
 import Reports from "./pages/Reports";
 import DevPipeline from "./pages/DevPipeline";
 import SlackAgent from "./pages/SlackAgent";
+import Integrations from "./pages/Integrations";
 import SettingsPage from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -25,6 +26,7 @@ const App = () => (
           <Route path="/reports" element={<Reports />} />
           <Route path="/dev-pipeline" element={<DevPipeline />} />
           <Route path="/slack-agent" element={<SlackAgent />} />
+          <Route path="/integrations" element={<Integrations />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

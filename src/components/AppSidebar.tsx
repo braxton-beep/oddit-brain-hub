@@ -5,6 +5,7 @@ import {
   FileText,
   Code2,
   MessageSquare,
+  Link2,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -17,6 +18,7 @@ const navItems = [
   { title: "Reports", url: "/reports", icon: FileText },
   { title: "Dev Pipeline", url: "/dev-pipeline", icon: Code2 },
   { title: "Slack Agent", url: "/slack-agent", icon: MessageSquare },
+  { title: "Integrations", url: "/integrations", icon: Link2 },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
