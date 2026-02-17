@@ -159,39 +159,43 @@ serve(async (req) => {
     let totalSkipped = 0;
     const errors: string[] = [];
 
+    const UPSERT_BATCH = 100;
+
     for (const cred of creds) {
       try {
         console.log(`Syncing with key ...${cred.api_key.slice(-4)}`);
         const transcripts = await fetchAllTranscripts(cred.api_key);
         console.log(`Fetched ${transcripts.length} total transcripts across all pages`);
 
-        for (const t of transcripts) {
-          const transcriptText = buildTranscriptText(t.sentences);
-          const speakerStats = computeSpeakerStats(t.sentences);
+        // Build all rows first
+        const rows = transcripts.map((t) => ({
+          fireflies_id: t.id,
+          title: t.title || "Untitled Meeting",
+          date: t.date ? new Date(t.date).toISOString() : null,
+          duration: t.duration || 0,
+          organizer_email: t.organizer_email || null,
+          participants: t.participants || [],
+          summary: t.summary?.overview || t.summary?.shorthand_bullet || "",
+          action_items: t.summary?.action_items || "",
+          transcript_text: buildTranscriptText(t.sentences),
+          speaker_stats: computeSpeakerStats(t.sentences),
+          source_api_key_id: cred.id,
+        }));
 
-          const row = {
-            fireflies_id: t.id,
-            title: t.title || "Untitled Meeting",
-            date: t.date ? new Date(t.date).toISOString() : null,
-            duration: t.duration || 0,
-            organizer_email: t.organizer_email || null,
-            participants: t.participants || [],
-            summary: t.summary?.overview || t.summary?.shorthand_bullet || "",
-            action_items: t.summary?.action_items || "",
-            transcript_text: transcriptText,
-            speaker_stats: speakerStats,
-            source_api_key_id: cred.id,
-          };
+        // Upsert in batches to avoid payload size limits and timeouts
+        for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
+          const batch = rows.slice(i, i + UPSERT_BATCH);
+          console.log(`Upserting batch ${Math.floor(i / UPSERT_BATCH) + 1} (rows ${i + 1}–${i + batch.length})`);
 
           const { error: upsertErr } = await sb
             .from("fireflies_transcripts")
-            .upsert(row, { onConflict: "fireflies_id" });
+            .upsert(batch, { onConflict: "fireflies_id" });
 
           if (upsertErr) {
-            console.error(`Upsert error for ${t.id}: ${upsertErr.message}`);
-            totalSkipped++;
+            console.error(`Batch upsert error at offset ${i}: ${upsertErr.message}`);
+            totalSkipped += batch.length;
           } else {
-            totalSynced++;
+            totalSynced += batch.length;
           }
         }
       } catch (e) {
