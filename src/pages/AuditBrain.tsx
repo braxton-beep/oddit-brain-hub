@@ -12,9 +12,11 @@ import {
   RefreshCw,
   Loader2,
   Sparkles,
+  Download,
 } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
 
 const iconMap: Record<string, LucideIcon> = {
@@ -22,6 +24,7 @@ const iconMap: Record<string, LucideIcon> = {
 };
 
 const ASK_BRAIN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-brain`;
+const SYNC_FIREFLIES_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-fireflies`;
 
 interface QueryEntry {
   query: string;
@@ -33,8 +36,33 @@ const AuditBrain = () => {
   const [queryInput, setQueryInput] = useState("");
   const [isQuerying, setIsQuerying] = useState(false);
   const [queries, setQueries] = useState<QueryEntry[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { data: knowledgeSources, isLoading: ksLoading } = useKnowledgeSources();
   const abortRef = useRef<AbortController | null>(null);
+  const qc = useQueryClient();
+
+  const handleSyncFireflies = async () => {
+    setIsSyncing(true);
+    try {
+      const resp = await fetch(SYNC_FIREFLIES_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Sync failed");
+      toast.success(`Synced ${data.synced} transcripts`, {
+        description: data.skipped ? `${data.skipped} skipped` : `Total: ${data.total_transcripts}`,
+      });
+      qc.invalidateQueries({ queryKey: ["knowledge-sources"] });
+    } catch (e: any) {
+      toast.error("Fireflies sync failed", { description: e.message });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleQuery = async () => {
     if (!queryInput.trim()) {
@@ -180,6 +208,14 @@ const AuditBrain = () => {
           <div className="flex items-center gap-2 mb-5">
             <Database className="h-4 w-4 text-coral" />
             <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Knowledge Sources</h2>
+            <button
+              onClick={handleSyncFireflies}
+              disabled={isSyncing}
+              className="ml-auto flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {isSyncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+              {isSyncing ? "Syncing..." : "Sync Fireflies"}
+            </button>
           </div>
           {ksLoading ? (
             <div className="grid gap-3 sm:grid-cols-2">
