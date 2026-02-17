@@ -1,14 +1,11 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import {
-  useBrainStatus,
-  useBrainHealth,
-  useTools,
-  useWorkflows,
-  useAgents,
   useProjects,
-  useStats,
-  useRunWorkflow,
-} from "@/hooks/useBrain";
+  useWorkflows,
+  useActivityLog,
+  useDashboardStats,
+} from "@/hooks/useDashboardData";
+import { useIntegrationCredentials } from "@/hooks/useIntegrationCredentials";
 import {
   Brain,
   Zap,
@@ -25,6 +22,7 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { toast } from "sonner";
+import { formatDistanceToNow } from "date-fns";
 
 const statusBadge: Record<string, string> = {
   active:        "bg-accent/15 text-accent border-accent/30",
@@ -84,29 +82,26 @@ function StatCard({ label, value, icon: Icon, color = "primary" }: { label: stri
   );
 }
 
+// Tool definitions for display (connected status comes from integration_credentials)
+const toolDefs = [
+  { id: "slack", display: "Slack", emoji: "💬" },
+  { id: "google-drive", display: "Google Drive", emoji: "📁" },
+  { id: "fireflies", display: "Fireflies.ai", emoji: "🔥" },
+  { id: "notion", display: "Notion", emoji: "📝" },
+  { id: "figma", display: "Figma", emoji: "🎨" },
+  { id: "shopify", display: "Shopify", emoji: "🛒" },
+  { id: "github", display: "GitHub", emoji: "🐙" },
+  { id: "google-analytics", display: "Google Analytics", emoji: "📊" },
+];
+
 const Index = () => {
-  const { data: brainStatus } = useBrainStatus();
-  const { data: health } = useBrainHealth();
-  const { data: tools, isLoading: toolsLoading } = useTools();
-  const { data: workflows, isLoading: wfLoading } = useWorkflows();
-  const { data: agents, isLoading: agentsLoading } = useAgents();
   const { data: projects, isLoading: projLoading } = useProjects();
-  const { data: stats, isLoading: statsLoading } = useStats();
-  const runWorkflow = useRunWorkflow();
+  const { data: workflows, isLoading: wfLoading } = useWorkflows();
+  const { data: activity, isLoading: actLoading } = useActivityLog();
+  const { data: stats, isLoading: statsLoading } = useDashboardStats();
+  const { data: credentials } = useIntegrationCredentials();
 
-  const isConnected = !!health && health.status === "ok";
-
-  const handleRunWorkflow = (wfId: string, wfName: string) => {
-    toast.loading(`Running "${wfName}"...`, { id: `wf-${wfId}` });
-    runWorkflow.mutate(wfId, {
-      onSuccess: () => {
-        toast.success(`"${wfName}" started successfully`, { id: `wf-${wfId}` });
-      },
-      onError: () => {
-        toast.error(`Failed to start "${wfName}"`, { id: `wf-${wfId}` });
-      },
-    });
-  };
+  const connectedIds = new Set((credentials ?? []).map((c) => c.integration_id));
 
   return (
     <DashboardLayout>
@@ -117,16 +112,10 @@ const Index = () => {
             <Brain className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-cream">
-              {brainStatus?.name ?? "Oddit Brain"}
-              {brainStatus?.version && (
-                <span className="ml-2 text-sm font-normal text-muted-foreground">v{brainStatus.version}</span>
-              )}
-            </h1>
+            <h1 className="text-2xl font-bold text-cream">Oddit Brain</h1>
             <p className="text-[13px] text-muted-foreground flex items-center gap-2">
-              <span className={`inline-block h-2 w-2 rounded-full ${isConnected ? "bg-accent animate-pulse" : "bg-destructive"}`} />
-              {isConnected ? "Connected" : "Unreachable"}
-              {brainStatus && <span>• {brainStatus.connected_tools} tools</span>}
+              <span className="inline-block h-2 w-2 rounded-full bg-accent animate-pulse" />
+              Connected • {connectedIds.size} tools
             </p>
           </div>
         </div>
@@ -138,7 +127,7 @@ const Index = () => {
           Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)
         ) : stats ? (
           <>
-            <StatCard label="Tools Connected" value={stats.tools_connected} icon={Wrench} color="electric" />
+            <StatCard label="Tools Connected" value={connectedIds.size} icon={Wrench} color="electric" />
             <StatCard label="Workflows Active" value={stats.workflows_active} icon={Zap} color="coral" />
             <StatCard label="Executions Today" value={stats.executions_today} icon={BarChart3} color="gold" />
           </>
@@ -191,24 +180,20 @@ const Index = () => {
             <Wrench className="h-4 w-4 text-electric" />
             <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Tools</h2>
           </div>
-          {toolsLoading ? (
-            <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-11" />)}</div>
-          ) : tools ? (
-            <div className="space-y-1.5">
-              {tools.available.map((t) => {
-                const connected = tools.connected.includes(t.name);
-                return (
-                  <div key={t.name} className={`flex items-center gap-3 rounded-lg p-2.5 text-sm transition-colors cursor-pointer hover:bg-secondary ${connected ? "bg-secondary" : "opacity-40 hover:opacity-70"}`}
-                    onClick={() => toast(connected ? `${t.display} is connected and syncing` : `${t.display} is not connected yet`, { description: connected ? "Receiving real-time data" : "Go to Integrations to connect" })}
-                  >
-                    <span className="text-base">{t.emoji}</span>
-                    <span className={connected ? "text-cream font-medium" : "text-muted-foreground"}>{t.display}</span>
-                    {connected && <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-accent" />}
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
+          <div className="space-y-1.5">
+            {toolDefs.map((t) => {
+              const connected = connectedIds.has(t.id);
+              return (
+                <div key={t.id} className={`flex items-center gap-3 rounded-lg p-2.5 text-sm transition-colors cursor-pointer hover:bg-secondary ${connected ? "bg-secondary" : "opacity-40 hover:opacity-70"}`}
+                  onClick={() => toast(connected ? `${t.display} is connected and syncing` : `${t.display} is not connected yet`, { description: connected ? "Receiving real-time data" : "Go to Integrations to connect" })}
+                >
+                  <span className="text-base">{t.emoji}</span>
+                  <span className={connected ? "text-cream font-medium" : "text-muted-foreground"}>{t.display}</span>
+                  {connected && <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-accent" />}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Workflows */}
@@ -226,12 +211,11 @@ const Index = () => {
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-sm font-bold text-cream">{wf.name}</span>
                     <button
-                      onClick={() => handleRunWorkflow(wf.id, wf.name)}
-                      disabled={runWorkflow.isPending}
-                      className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+                      onClick={() => toast.info(`Workflow "${wf.name}" — ${wf.steps} steps`, { description: wf.description })}
+                      className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-accent-foreground hover:opacity-90 transition-opacity"
                     >
-                      {runWorkflow.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-                      Run
+                      <Play className="h-3 w-3" />
+                      View
                     </button>
                   </div>
                   <p className="text-xs text-muted-foreground mb-2">{wf.description}</p>
@@ -248,59 +232,47 @@ const Index = () => {
           )}
         </div>
 
-        {/* AI Agents */}
+        {/* Quick Stats */}
         <div className="glow-card rounded-xl bg-card p-5">
           <div className="flex items-center gap-2 mb-5">
             <Bot className="h-4 w-4 text-violet" />
-            <h2 className="text-sm font-bold text-cream uppercase tracking-wider">AI Agents</h2>
+            <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Quick Info</h2>
           </div>
-          {agentsLoading ? (
-            <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24" />)}</div>
-          ) : agents && agents.length > 0 ? (
-            <div className="space-y-2.5">
-              {agents.map((a, i) => (
-                <div key={i} className="rounded-lg border border-border bg-secondary p-3.5">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/15">
-                      <Brain className="h-3 w-3 text-primary" />
-                    </div>
-                    <span className="text-sm font-bold text-cream">{a.name}</span>
-                    <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">{a.type}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mb-2.5">{a.description}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {a.capabilities.map((cap) => (
-                      <span key={cap} className="rounded-md bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                        {cap}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
+          <div className="space-y-3">
+            <div className="rounded-lg border border-border bg-secondary p-3.5">
+              <p className="text-xs text-muted-foreground mb-1">Total Projects</p>
+              <p className="text-xl font-bold text-cream">{projects?.length ?? 0}</p>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No agents.</p>
-          )}
+            <div className="rounded-lg border border-border bg-secondary p-3.5">
+              <p className="text-xs text-muted-foreground mb-1">Active Workflows</p>
+              <p className="text-xl font-bold text-cream">{workflows?.filter(w => w.status === 'active' || w.status === 'running').length ?? 0}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-secondary p-3.5">
+              <p className="text-xs text-muted-foreground mb-1">Integrations</p>
+              <p className="text-xl font-bold text-cream">{connectedIds.size} / {toolDefs.length}</p>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Recent Activity */}
-      {stats?.recent_activity && stats.recent_activity.length > 0 && (
+      {activity && activity.length > 0 && (
         <section className="mt-10 glow-card rounded-xl bg-card p-5">
           <div className="flex items-center gap-2 mb-5">
             <Clock className="h-4 w-4 text-coral" />
             <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Recent Activity</h2>
           </div>
           <div className="space-y-1.5">
-            {stats.recent_activity.map((act, i) => {
+            {activity.map((act) => {
               const Icon = activityStatusIcon[act.status] ?? Activity;
+              const timeAgo = formatDistanceToNow(new Date(act.created_at), { addSuffix: true });
               return (
-                <div key={i} className="flex items-center gap-3 rounded-lg p-3 hover:bg-secondary transition-colors cursor-pointer"
-                  onClick={() => toast.info(act.workflow, { description: `Status: ${act.status} • ${act.timestamp}` })}
+                <div key={act.id} className="flex items-center gap-3 rounded-lg p-3 hover:bg-secondary transition-colors cursor-pointer"
+                  onClick={() => toast.info(act.workflow_name, { description: `Status: ${act.status} • ${timeAgo}` })}
                 >
                   <Icon className={`h-4 w-4 shrink-0 ${act.status === "completed" ? "text-accent" : act.status === "failed" ? "text-destructive" : "text-primary"}`} />
-                  <span className="text-sm text-cream flex-1 font-medium">{act.workflow}</span>
-                  <span className="text-xs text-muted-foreground">{act.timestamp}</span>
+                  <span className="text-sm text-cream flex-1 font-medium">{act.workflow_name}</span>
+                  <span className="text-xs text-muted-foreground">{timeAgo}</span>
                   <Badge status={act.status} />
                 </div>
               );

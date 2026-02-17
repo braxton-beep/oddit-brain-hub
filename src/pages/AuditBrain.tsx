@@ -1,5 +1,5 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { useAgents, useBrainStatus, useBrainHealth } from "@/hooks/useBrain";
+import { useKnowledgeSources } from "@/hooks/useDashboardData";
 import {
   Brain,
   Database,
@@ -15,15 +15,11 @@ import {
 } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
+import type { LucideIcon } from "lucide-react";
 
-const knowledgeSources = [
-  { name: "Meeting Notes", icon: FileText, count: 142, status: "synced" },
-  { name: "Client Calls", icon: Phone, count: 87, status: "synced" },
-  { name: "Sales KPIs", icon: TrendingUp, count: 23, status: "synced" },
-  { name: "Oddit Reports", icon: FileText, count: 11000, status: "synced" },
-  { name: "Slack Messages", icon: MessageSquare, count: 3420, status: "synced" },
-  { name: "CRO Playbooks", icon: Database, count: 56, status: "synced" },
-];
+const iconMap: Record<string, LucideIcon> = {
+  FileText, Phone, TrendingUp, MessageSquare, Database,
+};
 
 const ASK_BRAIN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-brain`;
 
@@ -37,7 +33,7 @@ const AuditBrain = () => {
   const [queryInput, setQueryInput] = useState("");
   const [isQuerying, setIsQuerying] = useState(false);
   const [queries, setQueries] = useState<QueryEntry[]>([]);
-  const { data: agents, isLoading: agentsLoading } = useAgents();
+  const { data: knowledgeSources, isLoading: ksLoading } = useKnowledgeSources();
   const abortRef = useRef<AbortController | null>(null);
 
   const handleQuery = async () => {
@@ -185,17 +181,26 @@ const AuditBrain = () => {
             <Database className="h-4 w-4 text-coral" />
             <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Knowledge Sources</h2>
           </div>
+          {ksLoading ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="animate-pulse rounded-xl bg-muted h-20" />
+              ))}
+            </div>
+          ) : (
           <div className="grid gap-3 sm:grid-cols-2 stagger-children">
-            {knowledgeSources.map((src) => (
-              <div key={src.name} className={`glow-card ${['glow-card-coral', 'glow-card-electric', 'glow-card-gold', 'glow-card-violet', 'glow-card-coral', 'glow-card-electric'][knowledgeSources.indexOf(src) % 6]} rounded-xl bg-card p-4 flex items-center gap-4 cursor-pointer hover-scale`}
-                onClick={() => toast.info(`${src.name}`, { description: `${src.count.toLocaleString()} items indexed • ${src.status === "synced" ? "Up to date" : "Sync in progress..."}` })}
+            {(knowledgeSources ?? []).map((src, idx) => {
+              const IconComponent = iconMap[src.icon] || FileText;
+              return (
+              <div key={src.id} className={`glow-card ${['glow-card-coral', 'glow-card-electric', 'glow-card-gold', 'glow-card-violet', 'glow-card-coral', 'glow-card-electric'][idx % 6]} rounded-xl bg-card p-4 flex items-center gap-4 cursor-pointer hover-scale`}
+                onClick={() => toast.info(`${src.name}`, { description: `${src.item_count.toLocaleString()} items indexed • ${src.status === "synced" ? "Up to date" : "Sync in progress..."}` })}
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <src.icon className="h-5 w-5 text-primary" />
+                  <IconComponent className="h-5 w-5 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-cream">{src.name}</p>
-                  <p className="text-xs text-muted-foreground">{src.count.toLocaleString()} items</p>
+                  <p className="text-xs text-muted-foreground">{src.item_count.toLocaleString()} items</p>
                 </div>
                 <div className="flex items-center gap-1.5">
                   {src.status === "synced" ? (
@@ -208,47 +213,42 @@ const AuditBrain = () => {
                   </span>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
+          )}
         </div>
 
-        {/* AI Agents */}
         <div>
           <div className="flex items-center gap-2 mb-5">
             <Brain className="h-4 w-4 text-violet" />
             <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Active Agents</h2>
           </div>
           <div className="space-y-2.5">
-            {agentsLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="animate-pulse rounded-xl bg-muted h-24" />
-              ))
-            ) : agents && agents.length > 0 ? (
-              agents.map((a, i) => (
-                <div key={i} className={`glow-card ${['glow-card-electric', 'glow-card-gold', 'glow-card-violet'][i % 3]} rounded-xl bg-card p-4 cursor-pointer`}
-                  onClick={() => toast.info(`${a.name}`, { description: `${a.description}` })}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/15">
-                      <Brain className="h-3 w-3 text-primary" />
-                    </div>
-                    <span className="text-sm font-bold text-cream">{a.name}</span>
+            {[
+              { name: "CRO Analyst", description: "Analyzes conversion funnels and identifies optimization opportunities", capabilities: ["funnel-analysis", "heatmap-review", "competitor-audit"] },
+              { name: "Report Writer", description: "Generates detailed audit reports with actionable recommendations", capabilities: ["report-gen", "data-viz", "copywriting"] },
+              { name: "Performance Monitor", description: "Tracks KPIs in real-time and alerts on anomalies", capabilities: ["kpi-tracking", "alerting", "trend-detection"] },
+            ].map((a, i) => (
+              <div key={i} className={`glow-card ${['glow-card-electric', 'glow-card-gold', 'glow-card-violet'][i % 3]} rounded-xl bg-card p-4 cursor-pointer`}
+                onClick={() => toast.info(`${a.name}`, { description: `${a.description}` })}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/15">
+                    <Brain className="h-3 w-3 text-primary" />
                   </div>
-                  <p className="text-xs text-muted-foreground mb-2">{a.description}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {a.capabilities.map((cap) => (
-                      <span key={cap} className="rounded-md bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                        {cap}
-                      </span>
-                    ))}
-                  </div>
+                  <span className="text-sm font-bold text-cream">{a.name}</span>
                 </div>
-              ))
-            ) : (
-              <div className="glow-card rounded-xl bg-card p-4 text-sm text-muted-foreground">
-                No agents connected. Start backend to load agents.
+                <p className="text-xs text-muted-foreground mb-2">{a.description}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {a.capabilities.map((cap) => (
+                    <span key={cap} className="rounded-md bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                      {cap}
+                    </span>
+                  ))}
+                </div>
               </div>
-            )}
+            ))}
           </div>
         </div>
       </div>
