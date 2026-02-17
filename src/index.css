@@ -16,8 +16,8 @@
     --popover: 230 30% 10%;
     --popover-foreground: 48 60% 92%;
 
-    /* Oddit signature blue */
-    --primary: 245 100% 55%;
+    /* Oddit signature blue — brightened for visibility */
+    --primary: 245 85% 68%;
     --primary-foreground: 48 100% 95%;
 
     --secondary: 230 25% 14%;
@@ -35,18 +35,18 @@
 
     --border: 230 20% 16%;
     --input: 230 20% 16%;
-    --ring: 245 100% 55%;
+    --ring: 245 85% 68%;
 
     --radius: 0.625rem;
 
     --sidebar-background: 230 35% 5%;
     --sidebar-foreground: 230 15% 55%;
-    --sidebar-primary: 245 100% 55%;
+    --sidebar-primary: 245 85% 68%;
     --sidebar-primary-foreground: 48 100% 95%;
     --sidebar-accent: 230 25% 12%;
     --sidebar-accent-foreground: 48 60% 92%;
     --sidebar-border: 230 20% 12%;
-    --sidebar-ring: 245 100% 55%;
+    --sidebar-ring: 245 85% 68%;
 
     --success: 160 60% 50%;
     --warning: 40 90% 60%;
@@ -70,11 +70,11 @@
     transition: box-shadow 0.2s ease, transform 0.2s ease;
   }
   .glow-card:hover {
-    box-shadow: 0 0 0 1px hsl(245 100% 55% / 0.35), 0 8px 32px -4px hsl(245 100% 55% / 0.12);
+    box-shadow: 0 0 0 1px hsl(245 85% 68% / 0.35), 0 8px 32px -4px hsl(245 85% 68% / 0.12);
     transform: translateY(-1px);
   }
   .text-gradient {
-    background: linear-gradient(135deg, hsl(245 100% 60%), hsl(160 60% 65%));
+    background: linear-gradient(135deg, hsl(245 85% 68%), hsl(160 60% 65%));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
@@ -82,12 +82,12 @@
     color: hsl(48 100% 95%);
   }
   .bg-oddit-blue {
-    background-color: hsl(245 100% 55%);
+    background-color: hsl(245 85% 68%);
   }
   .bg-oddit-mint {
     background-color: hsl(160 60% 65%);
   }
   .border-oddit-blue {
-    border-color: hsl(245 100% 55%);
+    border-color: hsl(245 85% 68%);
   }
 }
