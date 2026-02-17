@@ -62,12 +62,19 @@ function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-lg bg-muted ${className}`} />;
 }
 
-function StatCard({ label, value, icon: Icon }: { label: string; value: number | string; icon: typeof Wrench }) {
+function StatCard({ label, value, icon: Icon, color = "primary" }: { label: string; value: number | string; icon: typeof Wrench; color?: string }) {
+  const colorMap: Record<string, { bg: string; text: string; glow: string }> = {
+    primary: { bg: "bg-primary/10", text: "text-primary", glow: "glow-card" },
+    coral: { bg: "bg-coral/10", text: "text-coral", glow: "glow-card glow-card-coral" },
+    electric: { bg: "bg-electric/10", text: "text-electric", glow: "glow-card glow-card-electric" },
+    gold: { bg: "bg-gold/10", text: "text-gold", glow: "glow-card glow-card-gold" },
+  };
+  const c = colorMap[color] || colorMap.primary;
   return (
-    <div className="glow-card rounded-xl bg-card p-6 hover-scale">
+    <div className={`${c.glow} rounded-xl bg-card p-6 hover-scale`}>
       <div className="flex items-center justify-between mb-4">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-          <Icon className="h-5 w-5 text-primary" />
+        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${c.bg}`}>
+          <Icon className={`h-5 w-5 ${c.text}`} />
         </div>
         <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
       </div>
@@ -131,9 +138,9 @@ const Index = () => {
           Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)
         ) : stats ? (
           <>
-            <StatCard label="Tools Connected" value={stats.tools_connected} icon={Wrench} />
-            <StatCard label="Workflows Active" value={stats.workflows_active} icon={Zap} />
-            <StatCard label="Executions Today" value={stats.executions_today} icon={BarChart3} />
+            <StatCard label="Tools Connected" value={stats.tools_connected} icon={Wrench} color="electric" />
+            <StatCard label="Workflows Active" value={stats.workflows_active} icon={Zap} color="coral" />
+            <StatCard label="Executions Today" value={stats.executions_today} icon={BarChart3} color="gold" />
           </>
         ) : null}
       </div>
@@ -141,7 +148,7 @@ const Index = () => {
       {/* Projects */}
       <section className="mb-10">
         <div className="flex items-center gap-2 mb-5">
-          <Users className="h-4 w-4 text-accent" />
+          <Users className="h-4 w-4 text-coral" />
           <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Projects</h2>
         </div>
         {projLoading ? (
@@ -181,7 +188,7 @@ const Index = () => {
         {/* Tools */}
         <div className="glow-card rounded-xl bg-card p-5">
           <div className="flex items-center gap-2 mb-5">
-            <Wrench className="h-4 w-4 text-accent" />
+            <Wrench className="h-4 w-4 text-electric" />
             <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Tools</h2>
           </div>
           {toolsLoading ? (
@@ -207,7 +214,7 @@ const Index = () => {
         {/* Workflows */}
         <div className="glow-card rounded-xl bg-card p-5">
           <div className="flex items-center gap-2 mb-5">
-            <Zap className="h-4 w-4 text-accent" />
+            <Zap className="h-4 w-4 text-gold" />
             <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Workflows</h2>
           </div>
           {wfLoading ? (
@@ -244,7 +251,7 @@ const Index = () => {
         {/* AI Agents */}
         <div className="glow-card rounded-xl bg-card p-5">
           <div className="flex items-center gap-2 mb-5">
-            <Bot className="h-4 w-4 text-accent" />
+            <Bot className="h-4 w-4 text-violet" />
             <h2 className="text-sm font-bold text-cream uppercase tracking-wider">AI Agents</h2>
           </div>
           {agentsLoading ? (
@@ -281,7 +288,7 @@ const Index = () => {
       {stats?.recent_activity && stats.recent_activity.length > 0 && (
         <section className="mt-10 glow-card rounded-xl bg-card p-5">
           <div className="flex items-center gap-2 mb-5">
-            <Clock className="h-4 w-4 text-accent" />
+            <Clock className="h-4 w-4 text-coral" />
             <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Recent Activity</h2>
           </div>
           <div className="space-y-1.5">

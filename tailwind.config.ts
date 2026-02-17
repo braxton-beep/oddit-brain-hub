@@ -50,6 +50,10 @@ export default {
         success: "hsl(var(--success))",
         warning: "hsl(var(--warning))",
         cream: "hsl(var(--cream))",
+        coral: "hsl(var(--coral))",
+        electric: "hsl(var(--electric))",
+        gold: "hsl(var(--gold))",
+        violet: "hsl(var(--violet))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
