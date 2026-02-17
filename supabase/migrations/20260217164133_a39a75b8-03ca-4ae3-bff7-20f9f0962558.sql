@@ -1,0 +1,1 @@
+ALTER TABLE public.integration_credentials DROP CONSTRAINT IF EXISTS integration_credentials_integration_id_key;

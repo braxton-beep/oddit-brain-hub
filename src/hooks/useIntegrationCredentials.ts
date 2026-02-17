@@ -24,7 +24,7 @@ export function useIntegrationCredentials() {
   });
 }
 
-export function useUpsertCredential() {
+export function useAddCredential() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ integration_id, api_key }: { integration_id: string; api_key: string }) => {
@@ -33,10 +33,7 @@ export function useUpsertCredential() {
 
       const { error } = await supabase
         .from("integration_credentials")
-        .upsert(
-          { integration_id, api_key, created_by: userId },
-          { onConflict: "integration_id" }
-        );
+        .insert({ integration_id, api_key, created_by: userId });
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["integration-credentials"] }),
@@ -46,11 +43,11 @@ export function useUpsertCredential() {
 export function useDeleteCredential() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (integration_id: string) => {
+    mutationFn: async (id: string) => {
       const { error } = await supabase
         .from("integration_credentials")
         .delete()
-        .eq("integration_id", integration_id);
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["integration-credentials"] }),

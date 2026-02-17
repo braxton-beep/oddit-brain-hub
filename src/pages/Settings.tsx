@@ -1,8 +1,9 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import {
   useIntegrationCredentials,
-  useUpsertCredential,
+  useAddCredential,
   useDeleteCredential,
+  type IntegrationCredential,
 } from "@/hooks/useIntegrationCredentials";
 import {
   Settings as SettingsIcon,
@@ -68,15 +69,20 @@ const CATEGORIES = [
 
 const SettingsPage = () => {
   const { data: credentials, isLoading } = useIntegrationCredentials();
-  const upsert = useUpsertCredential();
+  const addCred = useAddCredential();
   const remove = useDeleteCredential();
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [visible, setVisible] = useState<Record<string, boolean>>({});
   const [activeCategory, setActiveCategory] = useState("all");
 
-  const credMap = new Map(credentials?.map((c) => [c.integration_id, c]) ?? []);
-  const connectedCount = INTEGRATIONS.filter((i) => credMap.has(i.id)).length;
+  const credsByIntegration = new Map<string, IntegrationCredential[]>();
+  credentials?.forEach((c) => {
+    const list = credsByIntegration.get(c.integration_id) ?? [];
+    list.push(c);
+    credsByIntegration.set(c.integration_id, list);
+  });
+  const connectedCount = INTEGRATIONS.filter((i) => credsByIntegration.has(i.id)).length;
 
   const filtered = activeCategory === "all"
     ? INTEGRATIONS
@@ -87,7 +93,7 @@ const SettingsPage = () => {
     if (!value) { toast.error("Please enter an API key"); return; }
     if (value.length < 5) { toast.error("API key seems too short"); return; }
     try {
-      await upsert.mutateAsync({ integration_id: integrationId, api_key: value });
+      await addCred.mutateAsync({ integration_id: integrationId, api_key: value });
       toast.success(`${integrationId} key saved`);
       setDrafts((d) => ({ ...d, [integrationId]: "" }));
     } catch {
@@ -193,8 +199,8 @@ const SettingsPage = () => {
           ))
         ) : (
           filtered.map((integration) => {
-            const existing = credMap.get(integration.id);
-            const isSet = !!existing;
+            const existingKeys = credsByIntegration.get(integration.id) ?? [];
+            const isSet = existingKeys.length > 0;
             const draft = drafts[integration.id] ?? "";
             const isVisible = visible[integration.id];
 
@@ -221,7 +227,7 @@ const SettingsPage = () => {
                           : "bg-muted-foreground/15 text-muted-foreground border-muted-foreground/30"
                       }`}
                     >
-                      {isSet ? "Connected" : "Not set"}
+                      {isSet ? `${existingKeys.length} key${existingKeys.length > 1 ? "s" : ""}` : "Not set"}
                     </span>
                   </div>
                   <a
@@ -240,20 +246,39 @@ const SettingsPage = () => {
                   {integration.description}
                 </p>
 
-                {/* Input row */}
+                {/* Existing keys list */}
+                {existingKeys.length > 0 && (
+                  <div className="space-y-1.5 mb-3">
+                    {existingKeys.map((cred) => (
+                      <div key={cred.id} className="flex items-center gap-2 rounded-lg bg-secondary/50 px-3 py-2">
+                        <Key className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <span className="flex-1 text-xs font-mono text-muted-foreground truncate">
+                          ••••••••{cred.api_key.slice(-4)}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(cred.created_at).toLocaleDateString()}
+                        </span>
+                        <button
+                          onClick={() => handleDelete(cred.id)}
+                          className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          title="Remove this key"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add new key input */}
                 <div className="flex items-center gap-2">
                   <input
                     type={isVisible ? "text" : "password"}
-                    value={draft || (isSet ? "••••••••••••" : "")}
+                    value={draft}
                     onChange={(e) =>
                       setDrafts((d) => ({ ...d, [integration.id]: e.target.value }))
                     }
-                    onFocus={() => {
-                      if (isSet && !draft) {
-                        setDrafts((d) => ({ ...d, [integration.id]: "" }));
-                      }
-                    }}
-                    placeholder={isSet ? "Paste new key to update" : `Paste your key here (${integration.placeholder})`}
+                    placeholder={`Paste ${isSet ? "another" : "your"} key here (${integration.placeholder})`}
                     className="flex-1 rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                   />
                   <button
@@ -271,17 +296,8 @@ const SettingsPage = () => {
                     className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 text-xs font-bold text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-30"
                   >
                     <Save className="h-3.5 w-3.5" />
-                    Save
+                    {isSet ? "Add" : "Save"}
                   </button>
-                  {isSet && (
-                    <button
-                      onClick={() => handleDelete(integration.id)}
-                      className="p-2.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                      title="Remove key"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
                 </div>
               </div>
             );
