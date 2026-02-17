@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_log: {
+        Row: {
+          created_at: string
+          id: string
+          status: string
+          workflow_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          status?: string
+          workflow_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          status?: string
+          workflow_name?: string
+        }
+        Relationships: []
+      }
       cro_audits: {
         Row: {
           client_name: string
@@ -73,6 +94,108 @@ export type Database = {
           created_by?: string | null
           id?: string
           integration_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      knowledge_sources: {
+        Row: {
+          created_at: string
+          icon: string
+          id: string
+          integration_id: string | null
+          item_count: number
+          name: string
+          source_type: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          icon?: string
+          id?: string
+          integration_id?: string | null
+          item_count?: number
+          name: string
+          source_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          icon?: string
+          id?: string
+          integration_id?: string | null
+          item_count?: number
+          name?: string
+          source_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          name: string
+          owner: string
+          priority: string
+          progress: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          name: string
+          owner?: string
+          priority?: string
+          progress?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          owner?: string
+          priority?: string
+          progress?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      workflows: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          name: string
+          status: string
+          steps: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          name: string
+          status?: string
+          steps?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          status?: string
+          steps?: number
           updated_at?: string
         }
         Relationships: []
