@@ -154,9 +154,9 @@ const SlackAgent = () => {
 
   return (
     <DashboardLayout>
-      <div className="mb-8">
+      <div className="mb-8 animate-fade-in">
         <div className="flex items-center gap-3 mb-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary animate-glow-pulse">
             <MessageSquare className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
@@ -167,7 +167,7 @@ const SlackAgent = () => {
       </div>
 
       {/* Status cards */}
-      <div className="grid gap-4 sm:grid-cols-3 mb-8">
+      <div className="grid gap-4 sm:grid-cols-3 mb-8 stagger-children">
         <div className="glow-card rounded-xl bg-card p-5">
           <div className="flex items-center gap-2 mb-2">
             <CheckCircle2 className="h-4 w-4 text-accent" />

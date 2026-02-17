@@ -128,9 +128,9 @@ const AuditBrain = () => {
 
   return (
     <DashboardLayout>
-      <div className="mb-8">
+      <div className="mb-8 animate-fade-in">
         <div className="flex items-center gap-3 mb-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary animate-glow-pulse">
             <Brain className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
@@ -141,7 +141,7 @@ const AuditBrain = () => {
       </div>
 
       {/* Query Bar */}
-      <div className="mb-10 glow-card rounded-xl bg-card p-6">
+      <div className="mb-10 glow-card rounded-xl bg-card p-6 animate-scale-in">
         <h2 className="text-sm font-bold text-cream uppercase tracking-wider mb-4">Ask the Brain</h2>
         <div className="flex gap-3">
           <div className="flex-1 relative">
@@ -185,9 +185,9 @@ const AuditBrain = () => {
             <Database className="h-4 w-4 text-accent" />
             <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Knowledge Sources</h2>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 stagger-children">
             {knowledgeSources.map((src) => (
-              <div key={src.name} className="glow-card rounded-xl bg-card p-4 flex items-center gap-4 cursor-pointer"
+              <div key={src.name} className="glow-card rounded-xl bg-card p-4 flex items-center gap-4 cursor-pointer hover-scale"
                 onClick={() => toast.info(`${src.name}`, { description: `${src.count.toLocaleString()} items indexed • ${src.status === "synced" ? "Up to date" : "Sync in progress..."}` })}
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">

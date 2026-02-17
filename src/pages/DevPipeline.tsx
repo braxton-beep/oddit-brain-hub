@@ -137,9 +137,9 @@ const DevPipeline = () => {
 
   return (
     <DashboardLayout>
-      <div className="mb-8">
+      <div className="mb-8 animate-fade-in">
         <div className="flex items-center gap-3 mb-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary animate-glow-pulse">
             <Code2 className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
@@ -150,9 +150,9 @@ const DevPipeline = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-4 mb-8">
+      <div className="grid gap-4 sm:grid-cols-4 mb-8 stagger-children">
         {pipelineStats.map((s) => (
-          <div key={s.label} className="glow-card rounded-xl bg-card p-5">
+          <div key={s.label} className="glow-card rounded-xl bg-card p-5 hover-scale">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">{s.label}</p>
             <p className="mt-2 text-2xl font-bold text-cream">{s.value}</p>
           </div>

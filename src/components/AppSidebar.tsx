@@ -36,11 +36,11 @@ export function AppSidebar() {
     >
       {/* Logo */}
       <div className="flex h-16 items-center gap-3 border-b border-border px-4">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary animate-glow-pulse">
           <Brain className="h-4 w-4 text-primary-foreground" />
         </div>
         {!collapsed && (
-          <div>
+          <div className="animate-fade-in-left">
             <span className="text-sm font-bold tracking-tight text-cream">oddit</span>
             <span className="ml-1 text-xs font-medium text-accent">brain</span>
           </div>
@@ -48,14 +48,14 @@ export function AppSidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-0.5 p-3">
+      <nav className="flex-1 space-y-0.5 p-3 stagger-children">
         {navItems.map((item) => (
           <NavLink
             key={item.url}
             to={item.url}
             end={item.url === "/"}
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium text-sidebar-foreground transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            activeClassName="bg-primary/10 text-primary border border-primary/20"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium text-sidebar-foreground transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:translate-x-0.5"
+            activeClassName="bg-primary/10 text-primary border border-primary/20 nav-glow"
           >
             <item.icon className="h-4 w-4 shrink-0" />
             {!collapsed && <span>{item.title}</span>}
