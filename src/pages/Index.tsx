@@ -64,7 +64,7 @@ function Skeleton({ className = "" }: { className?: string }) {
 
 function StatCard({ label, value, icon: Icon }: { label: string; value: number | string; icon: typeof Wrench }) {
   return (
-    <div className="glow-card rounded-xl bg-card p-6">
+    <div className="glow-card rounded-xl bg-card p-6 hover-scale">
       <div className="flex items-center justify-between mb-4">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
           <Icon className="h-5 w-5 text-primary" />
@@ -104,9 +104,9 @@ const Index = () => {
   return (
     <DashboardLayout>
       {/* Header */}
-      <div className="mb-10">
+      <div className="mb-10 animate-fade-in">
         <div className="flex items-center gap-3 mb-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary animate-glow-pulse">
             <Brain className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
@@ -126,7 +126,7 @@ const Index = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-3 mb-10">
+      <div className="grid gap-4 sm:grid-cols-3 mb-10 stagger-children">
         {statsLoading ? (
           Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)
         ) : stats ? (
@@ -149,9 +149,9 @@ const Index = () => {
             {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}
           </div>
         ) : projects && projects.length > 0 ? (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2 stagger-children">
             {projects.map((p) => (
-              <div key={p.id} className="glow-card rounded-xl bg-card p-5 cursor-pointer" onClick={() => toast.info(`Opening project: ${p.name}`, { description: p.description })}>
+              <div key={p.id} className="glow-card rounded-xl bg-card p-5 cursor-pointer hover-scale" onClick={() => toast.info(`Opening project: ${p.name}`, { description: p.description })}>
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2.5">
                     <div className={`h-2.5 w-2.5 rounded-full ${priorityDot[p.priority] ?? "bg-muted-foreground"}`} />

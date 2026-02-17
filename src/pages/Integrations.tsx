@@ -98,9 +98,9 @@ const Integrations = () => {
   return (
     <DashboardLayout>
       {/* Header */}
-      <div className="mb-8 flex items-start justify-between">
+      <div className="mb-8 flex items-start justify-between animate-fade-in">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary animate-glow-pulse">
             <Link2 className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
@@ -162,7 +162,7 @@ const Integrations = () => {
       </div>
 
       {/* Integration Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 stagger-children">
         {filtered.map((integration) => (
           <div
             key={integration.id}

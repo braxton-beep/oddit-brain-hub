@@ -84,9 +84,9 @@ const Vision = () => {
   return (
     <DashboardLayout>
       {/* Hero */}
-      <div className="mb-12">
+      <div className="mb-12 animate-fade-in">
         <div className="flex items-center gap-3 mb-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary animate-glow-pulse">
             <Rocket className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
@@ -119,9 +119,9 @@ const Vision = () => {
           <Target className="h-4 w-4 text-accent" />
           <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Core Pillars</h2>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 stagger-children">
           {pillars.map((pillar) => (
-            <div key={pillar.title} className="glow-card rounded-xl bg-card p-6">
+            <div key={pillar.title} className="glow-card rounded-xl bg-card p-6 hover-scale">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 mb-4">
                 <pillar.icon className="h-5 w-5 text-primary" />
               </div>
@@ -138,7 +138,7 @@ const Vision = () => {
           <TrendingUp className="h-4 w-4 text-accent" />
           <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Roadmap</h2>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 stagger-children">
           {phases.map((phase) => {
             const style = phaseStyles[phase.status];
             return (
