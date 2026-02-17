@@ -18,7 +18,7 @@ import { WelcomeTour } from "./components/WelcomeTour";
 
 const queryClient = new QueryClient();
 
-const AuthGate = () => {
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { session, loading } = useAuth();
 
   if (loading) {
@@ -33,22 +33,7 @@ const AuthGate = () => {
     return <Auth />;
   }
 
-  return (
-    <>
-      <WelcomeTour />
-      <Routes>
-        <Route path="/" element={<Index />} />
-        <Route path="/audit-brain" element={<AuditBrain />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/dev-pipeline" element={<DevPipeline />} />
-        <Route path="/slack-agent" element={<SlackAgent />} />
-        <Route path="/integrations" element={<Integrations />} />
-        <Route path="/vision" element={<Vision />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </>
-  );
+  return <>{children}</>;
 };
 
 const App = () => (
@@ -56,8 +41,24 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <WelcomeTour />
       <BrowserRouter>
-        <AuthGate />
+        <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<Index />} />
+          <Route path="/audit-brain" element={<AuditBrain />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/dev-pipeline" element={<DevPipeline />} />
+          <Route path="/slack-agent" element={<SlackAgent />} />
+          <Route path="/integrations" element={<Integrations />} />
+          <Route path="/vision" element={<Vision />} />
+          <Route path="/auth" element={<Auth />} />
+
+          {/* Protected: only Settings requires login */}
+          <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+
+          <Route path="*" element={<NotFound />} />
+        </Routes>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
