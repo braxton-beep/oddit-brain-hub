@@ -166,7 +166,7 @@ const AuditBrain = () => {
       </div>
 
       {/* Query Bar */}
-      <div className="mb-10 glow-card glow-card-violet rounded-xl bg-card p-6 animate-scale-in">
+      <div className="mb-4 glow-card glow-card-violet rounded-xl bg-card p-6 animate-scale-in">
         <h2 className="text-sm font-bold text-gradient-cool uppercase tracking-wider mb-4">Ask the Brain</h2>
         <div className="flex gap-3">
           <div className="flex-1 relative">
@@ -201,6 +201,55 @@ const AuditBrain = () => {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Conversation — directly below the query bar */}
+      <div className="mb-10 glow-card glow-card-electric rounded-xl bg-card p-6">
+        <div className="flex items-center gap-2 mb-5">
+          <MessageSquare className="h-4 w-4 text-electric" />
+          <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Conversation</h2>
+          {queries.length > 0 && (
+            <span className="ml-auto text-[11px] text-muted-foreground">{queries.length} {queries.length === 1 ? "query" : "queries"}</span>
+          )}
+        </div>
+        {queries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-foreground">
+            <Brain className="h-8 w-8 opacity-20" />
+            <p className="text-sm">Ask a question above to start a conversation</p>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {queries.map((q, i) => (
+              <div key={i} className="space-y-3">
+                {/* User message */}
+                <div className="flex justify-end">
+                  <div className="max-w-[80%] rounded-2xl rounded-br-md bg-primary px-4 py-3">
+                    <p className="text-sm font-medium text-primary-foreground">{q.query}</p>
+                  </div>
+                </div>
+                {/* Brain response */}
+                <div className="flex gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/15 mt-0.5">
+                    <Brain className="h-4 w-4 text-accent" />
+                  </div>
+                  <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-secondary border border-border px-4 py-3">
+                    {q.answer ? (
+                      <div className="prose prose-sm prose-invert max-w-none text-sm text-foreground leading-relaxed [&_p]:mb-2 [&_ul]:mb-2 [&_ol]:mb-2 [&_li]:mb-0.5 [&_strong]:text-cream [&_h1]:text-cream [&_h2]:text-cream [&_h3]:text-cream [&_code]:bg-background [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs">
+                        <ReactMarkdown>{q.answer}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Thinking...</span>
+                      </div>
+                    )}
+                    <span className="block text-[10px] text-muted-foreground mt-2">{q.time}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -290,47 +339,6 @@ const AuditBrain = () => {
         </div>
       </div>
 
-      {/* Chat Thread */}
-      {queries.length > 0 && (
-        <section className="mt-10 glow-card glow-card-electric rounded-xl bg-card p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <MessageSquare className="h-4 w-4 text-electric" />
-            <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Conversation</h2>
-            <span className="ml-auto text-[11px] text-muted-foreground">{queries.length} {queries.length === 1 ? "query" : "queries"}</span>
-          </div>
-          <div className="space-y-5">
-            {[...queries].reverse().map((q, i) => (
-              <div key={i} className="space-y-3">
-                {/* User message */}
-                <div className="flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl rounded-br-md bg-primary px-4 py-3">
-                    <p className="text-sm font-medium text-primary-foreground">{q.query}</p>
-                  </div>
-                </div>
-                {/* Brain response */}
-                <div className="flex gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/15 mt-0.5">
-                    <Brain className="h-4 w-4 text-accent" />
-                  </div>
-                  <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-secondary border border-border px-4 py-3">
-                    {q.answer ? (
-                      <div className="prose prose-sm prose-invert max-w-none text-sm text-foreground leading-relaxed [&_p]:mb-2 [&_ul]:mb-2 [&_ol]:mb-2 [&_li]:mb-0.5 [&_strong]:text-cream [&_h1]:text-cream [&_h2]:text-cream [&_h3]:text-cream [&_code]:bg-background [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs">
-                        <ReactMarkdown>{q.answer}</ReactMarkdown>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        <span>Thinking...</span>
-                      </div>
-                    )}
-                    <span className="block text-[10px] text-muted-foreground mt-2">{q.time}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
     </DashboardLayout>
   );
 };
