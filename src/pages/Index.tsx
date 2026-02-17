@@ -9,6 +9,9 @@ import {
   type EmailDraft,
 } from "@/hooks/useDashboardData";
 import { useIntegrationCredentials } from "@/hooks/useIntegrationCredentials";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
 import {
   Brain,
   Zap,
@@ -27,7 +30,11 @@ import {
   Check,
   X,
   CalendarDays,
+  Trophy,
+  Loader2,
+  FileText,
 } from "lucide-react";
+
 import { toast } from "sonner";
 import { formatDistanceToNow, format } from "date-fns";
 import { useState } from "react";
@@ -175,7 +182,108 @@ function DraftModal({ draft, onClose, onDismiss }: { draft: EmailDraft; onClose:
   );
 }
 
+const SCAN_RECS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scan-recommendations`;
+
+function GreatestHits() {
+  const [isScanning, setIsScanning] = useState(false);
+  const qc = useQueryClient();
+  const { data: insights, isLoading } = useQuery({
+    queryKey: ["recommendation-insights"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("recommendation_insights")
+        .select("*")
+        .order("frequency_count", { ascending: false })
+        .limit(20);
+      return data || [];
+    },
+  });
+
+  const handleScan = async () => {
+    setIsScanning(true);
+    try {
+      const resp = await fetch(SCAN_RECS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Scan failed");
+      toast.success(`Found ${data.insights?.length || 0} recurring patterns`);
+      qc.invalidateQueries({ queryKey: ["recommendation-insights"] });
+    } catch (e: any) {
+      toast.error("Scan failed", { description: e.message });
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const categoryColors: Record<string, string> = {
+    "Trust Signals": "text-accent border-accent/30 bg-accent/10",
+    "Copy & Messaging": "text-gold border-gold/30 bg-gold/10",
+    "Visual Hierarchy": "text-violet border-violet/30 bg-violet/10",
+    "Social Proof": "text-primary border-primary/30 bg-primary/10",
+    "CTA Optimization": "text-coral border-coral/30 bg-coral/10",
+    "Mobile UX": "text-electric border-electric/30 bg-electric/10",
+  };
+
+  return (
+    <section className="mt-10 glow-card glow-card-coral rounded-xl bg-card p-5">
+      <div className="flex items-center gap-2 mb-5">
+        <Trophy className="h-4 w-4 text-gold" />
+        <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Greatest Hits</h2>
+        <span className="text-[11px] text-muted-foreground ml-1">Top recurring recommendations</span>
+        <button
+          onClick={handleScan}
+          disabled={isScanning}
+          className="ml-auto flex items-center gap-1.5 rounded-lg bg-gold/10 border border-gold/30 px-3 py-1.5 text-xs font-bold text-gold hover:bg-gold/20 transition-colors disabled:opacity-50"
+        >
+          {isScanning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+          {isScanning ? "Scanning..." : "Scan Audits"}
+        </button>
+      </div>
+      {isLoading ? (
+        <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="animate-pulse h-12 rounded-lg bg-muted" />)}</div>
+      ) : !insights || insights.length === 0 ? (
+        <div className="text-center py-8">
+          <Trophy className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-30" />
+          <p className="text-xs text-muted-foreground">Click "Scan Audits" to discover recurring recommendation patterns.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {(insights as any[]).map((insight, i) => {
+            const catStyle = categoryColors[insight.category] || "text-muted-foreground border-border bg-muted/20";
+            return (
+              <div key={insight.id} className="flex items-center gap-3 rounded-xl border border-border bg-secondary px-4 py-3">
+                <span className="text-lg font-black text-muted-foreground/30 w-6 shrink-0">#{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-cream truncate">{insight.recommendation_text}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className={`text-[10px] font-bold rounded-full border px-2 py-0.5 ${catStyle}`}>{insight.category}</span>
+                  </div>
+                </div>
+                <div className="shrink-0 flex items-center gap-2">
+                  <span className="flex items-center gap-1 rounded-full bg-gold/15 border border-gold/30 px-2.5 py-1 text-xs font-bold text-gold">
+                    We've made this <span className="text-sm">{insight.frequency_count}x</span>
+                  </span>
+                  <button
+                    onClick={() => toast.info("Build Template", { description: `Template builder for "${insight.recommendation_text.substring(0, 40)}..." coming soon.` })}
+                    className="flex items-center gap-1 rounded-lg bg-primary/10 border border-primary/20 px-2.5 py-1.5 text-[10px] font-bold text-primary hover:bg-primary/20 transition-colors"
+                  >
+                    <FileText className="h-3 w-3" />
+                    Build Template
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 const Index = () => {
+
   const { data: projects, isLoading: projLoading } = useProjects();
   const { data: workflows, isLoading: wfLoading } = useWorkflows();
   const { data: activity, isLoading: actLoading } = useActivityLog();
@@ -386,6 +494,9 @@ const Index = () => {
         </section>
       )}
 
+      {/* Greatest Hits */}
+      <GreatestHits />
+
       {/* Recent Activity */}
       {activity && activity.length > 0 && (
         <section className="mt-10 glow-card rounded-xl bg-card p-5">
@@ -411,6 +522,7 @@ const Index = () => {
           </div>
         </section>
       )}
+
 
       {/* Draft Modal */}
       {selectedDraft && (

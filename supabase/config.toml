@@ -15,3 +15,16 @@ verify_jwt = false
 [functions.analyze-competitors]
 verify_jwt = false
 
+[functions.generate-oddit-score]
+verify_jwt = false
+
+[functions.scan-recommendations]
+verify_jwt = false
+
+[functions.fireflies-webhook]
+verify_jwt = false
+
+[functions.extract-kpis]
+verify_jwt = false
+
+

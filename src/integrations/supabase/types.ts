@@ -35,6 +35,41 @@ export type Database = {
         }
         Relationships: []
       }
+      client_implementations: {
+        Row: {
+          audit_id: string
+          id: string
+          notes: string | null
+          recommendation_id: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          audit_id: string
+          id?: string
+          notes?: string | null
+          recommendation_id: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          audit_id?: string
+          id?: string
+          notes?: string | null
+          recommendation_id?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_implementations_audit_id_fkey"
+            columns: ["audit_id"]
+            isOneToOne: false
+            referencedRelation: "cro_audits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       competitive_intel: {
         Row: {
           client_name: string
@@ -71,6 +106,8 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          portal_enabled: boolean
+          portal_token: string | null
           recommendations: Json | null
           screenshot_url: string | null
           shop_url: string
@@ -82,6 +119,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          portal_enabled?: boolean
+          portal_token?: string | null
           recommendations?: Json | null
           screenshot_url?: string | null
           shop_url: string
@@ -93,6 +132,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          portal_enabled?: boolean
+          portal_token?: string | null
           recommendations?: Json | null
           screenshot_url?: string | null
           shop_url?: string
@@ -267,6 +308,116 @@ export type Database = {
         }
         Relationships: []
       }
+      kpi_benchmarks: {
+        Row: {
+          created_at: string
+          id: string
+          industry: string
+          metric_name: string
+          p25: number | null
+          p50: number | null
+          p75: number | null
+          revenue_tier: string
+          source_count: number
+          source_transcript_ids: Json | null
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          industry?: string
+          metric_name?: string
+          p25?: number | null
+          p50?: number | null
+          p75?: number | null
+          revenue_tier?: string
+          source_count?: number
+          source_transcript_ids?: Json | null
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          industry?: string
+          metric_name?: string
+          p25?: number | null
+          p50?: number | null
+          p75?: number | null
+          revenue_tier?: string
+          source_count?: number
+          source_transcript_ids?: Json | null
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      oddit_scores: {
+        Row: {
+          clarity_value_prop: number
+          client_name: string
+          copy_strength: number
+          created_at: string
+          cro_audit_id: string | null
+          dimension_notes: Json | null
+          funnel_logic: number
+          id: string
+          mobile_ux: number
+          shop_url: string
+          social_proof: number
+          speed_perception: number
+          total_score: number
+          trust_signals: number
+          updated_at: string
+          visual_hierarchy: number
+        }
+        Insert: {
+          clarity_value_prop?: number
+          client_name?: string
+          copy_strength?: number
+          created_at?: string
+          cro_audit_id?: string | null
+          dimension_notes?: Json | null
+          funnel_logic?: number
+          id?: string
+          mobile_ux?: number
+          shop_url?: string
+          social_proof?: number
+          speed_perception?: number
+          total_score?: number
+          trust_signals?: number
+          updated_at?: string
+          visual_hierarchy?: number
+        }
+        Update: {
+          clarity_value_prop?: number
+          client_name?: string
+          copy_strength?: number
+          created_at?: string
+          cro_audit_id?: string | null
+          dimension_notes?: Json | null
+          funnel_logic?: number
+          id?: string
+          mobile_ux?: number
+          shop_url?: string
+          social_proof?: number
+          speed_perception?: number
+          total_score?: number
+          trust_signals?: number
+          updated_at?: string
+          visual_hierarchy?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "oddit_scores_cro_audit_id_fkey"
+            columns: ["cro_audit_id"]
+            isOneToOne: false
+            referencedRelation: "cro_audits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           created_at: string
@@ -299,6 +450,75 @@ export type Database = {
           priority?: string
           progress?: number
           status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      recommendation_insights: {
+        Row: {
+          category: string
+          client_examples: Json | null
+          created_at: string
+          frequency_count: number
+          id: string
+          recommendation_text: string
+          template_content: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          client_examples?: Json | null
+          created_at?: string
+          frequency_count?: number
+          id?: string
+          recommendation_text: string
+          template_content?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          client_examples?: Json | null
+          created_at?: string
+          frequency_count?: number
+          id?: string
+          recommendation_text?: string
+          template_content?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      report_drafts: {
+        Row: {
+          client_name: string
+          created_at: string
+          fireflies_id: string | null
+          id: string
+          progress: number
+          sections: Json | null
+          status: string
+          transcript_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_name?: string
+          created_at?: string
+          fireflies_id?: string | null
+          id?: string
+          progress?: number
+          sections?: Json | null
+          status?: string
+          transcript_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_name?: string
+          created_at?: string
+          fireflies_id?: string | null
+          id?: string
+          progress?: number
+          sections?: Json | null
+          status?: string
+          transcript_id?: string | null
           updated_at?: string
         }
         Relationships: []

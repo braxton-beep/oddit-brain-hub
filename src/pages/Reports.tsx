@@ -17,13 +17,24 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
+  Target,
+  Share2,
+  Copy,
+  Check,
+  Zap,
+  RefreshCw,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, Tooltip } from "recharts";
 
 const GENERATE_AUDIT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-cro-audit`;
 const GENERATE_MOCKUP_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-audit-mockup`;
+const GENERATE_SCORE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-oddit-score`;
+const SCAN_RECS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scan-recommendations`;
+
 
 interface Recommendation {
   id: number;
@@ -44,7 +55,44 @@ interface CroAudit {
   screenshot_url: string | null;
   recommendations: Recommendation[];
   created_at: string;
+  portal_token: string | null;
+  portal_enabled: boolean;
 }
+
+interface OdditScore {
+  id: string;
+  cro_audit_id: string;
+  total_score: number;
+  clarity_value_prop: number;
+  visual_hierarchy: number;
+  trust_signals: number;
+  mobile_ux: number;
+  funnel_logic: number;
+  copy_strength: number;
+  social_proof: number;
+  speed_perception: number;
+  dimension_notes: Record<string, string>;
+}
+
+interface ReportDraft {
+  id: string;
+  client_name: string;
+  status: string;
+  progress: number;
+  sections: Record<string, any>;
+  created_at: string;
+}
+
+const SCORE_DIMS = [
+  { key: "clarity_value_prop", label: "Clarity" },
+  { key: "visual_hierarchy", label: "Visual" },
+  { key: "trust_signals", label: "Trust" },
+  { key: "mobile_ux", label: "Mobile" },
+  { key: "funnel_logic", label: "Funnel" },
+  { key: "copy_strength", label: "Copy" },
+  { key: "social_proof", label: "Social" },
+  { key: "speed_perception", label: "Speed" },
+];
 
 const severityStyles = {
   high: { bg: "bg-destructive/15 text-destructive border-destructive/30", dot: "bg-destructive" },
@@ -60,6 +108,7 @@ const statusIcon: Record<string, typeof CheckCircle2> = {
   generating: Loader2,
 };
 
+
 const Reports = () => {
   const [audits, setAudits] = useState<CroAudit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +119,27 @@ const Reports = () => {
   const [viewingAudit, setViewingAudit] = useState<CroAudit | null>(null);
   const [generatingMockups, setGeneratingMockups] = useState<Set<number>>(new Set());
   const [expandedRecs, setExpandedRecs] = useState<Set<number>>(new Set());
+  const [generatingScore, setGeneratingScore] = useState<string | null>(null);
+  const [sharingPortal, setSharingPortal] = useState<string | null>(null);
+  const [copiedPortal, setCopiedPortal] = useState<string | null>(null);
+  const qc = useQueryClient();
+
+  const { data: scores } = useQuery({
+    queryKey: ["oddit-scores"],
+    queryFn: async () => {
+      const { data } = await supabase.from("oddit_scores").select("*").order("created_at", { ascending: false });
+      return (data || []) as OdditScore[];
+    },
+  });
+
+  const { data: drafts } = useQuery({
+    queryKey: ["report-drafts"],
+    queryFn: async () => {
+      const { data } = await supabase.from("report_drafts").select("*").order("created_at", { ascending: false }).limit(10);
+      return (data || []) as ReportDraft[];
+    },
+  });
+
 
   // Load audits from DB
   useEffect(() => {
@@ -195,6 +265,52 @@ const Reports = () => {
     }
   };
 
+  const handleGenerateOdditScore = async (audit: CroAudit) => {
+    setGeneratingScore(audit.id);
+    const toastId = `score-${audit.id}`;
+    toast.loading("Generating Oddit Score...", { id: toastId, description: "Scoring 8 dimensions with Gemini" });
+    try {
+      const recs = audit.recommendations;
+      const context = `Site: ${audit.shop_url}\nClient: ${audit.client_name}\nRecommendations:\n${recs.map((r) => `- [${r.severity}] ${r.section}: ${r.current_issue}`).join("\n")}`;
+      const resp = await fetch(GENERATE_SCORE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+        body: JSON.stringify({ audit_id: audit.id, client_name: audit.client_name, shop_url: audit.shop_url, site_content: context }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Score failed");
+      toast.success(`Oddit Score: ${data.score?.total_score}/100`, { id: toastId });
+      qc.invalidateQueries({ queryKey: ["oddit-scores"] });
+    } catch (e: any) {
+      toast.error("Score generation failed", { id: toastId, description: e.message });
+    } finally {
+      setGeneratingScore(null);
+    }
+  };
+
+  const handleSharePortal = async (audit: CroAudit) => {
+    setSharingPortal(audit.id);
+    try {
+      let token = audit.portal_token;
+      if (!token) {
+        token = crypto.randomUUID();
+        await supabase.from("cro_audits").update({ portal_token: token, portal_enabled: true }).eq("id", audit.id);
+        await loadAudits();
+      } else {
+        await supabase.from("cro_audits").update({ portal_enabled: true }).eq("id", audit.id);
+      }
+      const url = `${window.location.origin}/portal/${token}`;
+      await navigator.clipboard.writeText(url);
+      setCopiedPortal(audit.id);
+      setTimeout(() => setCopiedPortal(null), 3000);
+      toast.success("Portal link copied!", { description: "Share this link with your client." });
+    } catch (e: any) {
+      toast.error("Failed to create portal", { description: e.message });
+    } finally {
+      setSharingPortal(null);
+    }
+  };
+
   const toggleRec = (id: number) => {
     setExpandedRecs((prev) => {
       const next = new Set(prev);
@@ -206,6 +322,8 @@ const Reports = () => {
 
   const completedAudits = audits.filter((a) => a.status === "completed");
   const totalRecs = completedAudits.reduce((sum, a) => sum + a.recommendations.length, 0);
+  const liveDrafts = (drafts || []).filter((d) => d.status !== "dismissed");
+
 
   return (
     <DashboardLayout>
@@ -365,9 +483,40 @@ const Reports = () => {
                     <span className="text-xs text-muted-foreground">
                       {audit.recommendations.length} recs
                     </span>
+                    {audit.status === "completed" && (() => {
+                      const auditScore = (scores || []).find((s) => s.cro_audit_id === audit.id);
+                      return auditScore ? (
+                        <span className="text-xs font-bold text-gold border border-gold/30 rounded-full px-2 py-0.5">
+                          {auditScore.total_score}/100
+                        </span>
+                      ) : null;
+                    })()}
+                    {audit.status === "completed" && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleGenerateOdditScore(audit); }}
+                        disabled={generatingScore === audit.id}
+                        title="Generate Oddit Score"
+                        className="flex items-center gap-1 rounded-lg bg-gold/10 border border-gold/30 px-2 py-1 text-[10px] font-bold text-gold hover:bg-gold/20 transition-colors disabled:opacity-50"
+                      >
+                        {generatingScore === audit.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Target className="h-3 w-3" />}
+                        Score
+                      </button>
+                    )}
+                    {audit.status === "completed" && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleSharePortal(audit); }}
+                        disabled={sharingPortal === audit.id}
+                        title="Share Client Portal"
+                        className="flex items-center gap-1 rounded-lg bg-primary/10 border border-primary/30 px-2 py-1 text-[10px] font-bold text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                      >
+                        {sharingPortal === audit.id ? <Loader2 className="h-3 w-3 animate-spin" /> : copiedPortal === audit.id ? <Check className="h-3 w-3" /> : <Share2 className="h-3 w-3" />}
+                        {copiedPortal === audit.id ? "Copied!" : "Portal"}
+                      </button>
+                    )}
                     {audit.status === "completed" && (
                       <Eye className="h-4 w-4 text-muted-foreground" />
                     )}
+
                   </div>
                 </div>
               );
@@ -376,8 +525,41 @@ const Reports = () => {
         )}
       </div>
 
+      {/* Live Drafts */}
+      {liveDrafts.length > 0 && (
+        <div className="glow-card glow-card-electric rounded-xl bg-card p-5 mt-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Zap className="h-4 w-4 text-electric" />
+            <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Live Drafts</h2>
+            <span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-electric/20 text-[10px] font-bold text-electric">{liveDrafts.length}</span>
+          </div>
+          <div className="space-y-2">
+            {liveDrafts.map((draft) => (
+              <div key={draft.id} className="flex items-center gap-4 rounded-xl border border-border bg-secondary px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-cream">{draft.client_name}</p>
+                  <p className="text-[11px] text-muted-foreground">{new Date(draft.created_at).toLocaleDateString()}</p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-24 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full rounded-full bg-electric transition-all" style={{ width: `${draft.progress}%` }} />
+                    </div>
+                    <span className="text-xs font-bold text-electric">{draft.progress}%</span>
+                  </div>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider rounded-full border px-2 py-0.5 ${draft.status === "ready" ? "text-accent border-accent/30 bg-accent/10" : "text-primary border-primary/30 bg-primary/10"}`}>
+                    {draft.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Audit Viewer Modal */}
       {viewingAudit && (
+
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
           <div className="relative w-full sm:max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-card border border-border p-4 sm:p-6 md:p-8 shadow-2xl">
             <button
