@@ -24,7 +24,7 @@
     --secondary-foreground: 48 40% 80%;
 
     --muted: 230 20% 16%;
-    --muted-foreground: 230 15% 50%;
+    --muted-foreground: 230 15% 75%;
 
     /* Oddit mint green */
     --accent: 160 60% 65%;
@@ -40,7 +40,7 @@
     --radius: 0.625rem;
 
     --sidebar-background: 230 35% 5%;
-    --sidebar-foreground: 230 15% 55%;
+    --sidebar-foreground: 230 15% 75%;
     --sidebar-primary: 245 85% 68%;
     --sidebar-primary-foreground: 48 100% 95%;
     --sidebar-accent: 230 25% 12%;
