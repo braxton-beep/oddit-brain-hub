@@ -177,18 +177,27 @@ serve(async (req) => {
       .from("fireflies_transcripts")
       .select("*", { count: "exact", head: true });
 
-    // Upsert the knowledge source entry for Fireflies
-    await sb.from("knowledge_sources").upsert(
-      {
+    // Update or insert the knowledge source entry for Fireflies
+    const { data: existingKs } = await sb
+      .from("knowledge_sources")
+      .select("id")
+      .eq("integration_id", "fireflies")
+      .limit(1);
+
+    if (existingKs && existingKs.length > 0) {
+      await sb.from("knowledge_sources")
+        .update({ item_count: count ?? 0, status: "synced" })
+        .eq("id", existingKs[0].id);
+    } else {
+      await sb.from("knowledge_sources").insert({
         name: "Meeting Transcripts",
         icon: "Phone",
         source_type: "fireflies",
         integration_id: "fireflies",
         item_count: count ?? 0,
         status: "synced",
-      },
-      { onConflict: "integration_id" }
-    );
+      });
+    }
 
     return new Response(
       JSON.stringify({
