@@ -1,5 +1,4 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
-import odditMascot from "@/assets/oddit-brain-mascot.png";
 import {
   useBrainStatus,
   useBrainHealth,
@@ -111,14 +110,12 @@ const Index = () => {
 
   return (
     <DashboardLayout>
-      {/* Header with Mascot */}
+      {/* Header */}
       <div className="mb-10 animate-fade-in">
-        <div className="flex items-center gap-4 mb-2">
-          <img
-            src={odditMascot}
-            alt="Oddit Brain mascot"
-            className="h-16 w-16 rounded-2xl border border-primary/20 shadow-lg shadow-primary/10 animate-float"
-          />
+        <div className="flex items-center gap-3 mb-2">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary animate-glow-pulse">
+            <Brain className="h-5 w-5 text-primary-foreground" />
+          </div>
           <div>
             <h1 className="text-2xl font-bold text-cream">
               {brainStatus?.name ?? "Oddit Brain"}
@@ -126,10 +123,7 @@ const Index = () => {
                 <span className="ml-2 text-sm font-normal text-muted-foreground">v{brainStatus.version}</span>
               )}
             </h1>
-            <p className="text-[13px] text-muted-foreground italic">
-              "Eight arms. One mission. Better conversions." 🐙
-            </p>
-            <p className="text-[12px] text-muted-foreground flex items-center gap-2 mt-0.5">
+            <p className="text-[13px] text-muted-foreground flex items-center gap-2">
               <span className={`inline-block h-2 w-2 rounded-full ${isConnected ? "bg-accent animate-pulse" : "bg-destructive"}`} />
               {isConnected ? "Connected" : "Unreachable"}
               {brainStatus && <span>• {brainStatus.connected_tools} tools</span>}
