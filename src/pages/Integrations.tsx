@@ -10,6 +10,7 @@ import {
   Shield,
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 type ConnectionStatus = "connected" | "disconnected" | "syncing";
 
@@ -71,24 +72,26 @@ const Integrations = () => {
   const totalItems = integrations.filter((i) => i.status === "connected").reduce((sum, i) => sum + (i.itemsSynced ?? 0), 0);
 
   const handleToggle = (id: string) => {
-    setIntegrations((prev) =>
-      prev.map((i) =>
-        i.id === id
-          ? {
-              ...i,
-              status: i.status === "connected" ? "disconnected" : "syncing",
-              ...(i.status === "disconnected" && { lastSync: "Just now", itemsSynced: 0, connectedBy: "You" }),
-            }
-          : i
-      )
-    );
-    // Simulate sync completing
-    if (integrations.find((i) => i.id === id)?.status === "disconnected") {
+    const integration = integrations.find((i) => i.id === id);
+    if (!integration) return;
+
+    if (integration.status === "connected") {
+      setIntegrations((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, status: "disconnected" as ConnectionStatus, lastSync: undefined, itemsSynced: undefined, connectedBy: undefined } : i))
+      );
+      toast.success(`${integration.name} disconnected`, { description: "Data sync has been paused" });
+    } else if (integration.status === "disconnected") {
+      setIntegrations((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, status: "syncing" as ConnectionStatus, lastSync: "Just now", itemsSynced: 0, connectedBy: "You" } : i))
+      );
+      toast.loading(`Connecting ${integration.name}...`, { id: `sync-${id}`, description: "Authenticating and starting initial sync" });
+
       setTimeout(() => {
         setIntegrations((prev) =>
-          prev.map((i) => (i.id === id ? { ...i, status: "connected" } : i))
+          prev.map((i) => (i.id === id ? { ...i, status: "connected" as ConnectionStatus, itemsSynced: Math.floor(Math.random() * 500) + 50 } : i))
         );
-      }, 2000);
+        toast.success(`${integration.name} connected!`, { id: `sync-${id}`, description: "Brain is now indexing data from this source" });
+      }, 2500);
     }
   };
 

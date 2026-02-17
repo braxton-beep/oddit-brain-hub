@@ -11,6 +11,7 @@ import SlackAgent from "./pages/SlackAgent";
 import Integrations from "./pages/Integrations";
 import SettingsPage from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import { WelcomeTour } from "./components/WelcomeTour";
 
 const queryClient = new QueryClient();
 
@@ -19,6 +20,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <WelcomeTour />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
