@@ -6,7 +6,6 @@ import {
   Code2,
   MessageSquare,
   Settings,
-  Figma,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -27,26 +26,31 @@ export function AppSidebar() {
   return (
     <aside
       className={`flex flex-col border-r border-border bg-sidebar transition-all duration-200 ${
-        collapsed ? "w-16" : "w-60"
+        collapsed ? "w-16" : "w-56"
       }`}
     >
-      <div className="flex h-14 items-center gap-2 border-b border-border px-4">
-        <Brain className="h-6 w-6 shrink-0 text-primary" />
+      {/* Logo */}
+      <div className="flex h-16 items-center gap-3 border-b border-border px-4">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
+          <Brain className="h-4 w-4 text-primary-foreground" />
+        </div>
         {!collapsed && (
-          <span className="text-gradient text-lg font-bold tracking-tight">
-            Oddit Brain
-          </span>
+          <div>
+            <span className="text-sm font-bold tracking-tight text-cream">oddit</span>
+            <span className="ml-1 text-xs font-medium text-accent">brain</span>
+          </div>
         )}
       </div>
 
-      <nav className="flex-1 space-y-1 p-2">
+      {/* Nav */}
+      <nav className="flex-1 space-y-0.5 p-3">
         {navItems.map((item) => (
           <NavLink
             key={item.url}
             to={item.url}
             end={item.url === "/"}
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            activeClassName="bg-sidebar-accent text-primary font-medium"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium text-sidebar-foreground transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            activeClassName="bg-primary/10 text-primary border border-primary/20"
           >
             <item.icon className="h-4 w-4 shrink-0" />
             {!collapsed && <span>{item.title}</span>}
@@ -54,9 +58,10 @@ export function AppSidebar() {
         ))}
       </nav>
 
+      {/* Collapse */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex h-10 items-center justify-center border-t border-border text-muted-foreground hover:text-foreground transition-colors"
+        className="flex h-12 items-center justify-center border-t border-border text-muted-foreground hover:text-foreground transition-colors"
       >
         {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
       </button>
