@@ -1,5 +1,4 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { useAuth } from "@/hooks/useAuth";
 import {
   useIntegrationCredentials,
   useUpsertCredential,
@@ -15,7 +14,7 @@ import {
   Trash2,
   Eye,
   EyeOff,
-  LogOut,
+  
   ExternalLink,
   Sparkles,
   ArrowRight,
@@ -68,7 +67,6 @@ const CATEGORIES = [
 ];
 
 const SettingsPage = () => {
-  const { session, signOut } = useAuth();
   const { data: credentials, isLoading } = useIntegrationCredentials();
   const upsert = useUpsertCredential();
   const remove = useDeleteCredential();
@@ -117,17 +115,10 @@ const SettingsPage = () => {
           <div>
             <h1 className="text-2xl font-bold text-cream">Settings</h1>
             <p className="text-[13px] text-muted-foreground">
-              Signed in as {session?.user?.email}
+              Manage your integration API keys
             </p>
           </div>
         </div>
-        <button
-          onClick={() => signOut()}
-          className="flex items-center gap-2 rounded-lg bg-secondary border border-border px-4 py-2.5 text-sm font-bold text-foreground hover:border-destructive/30 hover:text-destructive transition-colors"
-        >
-          <LogOut className="h-4 w-4" />
-          Sign Out
-        </button>
       </div>
 
       {/* Welcome / Progress Banner */}
