@@ -1,51 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 220 20% 7%;
-    --foreground: 210 20% 92%;
+    /* Oddit-inspired palette — dark mode internal tool */
+    --background: 230 35% 7%;
+    --foreground: 48 60% 92%;
 
-    --card: 220 18% 10%;
-    --card-foreground: 210 20% 92%;
+    --card: 230 30% 10%;
+    --card-foreground: 48 60% 92%;
 
-    --popover: 220 18% 10%;
-    --popover-foreground: 210 20% 92%;
+    --popover: 230 30% 10%;
+    --popover-foreground: 48 60% 92%;
 
-    --primary: 174 72% 50%;
-    --primary-foreground: 220 20% 7%;
+    /* Oddit signature blue */
+    --primary: 245 100% 55%;
+    --primary-foreground: 48 100% 95%;
 
-    --secondary: 220 16% 14%;
-    --secondary-foreground: 210 20% 80%;
+    --secondary: 230 25% 14%;
+    --secondary-foreground: 48 40% 80%;
 
-    --muted: 220 14% 16%;
-    --muted-foreground: 215 15% 55%;
+    --muted: 230 20% 16%;
+    --muted-foreground: 230 15% 50%;
 
-    --accent: 174 72% 50%;
-    --accent-foreground: 220 20% 7%;
+    /* Oddit mint green */
+    --accent: 160 60% 65%;
+    --accent-foreground: 230 35% 7%;
 
     --destructive: 0 72% 55%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 48 100% 95%;
 
-    --border: 220 14% 18%;
-    --input: 220 14% 18%;
-    --ring: 174 72% 50%;
+    --border: 230 20% 16%;
+    --input: 230 20% 16%;
+    --ring: 245 100% 55%;
 
-    --radius: 0.5rem;
+    --radius: 0.625rem;
 
-    --sidebar-background: 220 20% 5%;
-    --sidebar-foreground: 210 15% 70%;
-    --sidebar-primary: 174 72% 50%;
-    --sidebar-primary-foreground: 220 20% 7%;
-    --sidebar-accent: 220 16% 12%;
-    --sidebar-accent-foreground: 210 20% 92%;
-    --sidebar-border: 220 14% 14%;
-    --sidebar-ring: 174 72% 50%;
+    --sidebar-background: 230 35% 5%;
+    --sidebar-foreground: 230 15% 55%;
+    --sidebar-primary: 245 100% 55%;
+    --sidebar-primary-foreground: 48 100% 95%;
+    --sidebar-accent: 230 25% 12%;
+    --sidebar-accent-foreground: 48 60% 92%;
+    --sidebar-border: 230 20% 12%;
+    --sidebar-ring: 245 100% 55%;
 
-    --success: 152 60% 50%;
-    --warning: 38 90% 55%;
-    --glow-primary: 0 0 20px hsl(174 72% 50% / 0.15);
+    --success: 160 60% 50%;
+    --warning: 40 90% 60%;
+    --cream: 48 100% 95%;
   }
 }
 
@@ -55,21 +60,34 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
 }
 
 @layer utilities {
   .glow-card {
-    box-shadow: 0 0 0 1px hsl(220 14% 18%), 0 4px 24px -4px hsl(0 0% 0% / 0.4);
-    transition: box-shadow 0.2s ease;
+    box-shadow: 0 0 0 1px hsl(230 20% 16%), 0 4px 24px -4px hsl(0 0% 0% / 0.5);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
   }
   .glow-card:hover {
-    box-shadow: 0 0 0 1px hsl(174 72% 50% / 0.3), 0 4px 32px -4px hsl(174 72% 50% / 0.1);
+    box-shadow: 0 0 0 1px hsl(245 100% 55% / 0.35), 0 8px 32px -4px hsl(245 100% 55% / 0.12);
+    transform: translateY(-1px);
   }
   .text-gradient {
-    background: linear-gradient(135deg, hsl(174 72% 50%), hsl(174 72% 70%));
+    background: linear-gradient(135deg, hsl(245 100% 60%), hsl(160 60% 65%));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+  }
+  .text-cream {
+    color: hsl(48 100% 95%);
+  }
+  .bg-oddit-blue {
+    background-color: hsl(245 100% 55%);
+  }
+  .bg-oddit-mint {
+    background-color: hsl(160 60% 65%);
+  }
+  .border-oddit-blue {
+    border-color: hsl(245 100% 55%);
   }
 }
