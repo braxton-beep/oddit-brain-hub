@@ -7,8 +7,10 @@ import {
   CheckCircle2,
   Loader2,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { toast } from "sonner";
+
+const ASK_BRAIN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-brain`;
 
 const channels = [
   { name: "#oddit-brain-ai", members: 6, status: "active" as const },
@@ -25,22 +27,7 @@ interface Message {
   botReply: string;
 }
 
-const botResponses: Record<string, string> = {
-  "status": "All systems operational. 4 projects in pipeline, 8 tools connected, 23 workflow executions today.",
-  "audit": "Latest audits: Braxley Bands (+40% CVR), TechFlow (+22%), NovaPay (in progress). Want me to generate a summary report?",
-  "report": "I can generate reports for any active client. Currently 6 reports in the system — 3 completed, 1 generating, 1 draft, 1 failed.",
-  "help": "I can help with: project status updates, audit insights, report generation, KPI tracking, workflow triggers, and meeting summaries. Just ask!",
-  "default": "I've searched across 4,971 indexed items in the knowledge base. Could you be more specific about what you're looking for?",
-};
-
-function getBotResponse(msg: string): string {
-  const m = msg.toLowerCase();
-  if (m.includes("status") || m.includes("how")) return botResponses.status;
-  if (m.includes("audit") || m.includes("conversion")) return botResponses.audit;
-  if (m.includes("report") || m.includes("generate")) return botResponses.report;
-  if (m.includes("help") || m.includes("what can")) return botResponses.help;
-  return botResponses.default;
-}
+// Real AI is used via the ask-brain edge function
 
 const agentCapabilities = [
   "Answer CRO questions from knowledge base",
@@ -54,6 +41,7 @@ const agentCapabilities = [
 const SlackAgent = () => {
   const [testMessage, setTestMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
       channel: "#oddit-brain-ai", user: "Braxton",
@@ -77,23 +65,91 @@ const SlackAgent = () => {
       toast.error("Type a message first");
       return;
     }
-    setIsSending(true);
     const userMsg = testMessage;
     setTestMessage("");
+    setIsSending(true);
 
-    // Simulate delay
-    await new Promise((r) => setTimeout(r, 1500));
-
-    const botReply = getBotResponse(userMsg);
     const now = new Date();
     const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+    // Add placeholder message
     setMessages((prev) => [
-      { channel: "#oddit-brain-ai", user: "You", message: userMsg, time, botReply },
+      { channel: "#oddit-brain-ai", user: "You", message: userMsg, time, botReply: "" },
       ...prev,
     ]);
-    setIsSending(false);
-    toast.success("Brain responded", { description: "Check the conversation above" });
+
+    try {
+      abortRef.current = new AbortController();
+      const resp = await fetch(ASK_BRAIN_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ query: userMsg }),
+        signal: abortRef.current.signal,
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: "Request failed" }));
+        throw new Error(err.error || `Error ${resp.status}`);
+      }
+
+      if (!resp.body) throw new Error("No response body");
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = "";
+      let fullReply = "";
+      let streamDone = false;
+
+      while (!streamDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") { streamDone = true; break; }
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) {
+              fullReply += content;
+              const captured = fullReply;
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[0] = { ...updated[0], botReply: captured };
+                return updated;
+              });
+            }
+          } catch {
+            textBuffer = line + "\n" + textBuffer;
+            break;
+          }
+        }
+      }
+
+      toast.success("Brain responded");
+    } catch (e: any) {
+      if (e.name === "AbortError") return;
+      toast.error("Brain error", { description: e.message });
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[0] = { ...updated[0], botReply: `Error: ${e.message}` };
+        return updated;
+      });
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
