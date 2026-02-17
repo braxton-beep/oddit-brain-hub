@@ -141,8 +141,8 @@ const AuditBrain = () => {
       </div>
 
       {/* Query Bar */}
-      <div className="mb-10 glow-card rounded-xl bg-card p-6 animate-scale-in">
-        <h2 className="text-sm font-bold text-cream uppercase tracking-wider mb-4">Ask the Brain</h2>
+      <div className="mb-10 glow-card glow-card-violet rounded-xl bg-card p-6 animate-scale-in">
+        <h2 className="text-sm font-bold text-gradient-cool uppercase tracking-wider mb-4">Ask the Brain</h2>
         <div className="flex gap-3">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -182,12 +182,12 @@ const AuditBrain = () => {
         {/* Knowledge Sources */}
         <div className="lg:col-span-2">
           <div className="flex items-center gap-2 mb-5">
-            <Database className="h-4 w-4 text-accent" />
+            <Database className="h-4 w-4 text-coral" />
             <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Knowledge Sources</h2>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 stagger-children">
             {knowledgeSources.map((src) => (
-              <div key={src.name} className="glow-card rounded-xl bg-card p-4 flex items-center gap-4 cursor-pointer hover-scale"
+              <div key={src.name} className={`glow-card ${['glow-card-coral', 'glow-card-electric', 'glow-card-gold', 'glow-card-violet', 'glow-card-coral', 'glow-card-electric'][knowledgeSources.indexOf(src) % 6]} rounded-xl bg-card p-4 flex items-center gap-4 cursor-pointer hover-scale`}
                 onClick={() => toast.info(`${src.name}`, { description: `${src.count.toLocaleString()} items indexed • ${src.status === "synced" ? "Up to date" : "Sync in progress..."}` })}
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -215,7 +215,7 @@ const AuditBrain = () => {
         {/* AI Agents */}
         <div>
           <div className="flex items-center gap-2 mb-5">
-            <Brain className="h-4 w-4 text-accent" />
+            <Brain className="h-4 w-4 text-violet" />
             <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Active Agents</h2>
           </div>
           <div className="space-y-2.5">
@@ -225,7 +225,7 @@ const AuditBrain = () => {
               ))
             ) : agents && agents.length > 0 ? (
               agents.map((a, i) => (
-                <div key={i} className="glow-card rounded-xl bg-card p-4 cursor-pointer"
+                <div key={i} className={`glow-card ${['glow-card-electric', 'glow-card-gold', 'glow-card-violet'][i % 3]} rounded-xl bg-card p-4 cursor-pointer`}
                   onClick={() => toast.info(`${a.name}`, { description: `${a.description}` })}
                 >
                   <div className="flex items-center gap-2 mb-2">
@@ -254,9 +254,9 @@ const AuditBrain = () => {
       </div>
 
       {/* Recent Queries */}
-      <section className="mt-10 glow-card rounded-xl bg-card p-5">
+      <section className="mt-10 glow-card glow-card-electric rounded-xl bg-card p-5">
         <div className="flex items-center gap-2 mb-5">
-          <Search className="h-4 w-4 text-accent" />
+          <Search className="h-4 w-4 text-electric" />
           <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Recent Queries</h2>
           <span className="ml-auto text-[11px] text-muted-foreground">{queries.length} queries</span>
         </div>
