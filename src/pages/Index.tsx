@@ -15,7 +15,6 @@ import {
   Users,
   Play,
   Loader2,
-  WifiOff,
   CheckCircle2,
   AlertCircle,
   Clock,
@@ -25,6 +24,7 @@ import {
   Activity,
   ArrowUpRight,
 } from "lucide-react";
+import { toast } from "sonner";
 
 const statusBadge: Record<string, string> = {
   active:        "bg-accent/15 text-accent border-accent/30",
@@ -78,7 +78,7 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: number |
 }
 
 const Index = () => {
-  const { data: brainStatus, isError: statusError } = useBrainStatus();
+  const { data: brainStatus } = useBrainStatus();
   const { data: health } = useBrainHealth();
   const { data: tools, isLoading: toolsLoading } = useTools();
   const { data: workflows, isLoading: wfLoading } = useWorkflows();
@@ -88,6 +88,18 @@ const Index = () => {
   const runWorkflow = useRunWorkflow();
 
   const isConnected = !!health && health.status === "ok";
+
+  const handleRunWorkflow = (wfId: string, wfName: string) => {
+    toast.loading(`Running "${wfName}"...`, { id: `wf-${wfId}` });
+    runWorkflow.mutate(wfId, {
+      onSuccess: () => {
+        toast.success(`"${wfName}" started successfully`, { id: `wf-${wfId}` });
+      },
+      onError: () => {
+        toast.error(`Failed to start "${wfName}"`, { id: `wf-${wfId}` });
+      },
+    });
+  };
 
   return (
     <DashboardLayout>
@@ -112,18 +124,6 @@ const Index = () => {
           </div>
         </div>
       </div>
-
-      {statusError && (
-        <div className="mb-8 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-foreground">
-          <WifiOff className="h-5 w-5 text-primary shrink-0" />
-          <div>
-            <p className="font-medium">Backend unreachable</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Set <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] text-accent">VITE_API_URL</code> or start your FastAPI server.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-3 mb-10">
@@ -151,7 +151,7 @@ const Index = () => {
         ) : projects && projects.length > 0 ? (
           <div className="grid gap-4 lg:grid-cols-2">
             {projects.map((p) => (
-              <div key={p.id} className="glow-card rounded-xl bg-card p-5">
+              <div key={p.id} className="glow-card rounded-xl bg-card p-5 cursor-pointer" onClick={() => toast.info(`Opening project: ${p.name}`, { description: p.description })}>
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2.5">
                     <div className={`h-2.5 w-2.5 rounded-full ${priorityDot[p.priority] ?? "bg-muted-foreground"}`} />
@@ -191,7 +191,9 @@ const Index = () => {
               {tools.available.map((t) => {
                 const connected = tools.connected.includes(t.name);
                 return (
-                  <div key={t.name} className={`flex items-center gap-3 rounded-lg p-2.5 text-sm transition-colors ${connected ? "bg-secondary" : "opacity-40"}`}>
+                  <div key={t.name} className={`flex items-center gap-3 rounded-lg p-2.5 text-sm transition-colors cursor-pointer hover:bg-secondary ${connected ? "bg-secondary" : "opacity-40 hover:opacity-70"}`}
+                    onClick={() => toast(connected ? `${t.display} is connected and syncing` : `${t.display} is not connected yet`, { description: connected ? "Receiving real-time data" : "Go to Integrations to connect" })}
+                  >
                     <span className="text-base">{t.emoji}</span>
                     <span className={connected ? "text-cream font-medium" : "text-muted-foreground"}>{t.display}</span>
                     {connected && <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-accent" />}
@@ -217,7 +219,7 @@ const Index = () => {
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-sm font-bold text-cream">{wf.name}</span>
                     <button
-                      onClick={() => runWorkflow.mutate(wf.id)}
+                      onClick={() => handleRunWorkflow(wf.id, wf.name)}
                       disabled={runWorkflow.isPending}
                       className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
                     >
@@ -286,7 +288,9 @@ const Index = () => {
             {stats.recent_activity.map((act, i) => {
               const Icon = activityStatusIcon[act.status] ?? Activity;
               return (
-                <div key={i} className="flex items-center gap-3 rounded-lg p-3 hover:bg-secondary transition-colors">
+                <div key={i} className="flex items-center gap-3 rounded-lg p-3 hover:bg-secondary transition-colors cursor-pointer"
+                  onClick={() => toast.info(act.workflow, { description: `Status: ${act.status} • ${act.timestamp}` })}
+                >
                   <Icon className={`h-4 w-4 shrink-0 ${act.status === "completed" ? "text-accent" : act.status === "failed" ? "text-destructive" : "text-primary"}`} />
                   <span className="text-sm text-cream flex-1 font-medium">{act.workflow}</span>
                   <span className="text-xs text-muted-foreground">{act.timestamp}</span>

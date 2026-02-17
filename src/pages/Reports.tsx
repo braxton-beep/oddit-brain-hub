@@ -9,8 +9,10 @@ import {
   Plus,
   Loader2,
   BarChart3,
+  X,
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 type ReportStatus = "completed" | "generating" | "draft" | "failed";
 
@@ -23,7 +25,7 @@ interface Report {
   pages: number;
 }
 
-const reports: Report[] = [
+const initialReports: Report[] = [
   { id: "1", client: "Braxley Bands", type: "Full CRO Audit", status: "completed", date: "Feb 15, 2026", pages: 42 },
   { id: "2", client: "TechFlow", type: "Homepage Audit", status: "completed", date: "Feb 14, 2026", pages: 18 },
   { id: "3", client: "NovaPay", type: "Checkout Optimization", status: "generating", date: "Feb 17, 2026", pages: 0 },
@@ -49,7 +51,61 @@ const statusStyles: Record<ReportStatus, { bg: string; icon: typeof CheckCircle2
 
 const Reports = () => {
   const [filter, setFilter] = useState<"all" | ReportStatus>("all");
+  const [reports, setReports] = useState(initialReports);
+  const [showNewReport, setShowNewReport] = useState(false);
+  const [newClient, setNewClient] = useState("");
+  const [newTemplate, setNewTemplate] = useState(templates[0].name);
+
   const filtered = filter === "all" ? reports : reports.filter((r) => r.status === filter);
+
+  const handleNewReport = () => {
+    if (!newClient.trim()) {
+      toast.error("Enter a client name");
+      return;
+    }
+    const id = `new-${Date.now()}`;
+    const newReport: Report = {
+      id,
+      client: newClient,
+      type: newTemplate,
+      status: "generating",
+      date: "Feb 17, 2026",
+      pages: 0,
+    };
+    setReports((prev) => [newReport, ...prev]);
+    setShowNewReport(false);
+    setNewClient("");
+    toast.loading(`Generating "${newTemplate}" for ${newClient}...`, { id });
+
+    // Simulate generation completing
+    setTimeout(() => {
+      setReports((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, status: "completed" as ReportStatus, pages: Math.floor(Math.random() * 30) + 15 } : r))
+      );
+      toast.success(`Report for ${newClient} is ready!`, { id, description: `${newTemplate} completed` });
+    }, 4000);
+  };
+
+  const handleView = (report: Report) => {
+    toast.info(`Viewing: ${report.client} — ${report.type}`, { description: `${report.pages} pages • ${report.date}` });
+  };
+
+  const handleDownload = (report: Report) => {
+    toast.success(`Downloading: ${report.client} — ${report.type}`, { description: `${report.pages}-page PDF export started` });
+  };
+
+  const handleRetry = (report: Report) => {
+    setReports((prev) =>
+      prev.map((r) => (r.id === report.id ? { ...r, status: "generating" as ReportStatus } : r))
+    );
+    toast.loading(`Retrying "${report.type}" for ${report.client}...`, { id: report.id });
+    setTimeout(() => {
+      setReports((prev) =>
+        prev.map((r) => (r.id === report.id ? { ...r, status: "completed" as ReportStatus, pages: Math.floor(Math.random() * 30) + 15 } : r))
+      );
+      toast.success(`Report for ${report.client} is ready!`, { id: report.id });
+    }, 3000);
+  };
 
   return (
     <DashboardLayout>
@@ -63,17 +119,63 @@ const Reports = () => {
             <p className="text-[13px] text-muted-foreground">Automated audit report generation & management</p>
           </div>
         </div>
-        <button className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-accent-foreground hover:opacity-90 transition-opacity">
+        <button
+          onClick={() => setShowNewReport(true)}
+          className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-accent-foreground hover:opacity-90 transition-opacity"
+        >
           <Plus className="h-4 w-4" />
           New Report
         </button>
       </div>
 
+      {/* New Report Modal */}
+      {showNewReport && (
+        <div className="mb-6 glow-card rounded-xl bg-card p-6 border border-primary/20">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-cream uppercase tracking-wider">Generate New Report</h3>
+            <button onClick={() => setShowNewReport(false)} className="text-muted-foreground hover:text-foreground">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 mb-4">
+            <div>
+              <label className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">Client Name</label>
+              <input
+                type="text"
+                value={newClient}
+                onChange={(e) => setNewClient(e.target.value)}
+                placeholder="e.g. Braxley Bands"
+                className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">Template</label>
+              <select
+                value={newTemplate}
+                onChange={(e) => setNewTemplate(e.target.value)}
+                className="w-full rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+              >
+                {templates.map((t) => (
+                  <option key={t.name} value={t.name}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <button
+            onClick={handleNewReport}
+            className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-90 transition-opacity"
+          >
+            <Loader2 className="h-4 w-4" />
+            Generate Report
+          </button>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-4 mb-8">
         {[
-          { label: "Total Reports", value: "1,243" },
-          { label: "This Month", value: "34" },
+          { label: "Total Reports", value: reports.length.toString() },
+          { label: "Completed", value: reports.filter((r) => r.status === "completed").length.toString() },
           { label: "Auto-Generated", value: "89%" },
           { label: "Avg. Pages", value: "28" },
         ].map((s) => (
@@ -120,13 +222,30 @@ const Reports = () => {
                   <div className="flex gap-1.5">
                     {r.status === "completed" && (
                       <>
-                        <button className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary border border-border hover:border-primary/30 transition-colors">
+                        <button onClick={() => handleView(r)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary border border-border hover:border-primary/30 transition-colors" title="View">
                           <Eye className="h-3.5 w-3.5 text-muted-foreground" />
                         </button>
-                        <button className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary border border-border hover:border-primary/30 transition-colors">
+                        <button onClick={() => handleDownload(r)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary border border-border hover:border-primary/30 transition-colors" title="Download">
                           <Download className="h-3.5 w-3.5 text-muted-foreground" />
                         </button>
                       </>
+                    )}
+                    {r.status === "failed" && (
+                      <button onClick={() => handleRetry(r)} className="flex items-center gap-1.5 rounded-lg bg-primary/10 border border-primary/20 px-3 py-1.5 text-[11px] font-bold text-primary hover:opacity-90 transition-opacity">
+                        Retry
+                      </button>
+                    )}
+                    {r.status === "draft" && (
+                      <button onClick={() => {
+                        setReports((prev) => prev.map((rep) => rep.id === r.id ? { ...rep, status: "generating" as ReportStatus } : rep));
+                        toast.loading(`Finalizing "${r.type}" for ${r.client}...`, { id: r.id });
+                        setTimeout(() => {
+                          setReports((prev) => prev.map((rep) => rep.id === r.id ? { ...rep, status: "completed" as ReportStatus } : rep));
+                          toast.success(`${r.client} report finalized!`, { id: r.id });
+                        }, 3000);
+                      }} className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[11px] font-bold text-accent-foreground hover:opacity-90 transition-opacity">
+                        Finalize
+                      </button>
                     )}
                   </div>
                 </div>
@@ -143,7 +262,13 @@ const Reports = () => {
           </div>
           <div className="space-y-2.5">
             {templates.map((t) => (
-              <div key={t.name} className="rounded-lg border border-border bg-secondary p-3.5 hover:border-primary/20 transition-colors cursor-pointer">
+              <div key={t.name} className="rounded-lg border border-border bg-secondary p-3.5 hover:border-primary/20 transition-colors cursor-pointer"
+                onClick={() => {
+                  setNewTemplate(t.name);
+                  setShowNewReport(true);
+                  toast.info(`Selected template: ${t.name}`);
+                }}
+              >
                 <p className="text-sm font-bold text-cream mb-1">{t.name}</p>
                 <p className="text-xs text-muted-foreground mb-2">{t.description}</p>
                 <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{t.uses} reports generated</span>

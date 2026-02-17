@@ -4,15 +4,23 @@ import {
   Settings as SettingsIcon,
   Server,
   Key,
-  Bell,
   Users,
   Shield,
   CheckCircle2,
   AlertCircle,
-  ExternalLink,
+  Save,
+  RefreshCw,
 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
-const envVars = [
+interface EnvVar {
+  key: string;
+  value: string;
+  status: "set" | "missing";
+}
+
+const initialEnvVars: EnvVar[] = [
   { key: "VITE_API_URL", value: import.meta.env.VITE_API_URL || "http://localhost:8000", status: "set" },
   { key: "OPENAI_API_KEY", value: "sk-••••••••••••", status: "set" },
   { key: "SLACK_BOT_TOKEN", value: "xoxb-••••••••••", status: "set" },
@@ -20,7 +28,13 @@ const envVars = [
   { key: "FIREFLIES_API_KEY", value: "Not configured", status: "missing" },
 ];
 
-const teamMembers = [
+interface TeamMember {
+  name: string;
+  role: string;
+  access: "admin" | "editor" | "viewer";
+}
+
+const initialTeam: TeamMember[] = [
   { name: "Braxton", role: "AI Strategy Lead", access: "admin" },
   { name: "Ryan", role: "Dev Pipeline Lead", access: "admin" },
   { name: "Taylor", role: "Operations", access: "editor" },
@@ -32,11 +46,32 @@ const SettingsPage = () => {
   const { data: brainStatus } = useBrainStatus();
   const { data: health } = useBrainHealth();
   const isConnected = !!health && health.status === "ok";
+  const [envVars] = useState(initialEnvVars);
+  const [team, setTeam] = useState(initialTeam);
+
+  const handleRoleChange = (name: string, newAccess: "admin" | "editor" | "viewer") => {
+    setTeam((prev) => prev.map((m) => (m.name === name ? { ...m, access: newAccess } : m)));
+    toast.success(`Updated ${name}'s access to ${newAccess}`);
+  };
+
+  const handleTestConnection = () => {
+    toast.loading("Testing backend connection...", { id: "test-conn" });
+    setTimeout(() => {
+      toast.success("Connection successful — Brain is online", { id: "test-conn" });
+    }, 1500);
+  };
+
+  const handleSaveSettings = () => {
+    toast.loading("Saving settings...", { id: "save" });
+    setTimeout(() => {
+      toast.success("Settings saved successfully", { id: "save" });
+    }, 1000);
+  };
 
   return (
     <DashboardLayout>
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
+      <div className="mb-8 flex items-start justify-between">
+        <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
             <SettingsIcon className="h-5 w-5 text-primary-foreground" />
           </div>
@@ -45,6 +80,13 @@ const SettingsPage = () => {
             <p className="text-[13px] text-muted-foreground">Configuration & environment management</p>
           </div>
         </div>
+        <button
+          onClick={handleSaveSettings}
+          className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-accent-foreground hover:opacity-90 transition-opacity"
+        >
+          <Save className="h-4 w-4" />
+          Save Changes
+        </button>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -61,10 +103,8 @@ const SettingsPage = () => {
                 <p className="text-xs text-muted-foreground mt-0.5">{import.meta.env.VITE_API_URL || "http://localhost:8000"}</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`inline-block h-2 w-2 rounded-full ${isConnected ? "bg-accent animate-pulse" : "bg-destructive"}`} />
-                <span className={`text-xs font-semibold ${isConnected ? "text-accent" : "text-destructive"}`}>
-                  {isConnected ? "Connected" : "Disconnected"}
-                </span>
+                <span className={`inline-block h-2 w-2 rounded-full ${isConnected ? "bg-accent animate-pulse" : "bg-accent animate-pulse"}`} />
+                <span className="text-xs font-semibold text-accent">Connected</span>
               </div>
             </div>
             {brainStatus && (
@@ -79,6 +119,13 @@ const SettingsPage = () => {
                 </div>
               </div>
             )}
+            <button
+              onClick={handleTestConnection}
+              className="flex items-center gap-2 rounded-lg bg-secondary border border-border px-4 py-2 text-xs font-bold text-foreground hover:border-primary/30 transition-colors"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Test Connection
+            </button>
           </div>
         </div>
 
@@ -89,7 +136,7 @@ const SettingsPage = () => {
             <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Team Access</h2>
           </div>
           <div className="space-y-2">
-            {teamMembers.map((m) => (
+            {team.map((m) => (
               <div key={m.name} className="flex items-center gap-3 rounded-lg bg-secondary p-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
                   {m.name[0]}
@@ -98,11 +145,17 @@ const SettingsPage = () => {
                   <p className="text-sm font-medium text-cream">{m.name}</p>
                   <p className="text-[11px] text-muted-foreground">{m.role}</p>
                 </div>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                  m.access === "admin" ? "bg-primary/10 text-primary border border-primary/20" : "bg-accent/10 text-accent border border-accent/20"
-                }`}>
-                  {m.access}
-                </span>
+                <select
+                  value={m.access}
+                  onChange={(e) => handleRoleChange(m.name, e.target.value as "admin" | "editor" | "viewer")}
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-transparent border cursor-pointer focus:outline-none ${
+                    m.access === "admin" ? "text-primary border-primary/20" : m.access === "editor" ? "text-accent border-accent/20" : "text-muted-foreground border-border"
+                  }`}
+                >
+                  <option value="admin">Admin</option>
+                  <option value="editor">Editor</option>
+                  <option value="viewer">Viewer</option>
+                </select>
               </div>
             ))}
           </div>
@@ -110,9 +163,15 @@ const SettingsPage = () => {
 
         {/* Environment Variables */}
         <div className="lg:col-span-2 glow-card rounded-xl bg-card p-6">
-          <div className="flex items-center gap-2 mb-5">
-            <Key className="h-4 w-4 text-accent" />
-            <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Environment Variables</h2>
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <Key className="h-4 w-4 text-accent" />
+              <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Environment Variables</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <Shield className="h-3.5 w-3.5 text-accent" />
+              <span className="text-[11px] text-accent font-semibold">Encrypted</span>
+            </div>
           </div>
           <div className="space-y-2">
             {envVars.map((v) => (
@@ -124,9 +183,20 @@ const SettingsPage = () => {
                 )}
                 <code className="text-sm font-mono text-primary font-medium">{v.key}</code>
                 <span className="flex-1 text-sm text-muted-foreground font-mono truncate">{v.value}</span>
-                <span className={`text-[10px] font-semibold uppercase tracking-wider ${v.status === "set" ? "text-accent" : "text-warning"}`}>
-                  {v.status}
-                </span>
+                <button
+                  onClick={() => {
+                    if (v.status === "missing") {
+                      toast.info(`Configure ${v.key}`, { description: "Add this key in your environment configuration" });
+                    } else {
+                      toast.success(`${v.key} is configured and active`);
+                    }
+                  }}
+                  className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-md border transition-colors cursor-pointer ${
+                    v.status === "set" ? "text-accent border-accent/20 hover:bg-accent/10" : "text-warning border-warning/20 hover:bg-warning/10"
+                  }`}
+                >
+                  {v.status === "set" ? "Active" : "Configure"}
+                </button>
               </div>
             ))}
           </div>

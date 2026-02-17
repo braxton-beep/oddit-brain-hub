@@ -1,4 +1,5 @@
 import { NavLink } from "@/components/NavLink";
+import { TourTrigger } from "@/components/WelcomeTour";
 import {
   LayoutDashboard,
   Brain,
@@ -60,13 +61,16 @@ export function AppSidebar() {
         ))}
       </nav>
 
-      {/* Collapse */}
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="flex h-12 items-center justify-center border-t border-border text-muted-foreground hover:text-foreground transition-colors"
-      >
-        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-      </button>
+      {/* Footer */}
+      <div className="border-t border-border p-3 flex items-center justify-between">
+        {!collapsed && <TourTrigger />}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors ml-auto"
+        >
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </button>
+      </div>
     </aside>
   );
 }
