@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +26,53 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    // Build dynamic context from the database
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sb = createClient(supabaseUrl, supabaseKey);
+
+    const [
+      { data: knowledgeSources },
+      { data: projects },
+      { data: credentials },
+    ] = await Promise.all([
+      sb.from("knowledge_sources").select("*").order("name"),
+      sb.from("projects").select("*").order("created_at", { ascending: false }),
+      sb.from("integration_credentials").select("integration_id").order("integration_id"),
+    ]);
+
+    // Build knowledge context
+    const ksLines = (knowledgeSources ?? []).map(
+      (ks: any) => `- ${ks.name}: ${ks.item_count.toLocaleString()} items (${ks.source_type}, status: ${ks.status})`
+    );
+    const knowledgeBlock = ksLines.length > 0
+      ? `Knowledge sources indexed:\n${ksLines.join("\n")}`
+      : "No knowledge sources have been indexed yet.";
+
+    // Build projects context
+    const projLines = (projects ?? []).map(
+      (p: any) => `- ${p.name} (${p.progress}% complete, ${p.priority} priority, owner: ${p.owner})`
+    );
+    const projectBlock = projLines.length > 0
+      ? `Active projects:\n${projLines.join("\n")}`
+      : "No active projects.";
+
+    // Connected integrations
+    const connectedIntegrations = [...new Set((credentials ?? []).map((c: any) => c.integration_id))];
+    const intBlock = connectedIntegrations.length > 0
+      ? `Connected integrations: ${connectedIntegrations.join(", ")}`
+      : "No integrations connected yet.";
+
+    const systemPrompt = `You are the Oddit Audit Brain — an AI assistant embedded inside a CRO (Conversion Rate Optimization) agency's internal dashboard.
+
+${knowledgeBlock}
+
+${projectBlock}
+
+${intBlock}
+
+Answer questions concisely and specifically using this context. If you don't have data on something, say so honestly rather than making up numbers. Keep answers to 2-3 sentences unless more detail is requested.`;
+
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
@@ -36,24 +84,7 @@ serve(async (req) => {
         body: JSON.stringify({
           model: "google/gemini-3-flash-preview",
           messages: [
-            {
-              role: "system",
-              content: `You are the Oddit Audit Brain — an AI assistant embedded inside a CRO (Conversion Rate Optimization) agency's internal dashboard. You have access to a knowledge base of:
-- 142 meeting notes
-- 87 client call transcripts
-- 23 sales KPI datasets
-- 1,243 audit reports
-- 3,420 Slack messages
-- 56 CRO playbooks
-
-Active clients: Braxley Bands (72% complete, high priority), TechFlow (45%, high), NovaPay (28%, medium), GreenLeaf Co (10%, medium).
-
-Recent results: Braxley Bands saw +40% CVR after hero redesign. GreenLeaf Co +31%. TechFlow +22%.
-
-Top audit recommendations historically: Hero section redesign (avg +22% CVR), trust badge placement (avg +15%), CTA copy changes (avg +12%).
-
-Answer questions concisely and specifically using this knowledge. Use real numbers and data points. Keep answers to 2-3 sentences unless more detail is requested.`,
-            },
+            { role: "system", content: systemPrompt },
             { role: "user", content: query },
           ],
           stream: true,
