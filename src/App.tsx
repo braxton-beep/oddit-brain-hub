@@ -9,6 +9,7 @@ import Reports from "./pages/Reports";
 import DevPipeline from "./pages/DevPipeline";
 import SlackAgent from "./pages/SlackAgent";
 import Integrations from "./pages/Integrations";
+import Vision from "./pages/Vision";
 import SettingsPage from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import { WelcomeTour } from "./components/WelcomeTour";
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/dev-pipeline" element={<DevPipeline />} />
           <Route path="/slack-agent" element={<SlackAgent />} />
           <Route path="/integrations" element={<Integrations />} />
+          <Route path="/vision" element={<Vision />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
