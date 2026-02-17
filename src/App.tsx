@@ -12,6 +12,8 @@ import Integrations from "./pages/Integrations";
 import Vision from "./pages/Vision";
 import SettingsPage from "./pages/Settings";
 import CompetitiveIntel from "./pages/CompetitiveIntel";
+import BenchmarkExplorer from "./pages/BenchmarkExplorer";
+import ClientPortal from "./pages/ClientPortal";
 import NotFound from "./pages/NotFound";
 import { WelcomeTour } from "./components/WelcomeTour";
 
@@ -34,6 +36,8 @@ const App = () => (
           <Route path="/vision" element={<Vision />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/competitive-intel" element={<CompetitiveIntel />} />
+          <Route path="/benchmarks" element={<BenchmarkExplorer />} />
+          <Route path="/portal/:token" element={<ClientPortal />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
@@ -42,4 +46,5 @@ const App = () => (
 );
 
 export default App;
+
 
