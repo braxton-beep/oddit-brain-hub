@@ -35,6 +35,36 @@ export type Database = {
         }
         Relationships: []
       }
+      competitive_intel: {
+        Row: {
+          client_name: string
+          competitor_url: string
+          created_at: string
+          findings: Json | null
+          id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_name?: string
+          competitor_url?: string
+          created_at?: string
+          findings?: Json | null
+          id?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_name?: string
+          competitor_url?: string
+          created_at?: string
+          findings?: Json | null
+          id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       cro_audits: {
         Row: {
           client_name: string
