@@ -74,36 +74,8 @@ async function fetchTranscriptPage(apiKey: string, skip: number): Promise<Firefl
   return json.data?.transcripts ?? [];
 }
 
-async function fetchAllTranscripts(apiKey: string): Promise<FirefliesTranscript[]> {
-  const all: FirefliesTranscript[] = [];
-  let skip = 0;
-
-  while (true) {
-    console.log(`Fetching page at skip=${skip} (page ${Math.floor(skip / PAGE_SIZE) + 1})`);
-    const page = await fetchTranscriptPage(apiKey, skip);
-
-    if (page.length === 0) {
-      console.log(`No more transcripts at skip=${skip}, stopping.`);
-      break;
-    }
-
-    all.push(...page);
-    console.log(`Fetched ${page.length} transcripts (total so far: ${all.length})`);
-
-    if (page.length < PAGE_SIZE) {
-      // Last page — fewer results than page size means no more pages
-      break;
-    }
-
-    skip += PAGE_SIZE;
-  }
-
-  return all;
-}
-
 function buildTranscriptText(sentences: Array<{ speaker_name: string; text: string }> | null): string {
   if (!sentences || sentences.length === 0) return "";
-  // Combine consecutive same-speaker sentences
   const blocks: string[] = [];
   let currentSpeaker = "";
   let currentText = "";
@@ -159,45 +131,63 @@ serve(async (req) => {
     let totalSkipped = 0;
     const errors: string[] = [];
 
-    const UPSERT_BATCH = 100;
-
     for (const cred of creds) {
       try {
         console.log(`Syncing with key ...${cred.api_key.slice(-4)}`);
-        const transcripts = await fetchAllTranscripts(cred.api_key);
-        console.log(`Fetched ${transcripts.length} total transcripts across all pages`);
+        let skip = 0;
+        let pageNum = 0;
 
-        // Build all rows first
-        const rows = transcripts.map((t) => ({
-          fireflies_id: t.id,
-          title: t.title || "Untitled Meeting",
-          date: t.date ? new Date(t.date).toISOString() : null,
-          duration: t.duration || 0,
-          organizer_email: t.organizer_email || null,
-          participants: t.participants || [],
-          summary: t.summary?.overview || t.summary?.shorthand_bullet || "",
-          action_items: t.summary?.action_items || "",
-          transcript_text: buildTranscriptText(t.sentences),
-          speaker_stats: computeSpeakerStats(t.sentences),
-          source_api_key_id: cred.id,
-        }));
+        // Fetch-and-upsert one page at a time to avoid timeout
+        while (true) {
+          pageNum++;
+          console.log(`Fetching page ${pageNum} (skip=${skip})`);
+          const page = await fetchTranscriptPage(cred.api_key, skip);
 
-        // Upsert in batches to avoid payload size limits and timeouts
-        for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
-          const batch = rows.slice(i, i + UPSERT_BATCH);
-          console.log(`Upserting batch ${Math.floor(i / UPSERT_BATCH) + 1} (rows ${i + 1}–${i + batch.length})`);
+          if (page.length === 0) {
+            console.log(`No more transcripts at skip=${skip}, done.`);
+            break;
+          }
 
+          console.log(`Fetched ${page.length} transcripts (page ${pageNum}), upserting...`);
+
+          // Build rows for this page
+          const rows = page.map((t) => ({
+            fireflies_id: t.id,
+            title: t.title || "Untitled Meeting",
+            date: t.date ? new Date(t.date).toISOString() : null,
+            duration: t.duration || 0,
+            organizer_email: t.organizer_email || null,
+            participants: t.participants || [],
+            summary: t.summary?.overview || t.summary?.shorthand_bullet || "",
+            action_items: t.summary?.action_items || "",
+            transcript_text: buildTranscriptText(t.sentences),
+            speaker_stats: computeSpeakerStats(t.sentences),
+            source_api_key_id: cred.id,
+          }));
+
+          // Upsert this page immediately
           const { error: upsertErr } = await sb
             .from("fireflies_transcripts")
-            .upsert(batch, { onConflict: "fireflies_id" });
+            .upsert(rows, { onConflict: "fireflies_id" });
 
           if (upsertErr) {
-            console.error(`Batch upsert error at offset ${i}: ${upsertErr.message}`);
-            totalSkipped += batch.length;
+            console.error(`Upsert error on page ${pageNum}: ${upsertErr.message}`);
+            totalSkipped += page.length;
           } else {
-            totalSynced += batch.length;
+            totalSynced += page.length;
+            console.log(`Upserted page ${pageNum} (${page.length} rows). Total synced: ${totalSynced}`);
           }
+
+          if (page.length < PAGE_SIZE) {
+            // Partial page = last page
+            console.log(`Partial page (${page.length} < ${PAGE_SIZE}), finished.`);
+            break;
+          }
+
+          skip += PAGE_SIZE;
         }
+
+        console.log(`Finished syncing key ...${cred.api_key.slice(-4)}: ${totalSynced} synced, ${totalSkipped} skipped`);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Unknown error";
         console.error(`Error with key ...${cred.api_key.slice(-4)}: ${msg}`);
@@ -205,10 +195,12 @@ serve(async (req) => {
       }
     }
 
-    // Update knowledge_sources with real count
+    // Get true count from DB using count query (no limit)
     const { count } = await sb
       .from("fireflies_transcripts")
       .select("*", { count: "exact", head: true });
+
+    console.log(`True DB count after sync: ${count}`);
 
     // Update or insert the knowledge source entry for Fireflies
     const { data: existingKs } = await sb
