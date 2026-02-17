@@ -35,10 +35,14 @@ serve(async (req) => {
       { data: knowledgeSources },
       { data: projects },
       { data: credentials },
+      { data: recentTranscripts },
+      { count: totalTranscripts },
     ] = await Promise.all([
       sb.from("knowledge_sources").select("*").order("name"),
       sb.from("projects").select("*").order("created_at", { ascending: false }),
       sb.from("integration_credentials").select("integration_id").order("integration_id"),
+      sb.from("fireflies_transcripts").select("title, date, summary, action_items, organizer_email, participants, duration").order("date", { ascending: false }).limit(20),
+      sb.from("fireflies_transcripts").select("*", { count: "exact", head: true }),
     ]);
 
     // Build knowledge context
@@ -63,6 +67,22 @@ serve(async (req) => {
       ? `Connected integrations: ${connectedIntegrations.join(", ")}`
       : "No integrations connected yet.";
 
+    // Fireflies meeting data
+    let meetingBlock = "";
+    if (recentTranscripts && recentTranscripts.length > 0) {
+      const meetingLines = recentTranscripts.map((t: any) => {
+        const date = t.date ? new Date(t.date).toLocaleDateString() : "Unknown date";
+        const dur = t.duration ? `${Math.round(t.duration / 60)}min` : "";
+        const participants = t.participants?.join(", ") || "Unknown";
+        const summary = t.summary ? t.summary.substring(0, 200) : "No summary";
+        const actions = t.action_items ? `Action items: ${t.action_items.substring(0, 150)}` : "";
+        return `- "${t.title}" (${date}, ${dur}, participants: ${participants})\n  Summary: ${summary}\n  ${actions}`.trim();
+      });
+      meetingBlock = `\nFireflies Meeting Data (${totalTranscripts ?? 0} total transcripts, showing ${recentTranscripts.length} most recent):\n${meetingLines.join("\n")}`;
+    } else {
+      meetingBlock = "\nNo Fireflies meeting transcripts have been synced yet.";
+    }
+
     const systemPrompt = `You are the Oddit Audit Brain — an AI assistant embedded inside a CRO (Conversion Rate Optimization) agency's internal dashboard.
 
 ${knowledgeBlock}
@@ -70,8 +90,9 @@ ${knowledgeBlock}
 ${projectBlock}
 
 ${intBlock}
+${meetingBlock}
 
-Answer questions concisely and specifically using this context. If you don't have data on something, say so honestly rather than making up numbers. Keep answers to 2-3 sentences unless more detail is requested.`;
+Answer questions concisely and specifically using this context. Reference specific meetings, dates, and participants when relevant. If you don't have data on something, say so honestly rather than making up numbers. Keep answers to 2-3 sentences unless more detail is requested.`;
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",

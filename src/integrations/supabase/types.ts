@@ -71,6 +71,65 @@ export type Database = {
         }
         Relationships: []
       }
+      fireflies_transcripts: {
+        Row: {
+          action_items: string | null
+          created_at: string
+          date: string | null
+          duration: number | null
+          fireflies_id: string
+          id: string
+          organizer_email: string | null
+          participants: string[] | null
+          source_api_key_id: string | null
+          speaker_stats: Json | null
+          summary: string | null
+          title: string
+          transcript_text: string | null
+          updated_at: string
+        }
+        Insert: {
+          action_items?: string | null
+          created_at?: string
+          date?: string | null
+          duration?: number | null
+          fireflies_id: string
+          id?: string
+          organizer_email?: string | null
+          participants?: string[] | null
+          source_api_key_id?: string | null
+          speaker_stats?: Json | null
+          summary?: string | null
+          title?: string
+          transcript_text?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action_items?: string | null
+          created_at?: string
+          date?: string | null
+          duration?: number | null
+          fireflies_id?: string
+          id?: string
+          organizer_email?: string | null
+          participants?: string[] | null
+          source_api_key_id?: string | null
+          speaker_stats?: Json | null
+          summary?: string | null
+          title?: string
+          transcript_text?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fireflies_transcripts_source_api_key_id_fkey"
+            columns: ["source_api_key_id"]
+            isOneToOne: false
+            referencedRelation: "integration_credentials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integration_credentials: {
         Row: {
           api_key: string
