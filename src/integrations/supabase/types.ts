@@ -71,6 +71,50 @@ export type Database = {
         }
         Relationships: []
       }
+      email_drafts: {
+        Row: {
+          call_date: string | null
+          client_name: string
+          created_at: string
+          draft_body: string
+          id: string
+          status: string
+          subject_line: string
+          transcript_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          call_date?: string | null
+          client_name?: string
+          created_at?: string
+          draft_body?: string
+          id?: string
+          status?: string
+          subject_line?: string
+          transcript_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          call_date?: string | null
+          client_name?: string
+          created_at?: string
+          draft_body?: string
+          id?: string
+          status?: string
+          subject_line?: string
+          transcript_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_drafts_transcript_id_fkey"
+            columns: ["transcript_id"]
+            isOneToOne: false
+            referencedRelation: "fireflies_transcripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fireflies_transcripts: {
         Row: {
           action_items: string | null
