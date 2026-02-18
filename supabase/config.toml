@@ -36,4 +36,7 @@ verify_jwt = false
 [functions.figma-sync]
 verify_jwt = false
 
+[functions.google-drive-sync]
+verify_jwt = false
+
 
