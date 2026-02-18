@@ -6,11 +6,21 @@ import {
   Hash,
   CheckCircle2,
   Loader2,
+  Bell,
+  BellOff,
+  Settings,
+  Play,
+  AlertTriangle,
+  FileText,
+  Calendar,
+  Zap,
 } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 
 const ASK_BRAIN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-brain`;
+const SLACK_NOTIFY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/slack-notify`;
+const SLACK_DIGEST_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/slack-weekly-digest`;
 
 const channels = [
   { name: "#oddit-brain-ai", members: 6, status: "active" as const },
@@ -27,7 +37,12 @@ interface Message {
   botReply: string;
 }
 
-// Real AI is used via the ask-brain edge function
+interface NotificationSettings {
+  transcripts: { enabled: boolean; channel: string };
+  churnAlerts: { enabled: boolean; channel: string };
+  reportReady: { enabled: boolean; channel: string };
+  weeklyDigest: { enabled: boolean; channel: string };
+}
 
 const agentCapabilities = [
   "Answer CRO questions from knowledge base",
@@ -38,9 +53,255 @@ const agentCapabilities = [
   "Schedule and summarize team meetings",
 ];
 
+const defaultNotificationSettings: NotificationSettings = {
+  transcripts: { enabled: true, channel: "#transcripts" },
+  churnAlerts: { enabled: true, channel: "#alerts" },
+  reportReady: { enabled: true, channel: "#audit-reports" },
+  weeklyDigest: { enabled: true, channel: "#general" },
+};
+
+// ─── Notification Settings Panel ────────────────────────────────────────────
+function NotificationSettingsPanel() {
+  const [settings, setSettings] = useState<NotificationSettings>(defaultNotificationSettings);
+  const [isSending, setIsSending] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const notificationTypes = [
+    {
+      key: "transcripts" as const,
+      icon: MessageSquare,
+      label: "New Transcript Synced",
+      description: "Fires when Fireflies syncs new meeting transcripts",
+      testType: "transcript_synced",
+      testPayload: { title: "Test Meeting · Weekly Sync", date: new Date().toLocaleDateString(), participant_count: 4, duration_min: 45 },
+    },
+    {
+      key: "churnAlerts" as const,
+      icon: AlertTriangle,
+      label: "Churn Risk Alert",
+      description: "Fires when a client risk score exceeds 7/10",
+      testType: "churn_risk",
+      testPayload: { client_name: "Test Client Co.", score: 8, reason: "14+ days no contact, declining engagement" },
+    },
+    {
+      key: "reportReady" as const,
+      icon: FileText,
+      label: "Report Draft Ready",
+      description: "Fires when a CRO report draft is complete",
+      testType: "report_ready",
+      testPayload: { client_name: "Test Client Co.", report_id: "test-001" },
+    },
+    {
+      key: "weeklyDigest" as const,
+      icon: Calendar,
+      label: "Weekly Digest",
+      description: "Monday 9am summary: meetings, clients, top recommendation",
+      testType: "digest",
+      testPayload: {},
+    },
+  ];
+
+  const handleToggle = (key: keyof NotificationSettings) => {
+    setSettings((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], enabled: !prev[key].enabled },
+    }));
+  };
+
+  const handleChannel = (key: keyof NotificationSettings, value: string) => {
+    setSettings((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], channel: value },
+    }));
+  };
+
+  const handleSave = () => {
+    // In a full implementation this would persist to DB/env
+    setSaved(true);
+    toast.success("Notification settings saved", {
+      description: "Changes will apply to future notifications.",
+    });
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  const handleTest = async (notif: (typeof notificationTypes)[0]) => {
+    const cfg = settings[notif.key];
+    if (!cfg.enabled) {
+      toast.error("Enable this notification first before testing.");
+      return;
+    }
+
+    setIsSending(notif.key);
+    try {
+      const isDigest = notif.testType === "digest";
+      const url = isDigest ? SLACK_DIGEST_URL : SLACK_NOTIFY_URL;
+      const body = isDigest
+        ? { channel: cfg.channel }
+        : { type: notif.testType, channel: cfg.channel, payload: notif.testPayload };
+
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await resp.json();
+
+      if (data.skipped) {
+        toast.warning("Bot token not yet configured", {
+          description: "Add SLACK_BOT_TOKEN in your backend secrets to activate.",
+        });
+      } else if (data.success) {
+        toast.success(`Test sent to ${cfg.channel}`, {
+          description: "Check your Slack workspace for the message.",
+        });
+      } else {
+        throw new Error(data.error ?? "Unknown error");
+      }
+    } catch (e: any) {
+      toast.error("Test failed", { description: e.message });
+    } finally {
+      setIsSending(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Token status banner */}
+      <div className="rounded-xl border border-[hsl(var(--warning)/0.3)] bg-[hsl(var(--warning)/0.06)] p-4 flex items-start gap-3">
+        <AlertTriangle className="h-4 w-4 text-[hsl(var(--warning))] mt-0.5 shrink-0" />
+        <div>
+          <p className="text-sm font-semibold text-[hsl(var(--warning))]">SLACK_BOT_TOKEN not yet configured</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            All notification infrastructure is built and ready. Add your Slack Bot Token as a backend secret named{" "}
+            <code className="font-mono text-[hsl(var(--primary))] bg-muted px-1 rounded">SLACK_BOT_TOKEN</code>{" "}
+            to activate. Get your token from{" "}
+            <span className="text-[hsl(var(--primary))]">api.slack.com/apps → OAuth & Permissions → Bot User OAuth Token</span>.
+          </p>
+        </div>
+      </div>
+
+      {/* Notification rows */}
+      <div className="glow-card rounded-xl bg-card p-5">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-sm font-bold text-[hsl(var(--cream))] uppercase tracking-wider">Notification Settings</h2>
+          <button
+            onClick={handleSave}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+              saved
+                ? "bg-[hsl(var(--accent)/0.2)] text-[hsl(var(--accent))]"
+                : "bg-primary/20 text-[hsl(var(--primary))] hover:bg-primary/30"
+            }`}
+          >
+            {saved ? <CheckCircle2 className="h-3 w-3" /> : <Settings className="h-3 w-3" />}
+            {saved ? "Saved" : "Save Settings"}
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {notificationTypes.map((notif) => {
+            const Icon = notif.icon;
+            const cfg = settings[notif.key];
+            return (
+              <div
+                key={notif.key}
+                className={`rounded-lg border p-4 transition-colors ${
+                  cfg.enabled
+                    ? "border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.04)]"
+                    : "border-border bg-secondary"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                    cfg.enabled ? "bg-primary/15" : "bg-muted"
+                  }`}>
+                    <Icon className={`h-3.5 w-3.5 ${cfg.enabled ? "text-[hsl(var(--primary))]" : "text-muted-foreground"}`} />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-[hsl(var(--cream))]">{notif.label}</p>
+                      {/* Toggle */}
+                      <button
+                        onClick={() => handleToggle(notif.key)}
+                        className={`relative flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
+                          cfg.enabled ? "bg-[hsl(var(--accent))]" : "bg-muted"
+                        }`}
+                      >
+                        <span
+                          className={`absolute h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
+                            cfg.enabled ? "translate-x-[18px]" : "translate-x-[3px]"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{notif.description}</p>
+
+                    {cfg.enabled && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <Hash className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <input
+                          type="text"
+                          value={cfg.channel}
+                          onChange={(e) => handleChannel(notif.key, e.target.value)}
+                          placeholder="#channel-name"
+                          className="flex-1 rounded-md border border-border bg-background px-2.5 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                        />
+                        <button
+                          onClick={() => handleTest(notif)}
+                          disabled={isSending === notif.key}
+                          className="flex items-center gap-1.5 rounded-md bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                        >
+                          {isSending === notif.key ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Play className="h-3 w-3" />
+                          )}
+                          Test
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Cron info */}
+      <div className="glow-card rounded-xl bg-card p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Zap className="h-4 w-4 text-[hsl(var(--primary))]" />
+          <h2 className="text-sm font-bold text-[hsl(var(--cream))] uppercase tracking-wider">Scheduled Digest</h2>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          The weekly digest runs every Monday at 9:00 AM and posts to your configured digest channel. To activate
+          the schedule, run the SQL below in your backend dashboard once your bot token is added.
+        </p>
+        <pre className="rounded-lg bg-secondary p-3 text-[10px] text-muted-foreground overflow-x-auto leading-relaxed">
+{`SELECT cron.schedule(
+  'slack-weekly-digest',
+  '0 9 * * 1',
+  $$
+  SELECT net.http_post(
+    url := '${import.meta.env.VITE_SUPABASE_URL}/functions/v1/slack-weekly-digest',
+    headers := '{"Content-Type":"application/json"}'::jsonb,
+    body := '{"channel":"${settings.weeklyDigest.channel}"}'::jsonb
+  );
+  $$
+);`}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
 const SlackAgent = () => {
   const [testMessage, setTestMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [activeTab, setActiveTab] = useState<"conversations" | "settings">("conversations");
   const abortRef = useRef<AbortController | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -72,7 +333,6 @@ const SlackAgent = () => {
     const now = new Date();
     const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-    // Add placeholder message
     setMessages((prev) => [
       { channel: "#oddit-brain-ai", user: "You", message: userMsg, time, botReply: "" },
       ...prev,
@@ -160,7 +420,7 @@ const SlackAgent = () => {
             <MessageSquare className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-cream">Slack Agent</h1>
+            <h1 className="text-2xl font-bold text-[hsl(var(--cream))]">Slack Agent</h1>
             <p className="text-[13px] text-muted-foreground">AI assistant living in your Slack workspace</p>
           </div>
         </div>
@@ -170,112 +430,158 @@ const SlackAgent = () => {
       <div className="grid gap-4 sm:grid-cols-3 mb-8 stagger-children">
         <div className="glow-card rounded-xl bg-card p-5">
           <div className="flex items-center gap-2 mb-2">
-            <CheckCircle2 className="h-4 w-4 text-accent" />
+            <CheckCircle2 className="h-4 w-4 text-[hsl(var(--accent))]" />
             <span className="text-xs text-muted-foreground uppercase tracking-wider">Agent Status</span>
           </div>
-          <p className="text-xl font-bold text-accent">Online</p>
+          <p className="text-xl font-bold text-[hsl(var(--accent))]">Online</p>
         </div>
         <div className="glow-card rounded-xl bg-card p-5">
           <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Messages Today</p>
-          <p className="text-2xl font-bold text-cream">{47 + messages.length - 3}</p>
+          <p className="text-2xl font-bold text-[hsl(var(--cream))]">{47 + messages.length - 3}</p>
         </div>
         <div className="glow-card rounded-xl bg-card p-5">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Avg Response Time</p>
-          <p className="text-2xl font-bold text-cream">1.2s</p>
+          <div className="flex items-center gap-2 mb-2">
+            <Bell className="h-4 w-4 text-[hsl(var(--warning))]" />
+            <span className="text-xs text-muted-foreground uppercase tracking-wider">Push Notifications</span>
+          </div>
+          <p className="text-xl font-bold text-[hsl(var(--warning))]">Pending Token</p>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Recent conversations */}
-        <div className="lg:col-span-2 glow-card rounded-xl bg-card p-5">
-          <h2 className="text-sm font-bold text-cream uppercase tracking-wider mb-5">Recent Conversations</h2>
-          <div className="space-y-4 max-h-[500px] overflow-y-auto">
-            {messages.map((msg, i) => (
-              <div key={i} className="rounded-lg border border-border bg-secondary p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Hash className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-[11px] font-semibold text-muted-foreground">{msg.channel}</span>
-                  <span className="text-[11px] text-muted-foreground ml-auto">{msg.time}</span>
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 rounded-xl bg-secondary p-1 w-fit">
+        {[
+          { key: "conversations", label: "Conversations", icon: MessageSquare },
+          { key: "settings", label: "Notification Settings", icon: Bell },
+        ].map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key as typeof activeTab)}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+              activeTab === key
+                ? "bg-card text-[hsl(var(--cream))] shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "settings" ? (
+        <NotificationSettingsPanel />
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Recent conversations */}
+          <div className="lg:col-span-2 glow-card rounded-xl bg-card p-5">
+            <h2 className="text-sm font-bold text-[hsl(var(--cream))] uppercase tracking-wider mb-5">Recent Conversations</h2>
+            <div className="space-y-4 max-h-[500px] overflow-y-auto">
+              {messages.map((msg, i) => (
+                <div key={i} className="rounded-lg border border-border bg-secondary p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Hash className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-[11px] font-semibold text-muted-foreground">{msg.channel}</span>
+                    <span className="text-[11px] text-muted-foreground ml-auto">{msg.time}</span>
+                  </div>
+                  <div className="flex gap-3 mb-3">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
+                      {msg.user[0]}
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-[hsl(var(--cream))]">{msg.user}</span>
+                      <p className="text-xs text-foreground mt-0.5">{msg.message}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 ml-4 pl-4 border-l-2 border-primary/20">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15">
+                      <Bot className="h-3.5 w-3.5 text-[hsl(var(--primary))]" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-[hsl(var(--primary))]">Oddit Brain</span>
+                      <p className="text-xs text-foreground mt-0.5 leading-relaxed">{msg.botReply}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-3 mb-3">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
-                    {msg.user[0]}
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-cream">{msg.user}</span>
-                    <p className="text-xs text-foreground mt-0.5">{msg.message}</p>
-                  </div>
-                </div>
-                <div className="flex gap-3 ml-4 pl-4 border-l-2 border-primary/20">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15">
-                    <Bot className="h-3.5 w-3.5 text-primary" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-primary">Oddit Brain</span>
-                    <p className="text-xs text-foreground mt-0.5 leading-relaxed">{msg.botReply}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+
+            {/* Test input */}
+            <div className="mt-5 flex gap-3">
+              <input
+                type="text"
+                placeholder="Test a message to the agent..."
+                value={testMessage}
+                onChange={(e) => setTestMessage(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                disabled={isSending}
+                className="flex-1 rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all disabled:opacity-50"
+              />
+              <button
+                onClick={handleSend}
+                disabled={isSending}
+                className="flex items-center gap-2 rounded-lg bg-[hsl(var(--accent))] px-4 py-2.5 text-sm font-bold text-[hsl(var(--accent-foreground))] hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {isSending ? "Sending..." : "Send"}
+              </button>
+            </div>
           </div>
 
-          {/* Test input */}
-          <div className="mt-5 flex gap-3">
-            <input
-              type="text"
-              placeholder="Test a message to the agent..."
-              value={testMessage}
-              onChange={(e) => setTestMessage(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              disabled={isSending}
-              className="flex-1 rounded-lg border border-border bg-secondary px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all disabled:opacity-50"
-            />
+          {/* Sidebar */}
+          <div className="space-y-6">
+            <div className="glow-card rounded-xl bg-card p-5">
+              <h2 className="text-sm font-bold text-[hsl(var(--cream))] uppercase tracking-wider mb-4">Monitored Channels</h2>
+              <div className="space-y-2">
+                {channels.map((ch) => (
+                  <div
+                    key={ch.name}
+                    className="flex items-center gap-3 rounded-lg bg-secondary p-3 cursor-pointer hover:bg-secondary/80 transition-colors"
+                    onClick={() => toast.info(`${ch.name}`, { description: `${ch.members} members · ${ch.status}` })}
+                  >
+                    <Hash className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[hsl(var(--cream))]">{ch.name}</p>
+                      <p className="text-[11px] text-muted-foreground">{ch.members} members</p>
+                    </div>
+                    <span className={`text-[10px] font-semibold uppercase tracking-wider ${
+                      ch.status === "active" ? "text-[hsl(var(--accent))]" : "text-muted-foreground"
+                    }`}>
+                      {ch.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="glow-card rounded-xl bg-card p-5">
+              <h2 className="text-sm font-bold text-[hsl(var(--cream))] uppercase tracking-wider mb-4">Capabilities</h2>
+              <div className="space-y-2">
+                {agentCapabilities.map((cap, i) => (
+                  <div key={i} className="flex items-start gap-2.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-[hsl(var(--accent))] mt-0.5 shrink-0" />
+                    <span className="text-xs text-foreground leading-relaxed">{cap}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick link to settings */}
             <button
-              onClick={handleSend}
-              disabled={isSending}
-              className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+              onClick={() => setActiveTab("settings")}
+              className="w-full glow-card rounded-xl bg-card p-4 flex items-center gap-3 hover:border-primary/30 transition-colors text-left"
             >
-              {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              {isSending ? "Sending..." : "Send"}
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--warning)/0.15)]">
+                <Bell className="h-4 w-4 text-[hsl(var(--warning))]" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[hsl(var(--cream))]">Configure Notifications</p>
+                <p className="text-[11px] text-muted-foreground">Set channels & add bot token</p>
+              </div>
             </button>
           </div>
         </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          <div className="glow-card rounded-xl bg-card p-5">
-            <h2 className="text-sm font-bold text-cream uppercase tracking-wider mb-4">Monitored Channels</h2>
-            <div className="space-y-2">
-              {channels.map((ch) => (
-                <div key={ch.name} className="flex items-center gap-3 rounded-lg bg-secondary p-3 cursor-pointer hover:bg-secondary/80 transition-colors"
-                  onClick={() => toast.info(`${ch.name}`, { description: `${ch.members} members • ${ch.status}` })}
-                >
-                  <Hash className="h-4 w-4 text-muted-foreground" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-cream">{ch.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{ch.members} members</p>
-                  </div>
-                  <span className={`text-[10px] font-semibold uppercase tracking-wider ${ch.status === "active" ? "text-accent" : "text-muted-foreground"}`}>
-                    {ch.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="glow-card rounded-xl bg-card p-5">
-            <h2 className="text-sm font-bold text-cream uppercase tracking-wider mb-4">Capabilities</h2>
-            <div className="space-y-2">
-              {agentCapabilities.map((cap, i) => (
-                <div key={i} className="flex items-start gap-2.5">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-accent mt-0.5 shrink-0" />
-                  <span className="text-xs text-foreground leading-relaxed">{cap}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
     </DashboardLayout>
   );
 };

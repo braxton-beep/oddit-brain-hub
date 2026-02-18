@@ -103,6 +103,19 @@ function computeSpeakerStats(sentences: Array<{ speaker_name: string; text: stri
   return Object.entries(stats).map(([name, data]) => ({ name, ...data }));
 }
 
+async function notifySlack(supabaseUrl: string, type: string, channel: string, payload: any) {
+  try {
+    const notifyUrl = `${supabaseUrl}/functions/v1/slack-notify`;
+    await fetch(notifyUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, channel, payload }),
+    });
+  } catch (e) {
+    console.warn("Slack notify failed (non-fatal):", e);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -221,6 +234,17 @@ serve(async (req) => {
         integration_id: "fireflies",
         item_count: count ?? 0,
         status: "synced",
+      });
+    }
+
+    // Fire Slack notification for transcript sync if we synced new ones
+    if (totalSynced > 0) {
+      const notifyChannel = Deno.env.get("SLACK_TRANSCRIPTS_CHANNEL") ?? "#transcripts";
+      await notifySlack(supabaseUrl, "transcript_synced", notifyChannel, {
+        title: `${totalSynced} transcript${totalSynced > 1 ? "s" : ""} synced`,
+        date: new Date().toLocaleDateString(),
+        participant_count: "—",
+        duration_min: "—",
       });
     }
 
