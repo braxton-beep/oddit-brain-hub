@@ -271,6 +271,124 @@ function RunCard({ run }: { run: SetupRun }) {
   );
 }
 
+// ── Workflow pipeline ─────────────────────────────────────────────────────────
+const WORKFLOW_STEPS: Array<{
+  number: number;
+  label: string;
+  description: string;
+  mode: "manual" | "automated";
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  {
+    number: 1,
+    label: "Card moved to Ready For Setup",
+    description: "Someone moves the Asana card into the Ready For Setup column — this is the trigger.",
+    mode: "manual",
+    icon: ArrowRight,
+  },
+  {
+    number: 2,
+    label: "Screenshots captured",
+    description: "Desktop (1440px) and mobile (390px) screenshots taken of the website URL and focus URL on the card.",
+    mode: "automated",
+    icon: Camera,
+  },
+  {
+    number: 3,
+    label: "Figma template duplicated & injected",
+    description: "The template file is duplicated for the client, screenshots injected into the correct frames.",
+    mode: "automated",
+    icon: Figma,
+  },
+  {
+    number: 4,
+    label: "Figma links posted to Asana card",
+    description: "The new Figma file URL and (if applicable) Figma Slides URL are written back into the card description.",
+    mode: "automated",
+    icon: Link2,
+  },
+  {
+    number: 5,
+    label: "Card moved to Setup Complete",
+    description: "The card is automatically moved to the Setup Complete column — ready for the next person.",
+    mode: "automated",
+    icon: MoveRight,
+  },
+];
+
+function WorkflowPipeline() {
+  return (
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+        <p className="text-xs font-semibold text-foreground uppercase tracking-wider">Workflow Pipeline</p>
+        <div className="flex items-center gap-3 text-[10px]">
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <span className="h-2 w-2 rounded-full bg-muted-foreground/40 inline-block" />
+            Manual trigger
+          </span>
+          <span className="flex items-center gap-1.5 text-primary">
+            <span className="h-2 w-2 rounded-full bg-primary inline-block" />
+            Automated
+          </span>
+        </div>
+      </div>
+
+      <div className="px-5 py-4">
+        {WORKFLOW_STEPS.map((step, i) => {
+          const isLast = i === WORKFLOW_STEPS.length - 1;
+          const Icon = step.icon;
+          const isManual = step.mode === "manual";
+
+          return (
+            <div key={step.number} className="flex gap-4">
+              {/* Timeline */}
+              <div className="flex flex-col items-center shrink-0">
+                <div
+                  className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold border-2 transition-colors ${
+                    isManual
+                      ? "border-muted-foreground/30 text-muted-foreground bg-muted/30"
+                      : "border-primary/50 text-primary bg-primary/10"
+                  }`}
+                >
+                  {step.number}
+                </div>
+                {!isLast && (
+                  <div
+                    className={`w-px flex-1 mt-1 ${
+                      isManual ? "bg-muted-foreground/15" : "bg-primary/20"
+                    }`}
+                    style={{ minHeight: 24 }}
+                  />
+                )}
+              </div>
+
+              {/* Content */}
+              <div className={`pb-5 flex-1 min-w-0 ${isLast ? "pb-1" : ""}`}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-sm font-medium text-foreground">{step.label}</span>
+                  <span
+                    className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                      isManual
+                        ? "bg-muted text-muted-foreground"
+                        : "bg-primary/10 text-primary"
+                    }`}
+                  >
+                    {isManual ? "Manual" : "Automated"}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 pl-5 leading-relaxed">
+                  {step.description}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Empty state ───────────────────────────────────────────────────────────────
 function EmptyState() {
   return (
@@ -414,26 +532,8 @@ export default function ReportSetup() {
           ))}
         </div>
 
-        {/* How it works */}
-        <div className="rounded-xl border border-border bg-muted/20 px-5 py-4">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">How it works</p>
-          <div className="flex flex-wrap gap-x-6 gap-y-2">
-            {[
-              "Card moved to Ready For Setup",
-              "Screenshots captured (desktop + mobile)",
-              "Figma template duplicated & injected",
-              "Links posted back to Asana card",
-              "Card moved to Setup Complete",
-            ].map((step, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-foreground shrink-0">
-                  {i + 1}
-                </span>
-                {step}
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Workflow pipeline */}
+        <WorkflowPipeline />
 
         {/* Filter tabs */}
         {runs.length > 0 && (
