@@ -35,6 +35,36 @@ export type Database = {
         }
         Relationships: []
       }
+      brain_prompts: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          label: string
+          prompt: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          label: string
+          prompt: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          label?: string
+          prompt?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       client_implementations: {
         Row: {
           audit_id: string
