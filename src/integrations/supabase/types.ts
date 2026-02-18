@@ -186,6 +186,87 @@ export type Database = {
           },
         ]
       }
+      figma_files: {
+        Row: {
+          client_name: string | null
+          created_at: string
+          design_type: string
+          figma_file_key: string
+          figma_url: string | null
+          id: string
+          last_modified: string | null
+          name: string
+          project_id: string | null
+          project_name: string | null
+          raw_metadata: Json | null
+          tags: string[] | null
+          thumbnail_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_name?: string | null
+          created_at?: string
+          design_type?: string
+          figma_file_key: string
+          figma_url?: string | null
+          id?: string
+          last_modified?: string | null
+          name?: string
+          project_id?: string | null
+          project_name?: string | null
+          raw_metadata?: Json | null
+          tags?: string[] | null
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_name?: string | null
+          created_at?: string
+          design_type?: string
+          figma_file_key?: string
+          figma_url?: string | null
+          id?: string
+          last_modified?: string | null
+          name?: string
+          project_id?: string | null
+          project_name?: string | null
+          raw_metadata?: Json | null
+          tags?: string[] | null
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      figma_projects: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          project_id: string
+          project_name: string
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          project_id: string
+          project_name?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          project_id?: string
+          project_name?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       fireflies_transcripts: {
         Row: {
           action_items: string | null
