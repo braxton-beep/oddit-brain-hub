@@ -658,6 +658,36 @@ export type Database = {
           },
         ]
       }
+      pipeline_projects: {
+        Row: {
+          client: string
+          created_at: string
+          id: string
+          last_update: string
+          page: string
+          stages: Json
+          updated_at: string
+        }
+        Insert: {
+          client?: string
+          created_at?: string
+          id?: string
+          last_update?: string
+          page?: string
+          stages?: Json
+          updated_at?: string
+        }
+        Update: {
+          client?: string
+          created_at?: string
+          id?: string
+          last_update?: string
+          page?: string
+          stages?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       projects: {
         Row: {
           created_at: string
