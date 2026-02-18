@@ -36,6 +36,11 @@ interface IntegrationItem {
 const INTEGRATIONS: IntegrationItem[] = [
   // AI & Core
   { id: "openai", label: "OpenAI", placeholder: "sk-...", description: "Powers the Brain's AI audits, reports, and insights.", setupUrl: "https://platform.openai.com/api-keys", setupLabel: "Get key from OpenAI", category: "ai" },
+  // Social
+  { id: "twitter-consumer-key", label: "Twitter/X — Consumer Key", placeholder: "...", description: "OAuth Consumer Key for the Twitter/X API. Required alongside Consumer Secret + Access Tokens to sync and craft tweets.", setupUrl: "https://developer.x.com/en/portal/dashboard", setupLabel: "X Developer Portal", category: "social" },
+  { id: "twitter-consumer-secret", label: "Twitter/X — Consumer Secret", placeholder: "...", description: "OAuth Consumer Secret. Keep this confidential — it pairs with your Consumer Key.", setupUrl: "https://developer.x.com/en/portal/dashboard", setupLabel: "X Developer Portal", category: "social" },
+  { id: "twitter-access-token", label: "Twitter/X — Access Token", placeholder: "...", description: "Access Token for the authenticated Twitter/X account you want to sync.", setupUrl: "https://developer.x.com/en/portal/dashboard", setupLabel: "X Developer Portal", category: "social" },
+  { id: "twitter-access-secret", label: "Twitter/X — Access Token Secret", placeholder: "...", description: "Access Token Secret. Pairs with your Access Token for OAuth signing.", setupUrl: "https://developer.x.com/en/portal/dashboard", setupLabel: "X Developer Portal", category: "social" },
   // Communication
   { id: "slack", label: "Slack Bot Token", placeholder: "xoxb-...", description: "Enables the Slack Agent to read channels and post updates.", setupUrl: "https://api.slack.com/apps", setupLabel: "Create a Slack App", category: "communication" },
   { id: "gmail", label: "Gmail API Key", placeholder: "AIza...", description: "Index client emails so the Brain can surface context from conversations.", setupUrl: "https://console.cloud.google.com/apis/credentials", setupLabel: "Google Cloud Console", category: "communication" },
@@ -59,6 +64,7 @@ const INTEGRATIONS: IntegrationItem[] = [
 const CATEGORIES = [
   { id: "all", label: "All" },
   { id: "ai", label: "🤖 AI & Core" },
+  { id: "social", label: "🐦 Social" },
   { id: "communication", label: "💬 Communication" },
   { id: "storage", label: "📁 Storage & Docs" },
   { id: "meetings", label: "🎥 Meetings" },
