@@ -404,6 +404,87 @@ export type Database = {
           },
         ]
       }
+      google_drive_files: {
+        Row: {
+          client_name: string | null
+          created_at: string
+          doc_type: string
+          drive_file_id: string
+          drive_url: string | null
+          folder_id: string | null
+          folder_name: string | null
+          id: string
+          last_modified: string | null
+          mime_type: string
+          name: string
+          raw_metadata: Json | null
+          tags: string[] | null
+          thumbnail_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_name?: string | null
+          created_at?: string
+          doc_type?: string
+          drive_file_id: string
+          drive_url?: string | null
+          folder_id?: string | null
+          folder_name?: string | null
+          id?: string
+          last_modified?: string | null
+          mime_type?: string
+          name?: string
+          raw_metadata?: Json | null
+          tags?: string[] | null
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_name?: string | null
+          created_at?: string
+          doc_type?: string
+          drive_file_id?: string
+          drive_url?: string | null
+          folder_id?: string | null
+          folder_name?: string | null
+          id?: string
+          last_modified?: string | null
+          mime_type?: string
+          name?: string
+          raw_metadata?: Json | null
+          tags?: string[] | null
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      google_drive_folders: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          folder_id: string
+          folder_name: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          folder_id: string
+          folder_name?: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          folder_id?: string
+          folder_name?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       integration_credentials: {
         Row: {
           api_key: string

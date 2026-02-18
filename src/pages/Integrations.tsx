@@ -9,6 +9,7 @@ import {
 import { useState } from "react";
 import { useIntegrationCredentials } from "@/hooks/useIntegrationCredentials";
 import { FigmaIntegration } from "@/components/FigmaIntegration";
+import { GoogleDriveIntegration } from "@/components/GoogleDriveIntegration";
 
 interface IntegrationDef {
   id: string;
@@ -200,6 +201,9 @@ const Integrations = () => {
 
       {/* Figma Integration Section */}
       <FigmaIntegration />
+
+      {/* Google Drive Integration Section */}
+      <GoogleDriveIntegration />
 
       {/* Footer note */}
       <div className="mt-10 rounded-xl border border-border bg-card p-5 flex items-start gap-4">
