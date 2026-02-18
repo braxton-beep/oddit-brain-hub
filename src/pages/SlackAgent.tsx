@@ -22,13 +22,6 @@ const ASK_BRAIN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-bra
 const SLACK_NOTIFY_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/slack-notify`;
 const SLACK_DIGEST_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/slack-weekly-digest`;
 
-const channels = [
-  { name: "#oddit-brain-ai", members: 6, status: "active" as const },
-  { name: "#dev-pipeline", members: 4, status: "active" as const },
-  { name: "#audit-reports", members: 5, status: "active" as const },
-  { name: "#general", members: 12, status: "monitoring" as const },
-];
-
 interface Message {
   channel: string;
   user: string;
@@ -303,23 +296,7 @@ const SlackAgent = () => {
   const [isSending, setIsSending] = useState(false);
   const [activeTab, setActiveTab] = useState<"conversations" | "settings">("conversations");
   const abortRef = useRef<AbortController | null>(null);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      channel: "#oddit-brain-ai", user: "Braxton",
-      message: "@oddit-brain What was the conversion lift for the last 5 audits?", time: "10:32 AM",
-      botReply: "Here's the breakdown: Braxley Bands +40%, TechFlow +22%, NovaPay +18%, GreenLeaf +31%, UrbanFit +15%. Average lift: 25.2%.",
-    },
-    {
-      channel: "#dev-pipeline", user: "Ryan",
-      message: "@oddit-brain Status on the Braxley homepage build?", time: "10:15 AM",
-      botReply: "Braxley Bands Homepage Redesign is in QA stage (4/5 complete). Code gen finished 22 minutes ago. Estimated completion: ~45 min.",
-    },
-    {
-      channel: "#audit-reports", user: "Taylor",
-      message: "@oddit-brain Generate a report summary for NovaPay", time: "9:48 AM",
-      botReply: "Generating NovaPay Checkout Optimization report... This includes 3 high-priority recommendations and 8 quick wins identified from the audit.",
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
 
   const handleSend = async () => {
     if (!testMessage.trim()) {
@@ -430,14 +407,15 @@ const SlackAgent = () => {
       <div className="grid gap-4 sm:grid-cols-3 mb-8 stagger-children">
         <div className="glow-card rounded-xl bg-card p-5">
           <div className="flex items-center gap-2 mb-2">
-            <CheckCircle2 className="h-4 w-4 text-[hsl(var(--accent))]" />
+            <Bot className="h-4 w-4 text-muted-foreground" />
             <span className="text-xs text-muted-foreground uppercase tracking-wider">Agent Status</span>
           </div>
-          <p className="text-xl font-bold text-[hsl(var(--accent))]">Online</p>
+          <p className="text-xl font-bold text-muted-foreground">Not Connected</p>
+          <p className="text-[11px] text-muted-foreground mt-1">Add SLACK_BOT_TOKEN to activate</p>
         </div>
         <div className="glow-card rounded-xl bg-card p-5">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Messages Today</p>
-          <p className="text-2xl font-bold text-[hsl(var(--cream))]">{47 + messages.length - 3}</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Messages This Session</p>
+          <p className="text-2xl font-bold text-[hsl(var(--cream))]">{messages.length}</p>
         </div>
         <div className="glow-card rounded-xl bg-card p-5">
           <div className="flex items-center gap-2 mb-2">
@@ -475,42 +453,58 @@ const SlackAgent = () => {
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Recent conversations */}
           <div className="lg:col-span-2 glow-card rounded-xl bg-card p-5">
-            <h2 className="text-sm font-bold text-[hsl(var(--cream))] uppercase tracking-wider mb-5">Recent Conversations</h2>
+            <h2 className="text-sm font-bold text-[hsl(var(--cream))] uppercase tracking-wider mb-5">Conversations</h2>
             <div className="space-y-4 max-h-[500px] overflow-y-auto">
-              {messages.map((msg, i) => (
-                <div key={i} className="rounded-lg border border-border bg-secondary p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Hash className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[11px] font-semibold text-muted-foreground">{msg.channel}</span>
-                    <span className="text-[11px] text-muted-foreground ml-auto">{msg.time}</span>
+              {messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary mb-4">
+                    <Bot className="h-6 w-6 text-muted-foreground" />
                   </div>
-                  <div className="flex gap-3 mb-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
-                      {msg.user[0]}
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-[hsl(var(--cream))]">{msg.user}</span>
-                      <p className="text-xs text-foreground mt-0.5">{msg.message}</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3 ml-4 pl-4 border-l-2 border-primary/20">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15">
-                      <Bot className="h-3.5 w-3.5 text-[hsl(var(--primary))]" />
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-[hsl(var(--primary))]">Oddit Brain</span>
-                      <p className="text-xs text-foreground mt-0.5 leading-relaxed">{msg.botReply}</p>
-                    </div>
-                  </div>
+                  <p className="text-sm font-semibold text-[hsl(var(--cream))] mb-1">No conversations yet</p>
+                  <p className="text-xs text-muted-foreground max-w-[260px] leading-relaxed">
+                    Type a message below to test the Oddit Brain agent directly. Responses stream in real time.
+                  </p>
                 </div>
-              ))}
+              ) : (
+                messages.map((msg, i) => (
+                  <div key={i} className="rounded-lg border border-border bg-secondary p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Hash className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-[11px] font-semibold text-muted-foreground">{msg.channel}</span>
+                      <span className="text-[11px] text-muted-foreground ml-auto">{msg.time}</span>
+                    </div>
+                    <div className="flex gap-3 mb-3">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
+                        {msg.user[0]}
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-[hsl(var(--cream))]">{msg.user}</span>
+                        <p className="text-xs text-foreground mt-0.5">{msg.message}</p>
+                      </div>
+                    </div>
+                    {(msg.botReply || isSending) && (
+                      <div className="flex gap-3 ml-4 pl-4 border-l-2 border-primary/20">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15">
+                          <Bot className="h-3.5 w-3.5 text-[hsl(var(--primary))]" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-[hsl(var(--primary))]">Oddit Brain</span>
+                          <p className="text-xs text-foreground mt-0.5 leading-relaxed">
+                            {msg.botReply || <span className="animate-pulse text-muted-foreground">Thinking…</span>}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
 
-            {/* Test input */}
+            {/* Input */}
             <div className="mt-5 flex gap-3">
               <input
                 type="text"
-                placeholder="Test a message to the agent..."
+                placeholder="Ask the Oddit Brain anything…"
                 value={testMessage}
                 onChange={(e) => setTestMessage(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
@@ -523,35 +517,28 @@ const SlackAgent = () => {
                 className="flex items-center gap-2 rounded-lg bg-[hsl(var(--accent))] px-4 py-2.5 text-sm font-bold text-[hsl(var(--accent-foreground))] hover:opacity-90 transition-opacity disabled:opacity-50"
               >
                 {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                {isSending ? "Sending..." : "Send"}
+                {isSending ? "Sending…" : "Send"}
               </button>
             </div>
           </div>
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* Setup prompt */}
             <div className="glow-card rounded-xl bg-card p-5">
-              <h2 className="text-sm font-bold text-[hsl(var(--cream))] uppercase tracking-wider mb-4">Monitored Channels</h2>
-              <div className="space-y-2">
-                {channels.map((ch) => (
-                  <div
-                    key={ch.name}
-                    className="flex items-center gap-3 rounded-lg bg-secondary p-3 cursor-pointer hover:bg-secondary/80 transition-colors"
-                    onClick={() => toast.info(`${ch.name}`, { description: `${ch.members} members · ${ch.status}` })}
-                  >
-                    <Hash className="h-4 w-4 text-muted-foreground" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[hsl(var(--cream))]">{ch.name}</p>
-                      <p className="text-[11px] text-muted-foreground">{ch.members} members</p>
-                    </div>
-                    <span className={`text-[10px] font-semibold uppercase tracking-wider ${
-                      ch.status === "active" ? "text-[hsl(var(--accent))]" : "text-muted-foreground"
-                    }`}>
-                      {ch.status}
-                    </span>
-                  </div>
-                ))}
+              <div className="flex items-center gap-2 mb-3">
+                <Hash className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-bold text-[hsl(var(--cream))] uppercase tracking-wider">Slack Workspace</h2>
               </div>
+              <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+                Connect a Slack Bot Token to enable real channel monitoring and push notifications from this workspace.
+              </p>
+              <button
+                onClick={() => setActiveTab("settings")}
+                className="w-full rounded-lg bg-primary/10 border border-primary/20 px-3 py-2 text-xs font-bold text-[hsl(var(--primary))] hover:bg-primary/15 transition-colors"
+              >
+                Configure Bot Token →
+              </button>
             </div>
 
             <div className="glow-card rounded-xl bg-card p-5">
