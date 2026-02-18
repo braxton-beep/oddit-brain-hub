@@ -16,6 +16,7 @@ export interface FigmaFile {
   figma_file_key: string;
   name: string;
   design_type: string;
+  enabled: boolean;
   client_name: string | null;
   thumbnail_url: string | null;
   figma_url: string | null;
@@ -120,6 +121,17 @@ export function useUpdateFigmaFileType() {
         .from("figma_files")
         .update({ design_type, raw_metadata: metadata })
         .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["figma-files"] }),
+  });
+}
+
+export function useToggleFigmaFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
+      const { error } = await supabase.from("figma_files").update({ enabled }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["figma-files"] }),
