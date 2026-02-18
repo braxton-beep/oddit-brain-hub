@@ -64,19 +64,20 @@ serve(async (req) => {
         .map(kw => `title.ilike.%${kw}%,participants.cs.{${kw}}`)
         .join(",");
       
-      // Use OR filter: match keyword in title OR participants OR organizer email
+      // Use OR filter: match keyword in title, organizer email, summary, or transcript text
       const orConditions = queryKeywords
         .flatMap(kw => [
           `title.ilike.%${kw}%`,
           `organizer_email.ilike.%${kw}%`,
           `summary.ilike.%${kw}%`,
+          `transcript_text.ilike.%${kw}%`,
         ])
         .join(",");
 
       const { data: relevantTranscripts } = await transcriptQuery
         .or(orConditions)
         .order("date", { ascending: false })
-        .limit(10);
+        .limit(50);
 
       // If keyword search finds results, use those; otherwise fall back to recent
       var transcriptsToUse = relevantTranscripts && relevantTranscripts.length > 0
@@ -99,7 +100,7 @@ serve(async (req) => {
         ? sb.from("fireflies_transcripts")
             .select("title, date, summary, action_items, organizer_email, participants, duration, transcript_text")
             .order("date", { ascending: false })
-            .limit(isCallQuery ? 10 : 5)
+            .limit(isCallQuery ? 20 : 5)
         : Promise.resolve({ data: [] }),
       sb.from("fireflies_transcripts").select("*", { count: "exact", head: true }),
     ]);
