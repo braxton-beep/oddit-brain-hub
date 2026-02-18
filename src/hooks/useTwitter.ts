@@ -41,9 +41,9 @@ export const TWEET_TYPES = [
   { id: "other", label: "Other", emoji: "📝" },
 ];
 
-export function useTweets(tweetType?: string) {
+export function useTweets(tweetType?: string, figmaFileId?: string) {
   return useQuery({
-    queryKey: ["tweets", tweetType],
+    queryKey: ["tweets", tweetType, figmaFileId],
     queryFn: async () => {
       let q = supabase
         .from("twitter_tweets")
@@ -52,6 +52,9 @@ export function useTweets(tweetType?: string) {
         .limit(200);
       if (tweetType && tweetType !== "all") {
         q = q.eq("tweet_type", tweetType);
+      }
+      if (figmaFileId) {
+        q = q.eq("figma_file_id", figmaFileId);
       }
       const { data, error } = await q;
       if (error) throw error;

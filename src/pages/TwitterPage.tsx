@@ -110,6 +110,7 @@ function TweetCard({ tweet, onUpdateType }: { tweet: Tweet; onUpdateType: (id: s
 const TwitterPage = () => {
   const [activeTab, setActiveTab] = useState<"library" | "crafter">("crafter");
   const [filterType, setFilterType] = useState("all");
+  const [filterFigmaId, setFilterFigmaId] = useState("");
   const [topic, setTopic] = useState("");
   const [craftType, setCraftType] = useState("insight");
   const [selectedFigmaId, setSelectedFigmaId] = useState("");
@@ -117,7 +118,7 @@ const TwitterPage = () => {
   const [generatedContent, setGeneratedContent] = useState("");
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
-  const { data: tweets, isLoading: tweetsLoading } = useTweets(filterType);
+  const { data: tweets, isLoading: tweetsLoading } = useTweets(filterType, filterFigmaId || undefined);
   const { data: stats } = useTweetStats();
   const { data: drafts } = useTweetDrafts();
   const syncTweets = useSyncTweets();
@@ -426,7 +427,7 @@ const TwitterPage = () => {
       {activeTab === "library" && (
         <div>
           {/* Type filters */}
-          <div className="flex flex-wrap gap-1.5 mb-6">
+          <div className="flex flex-wrap gap-1.5 mb-3">
             {TWEET_TYPES.map((type) => (
               <button
                 key={type.id}
@@ -444,6 +445,33 @@ const TwitterPage = () => {
               </button>
             ))}
           </div>
+
+          {/* Figma filter */}
+          {(figmaFiles ?? []).length > 0 && (
+            <div className="flex items-center gap-2 mb-6">
+              <FileImage className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <select
+                value={filterFigmaId}
+                onChange={(e) => setFilterFigmaId(e.target.value)}
+                className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+              >
+                <option value="">All Figma files</option>
+                {(figmaFiles ?? []).map((f) => (
+                  <option key={f.id} value={f.id}>
+                    🎨 {f.name}{f.client_name ? ` (${f.client_name})` : ""}
+                  </option>
+                ))}
+              </select>
+              {filterFigmaId && (
+                <button
+                  onClick={() => setFilterFigmaId("")}
+                  className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
 
           {tweetsLoading ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
