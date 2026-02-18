@@ -27,4 +27,10 @@ verify_jwt = false
 [functions.extract-kpis]
 verify_jwt = false
 
+[functions.slack-notify]
+verify_jwt = false
+
+[functions.slack-weekly-digest]
+verify_jwt = false
+
 
