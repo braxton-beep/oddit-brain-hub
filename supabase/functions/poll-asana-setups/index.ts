@@ -13,11 +13,11 @@ const FIGMA_API = "https://api.figma.com/v1";
 const FIRECRAWL_API = "https://api.firecrawl.dev/v1";
 
 // Oddit Setups project
-const ASANA_PROJECT_GID = "1203000364658371";
+const ASANA_PROJECT_GID = "1207443359385412";
 // The "Ready For Setup" column that triggers the pipeline
-const SECTION_READY_FOR_SETUP = "1207466847448691"; // "Client Figma Setup"
+const SECTION_READY_FOR_SETUP = "1207443359385417"; // "Ready For Setup"
 // The "Setup Complete" column the card moves to after pipeline finishes
-const SECTION_SETUP_COMPLETE = "1203000364658378"; // "Ready for Deck"
+const SECTION_SETUP_COMPLETE = "1207443359385418"; // "Setup Complete"
 
 // Figma frame names to inject screenshots into
 const FRAME_DESKTOP_MAIN  = "Desktop Screenshot";
