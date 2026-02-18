@@ -43,22 +43,13 @@ const INTEGRATIONS: IntegrationItem[] = [
   { id: "twitter-access-secret", label: "Twitter/X — Access Token Secret", placeholder: "...", description: "Access Token Secret. Pairs with your Access Token for OAuth signing.", setupUrl: "https://developer.x.com/en/portal/dashboard", setupLabel: "X Developer Portal", category: "social" },
   // Communication
   { id: "slack", label: "Slack Bot Token", placeholder: "xoxb-...", description: "Enables the Slack Agent to read channels and post updates.", setupUrl: "https://api.slack.com/apps", setupLabel: "Create a Slack App", category: "communication" },
-  { id: "gmail", label: "Gmail API Key", placeholder: "AIza...", description: "Index client emails so the Brain can surface context from conversations.", setupUrl: "https://console.cloud.google.com/apis/credentials", setupLabel: "Google Cloud Console", category: "communication" },
   // Storage & Docs
   { id: "google-drive", label: "Google Drive", placeholder: "AIza...", description: "Connect docs, sheets, and slides. Brain indexes content automatically.", setupUrl: "https://console.cloud.google.com/apis/credentials", setupLabel: "Google Cloud Console", category: "storage" },
-  { id: "notion", label: "Notion", placeholder: "ntn_...", description: "Sync pages, databases, and wikis for the Brain to use as context.", setupUrl: "https://www.notion.so/my-integrations", setupLabel: "Notion Integrations", category: "storage" },
   // Meetings
   { id: "fireflies", label: "Fireflies.ai", placeholder: "ff-...", description: "Auto-import meeting transcripts so the Brain learns from every call.", setupUrl: "https://app.fireflies.ai/integrations", setupLabel: "Fireflies Settings", category: "meetings" },
-  { id: "loom", label: "Loom", placeholder: "loom_...", description: "Import video transcripts from async updates for Brain indexing.", setupUrl: "https://www.loom.com/account", setupLabel: "Loom Account", category: "meetings" },
   // Design
   { id: "figma", label: "Figma", placeholder: "figd_...", description: "Connect design files for the dev pipeline and audit references.", setupUrl: "https://www.figma.com/developers/api#access-tokens", setupLabel: "Figma Tokens", category: "design" },
-  // Analytics
-  { id: "google-analytics", label: "Google Analytics", placeholder: "AIza...", description: "Import traffic and conversion data for data-backed CRO insights.", setupUrl: "https://console.cloud.google.com/apis/credentials", setupLabel: "Google Cloud Console", category: "analytics" },
-  { id: "shopify", label: "Shopify", placeholder: "shpat_...", description: "Connect client stores for real-time performance and A/B test data.", setupUrl: "https://partners.shopify.com", setupLabel: "Shopify Partners", category: "analytics" },
-  { id: "hubspot", label: "HubSpot", placeholder: "pat-...", description: "Import CRM data, deals, and pipelines for sales intelligence.", setupUrl: "https://developers.hubspot.com/docs/api/private-apps", setupLabel: "HubSpot Developer", category: "analytics" },
   // Development
-  { id: "github", label: "GitHub", placeholder: "ghp_...", description: "Connect repos so the Brain tracks commits, PRs, and pipeline status.", setupUrl: "https://github.com/settings/tokens", setupLabel: "GitHub Tokens", category: "development" },
-  { id: "linear", label: "Linear", placeholder: "lin_api_...", description: "Sync issues and project boards for development progress tracking.", setupUrl: "https://linear.app/settings/api", setupLabel: "Linear API Settings", category: "development" },
   { id: "asana", label: "Asana", placeholder: "1/...", description: "Automate report fulfillment: create cards, link Figma files, and move tasks through columns automatically.", setupUrl: "https://app.asana.com/0/my-apps", setupLabel: "Asana My Apps", category: "development" },
 ];
 
@@ -70,7 +61,6 @@ const CATEGORIES = [
   { id: "storage", label: "📁 Storage & Docs" },
   { id: "meetings", label: "🎥 Meetings" },
   { id: "design", label: "🎨 Design" },
-  { id: "analytics", label: "📊 Analytics" },
   { id: "development", label: "🐙 Development" },
 ];
 
