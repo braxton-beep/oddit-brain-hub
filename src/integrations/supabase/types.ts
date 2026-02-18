@@ -100,6 +100,54 @@ export type Database = {
           },
         ]
       }
+      clients: {
+        Row: {
+          contact_email: string
+          contact_name: string
+          created_at: string
+          id: string
+          industry: string
+          name: string
+          notes: string
+          project_status: string
+          revenue_tier: string
+          shopify_url: string
+          tags: string[]
+          updated_at: string
+          vertical: string
+        }
+        Insert: {
+          contact_email?: string
+          contact_name?: string
+          created_at?: string
+          id?: string
+          industry?: string
+          name: string
+          notes?: string
+          project_status?: string
+          revenue_tier?: string
+          shopify_url?: string
+          tags?: string[]
+          updated_at?: string
+          vertical?: string
+        }
+        Update: {
+          contact_email?: string
+          contact_name?: string
+          created_at?: string
+          id?: string
+          industry?: string
+          name?: string
+          notes?: string
+          project_status?: string
+          revenue_tier?: string
+          shopify_url?: string
+          tags?: string[]
+          updated_at?: string
+          vertical?: string
+        }
+        Relationships: []
+      }
       competitive_intel: {
         Row: {
           client_name: string
