@@ -205,7 +205,7 @@ const AuditBrain = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-cream">Oddit Brain</h1>
-              <span className="rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] font-bold tracking-widest text-accent uppercase">v1.1</span>
+              <span className="rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] font-bold tracking-widest text-accent uppercase">v1.2</span>
             </div>
             <p className="text-[13px] text-muted-foreground">Central AI knowledge base & operational assistant</p>
           </div>
@@ -380,31 +380,25 @@ const AuditBrain = () => {
         <div>
           <div className="flex items-center gap-2 mb-5">
             <Brain className="h-4 w-4 text-violet" />
-            <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Active Agents</h2>
+            <h2 className="text-sm font-bold text-cream uppercase tracking-wider">What the Brain can do</h2>
           </div>
           <div className="space-y-2.5">
             {[
-              { name: "CRO Analyst", description: "Analyzes conversion funnels and identifies optimization opportunities", capabilities: ["funnel-analysis", "heatmap-review", "competitor-audit"] },
-              { name: "Report Writer", description: "Generates detailed audit reports with actionable recommendations", capabilities: ["report-gen", "data-viz", "copywriting"] },
-              { name: "Performance Monitor", description: "Tracks KPIs in real-time and alerts on anomalies", capabilities: ["kpi-tracking", "alerting", "trend-detection"] },
-            ].map((a, i) => (
-              <div key={i} className={`glow-card ${['glow-card-electric', 'glow-card-gold', 'glow-card-violet'][i % 3]} rounded-xl bg-card p-4 cursor-pointer`}
-                onClick={() => toast.info(`${a.name}`, { description: `${a.description}` })}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/15">
-                    <Brain className="h-3 w-3 text-primary" />
-                  </div>
-                  <span className="text-sm font-bold text-cream">{a.name}</span>
+              { label: "CRO Audits", description: "Scrapes any Shopify URL and generates 10 before/after recommendations using Gemini.", tag: "Reports →" },
+              { label: "Oddit Score", description: "Scores 8 dimensions (clarity, trust, mobile UX, funnel, copy, social proof) out of 100.", tag: "Reports →" },
+              { label: "Competitive Intel", description: "Scrapes competitor sites and surfaces design patterns, copy gaps, and priority wins.", tag: "Competitive Intel →" },
+              { label: "Transcript Q&A", description: "Answers questions about past client calls using indexed Fireflies transcripts.", tag: "Ask below" },
+              { label: "Report Drafts", description: "Generates AI-written CRO report summaries from audit data and client context.", tag: "Reports →" },
+              { label: "Tweet Crafter", description: "Writes tweet variations in the @itsOddit voice, trained on the indexed tweet library.", tag: "Twitter / X →" },
+            ].map((item) => (
+              <div key={item.label} className="rounded-xl border border-border bg-secondary px-4 py-3 flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-cream">{item.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{item.description}</p>
                 </div>
-                <p className="text-xs text-muted-foreground mb-2">{a.description}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {a.capabilities.map((cap) => (
-                    <span key={cap} className="rounded-md bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                      {cap}
-                    </span>
-                  ))}
-                </div>
+                <span className="shrink-0 text-[10px] font-semibold text-primary border border-primary/20 rounded-md px-2 py-1 whitespace-nowrap">
+                  {item.tag}
+                </span>
               </div>
             ))}
           </div>
