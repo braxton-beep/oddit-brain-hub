@@ -33,6 +33,7 @@ const integrationDefs: IntegrationDef[] = [
   { id: "linear", name: "Linear", emoji: "🔷", description: "Sync issues and project boards. Brain tracks development progress across teams.", category: "development" },
   { id: "hubspot", name: "HubSpot", emoji: "🟠", description: "Import CRM data, deals, and client pipelines. Brain enhances sales intelligence.", category: "analytics" },
   { id: "openai", name: "OpenAI", emoji: "🤖", description: "Power the Brain's AI capabilities with GPT models for audits, reports, and insights.", category: "development" },
+  { id: "asana", name: "Asana", emoji: "🗂️", description: "Sync tasks, projects, and team workspaces. Brain tracks deadlines and project status across clients.", category: "development" },
 ];
 
 const categories = [
