@@ -15,11 +15,22 @@ import {
   Download,
   Send,
   Trash2,
+  Plus,
+  Pencil,
+  X,
+  Check,
+  Settings2,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
+import {
+  useBrainPrompts,
+  useAddBrainPrompt,
+  useUpdateBrainPrompt,
+  useDeleteBrainPrompt,
+} from "@/hooks/useBrainPrompts";
 
 const iconMap: Record<string, LucideIcon> = {
   FileText, Phone, TrendingUp, MessageSquare, Database,
@@ -34,18 +45,30 @@ interface QueryEntry {
   answer: string;
 }
 
-const SUGGESTIONS = ["Conversion lifts", "Client status", "Top recommendations"];
-
 const AuditBrain = () => {
   const [queryInput, setQueryInput] = useState("");
   const [isQuerying, setIsQuerying] = useState(false);
   const [queries, setQueries] = useState<QueryEntry[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showPromptManager, setShowPromptManager] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newPrompt, setNewPrompt] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editPrompt, setEditPrompt] = useState("");
+
   const { data: knowledgeSources, isLoading: ksLoading } = useKnowledgeSources();
+  const { data: brainPrompts = [] } = useBrainPrompts();
+  const addPrompt = useAddBrainPrompt();
+  const updatePrompt = useUpdateBrainPrompt();
+  const deletePrompt = useDeleteBrainPrompt();
+
   const abortRef = useRef<AbortController | null>(null);
   const qc = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const enabledPrompts = brainPrompts.filter((p) => p.enabled);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -255,16 +278,16 @@ const AuditBrain = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Suggestion chips */}
-        {queries.length === 0 && (
+        {/* Suggestion chips — DB-driven */}
+        {queries.length === 0 && enabledPrompts.length > 0 && (
           <div className="flex gap-2 px-5 pb-3 flex-wrap shrink-0">
-            {SUGGESTIONS.map((s) => (
+            {enabledPrompts.map((p) => (
               <button
-                key={s}
-                onClick={() => { setQueryInput(s); textareaRef.current?.focus(); }}
+                key={p.id}
+                onClick={() => { setQueryInput(p.prompt); textareaRef.current?.focus(); }}
                 className="rounded-full border border-border bg-secondary px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
               >
-                {s}
+                {p.label}
               </button>
             ))}
           </div>
@@ -386,6 +409,125 @@ const AuditBrain = () => {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Starting Prompts Manager */}
+      <div className="mt-8 animate-fade-in">
+        <div className="flex items-center gap-2 mb-4">
+          <Settings2 className="h-4 w-4 text-accent" />
+          <h2 className="text-sm font-bold text-cream uppercase tracking-wider">Starting Prompts</h2>
+          <span className="text-[11px] text-muted-foreground ml-1">— editable by the team</span>
+          <button
+            onClick={() => setShowPromptManager((v) => !v)}
+            className="ml-auto text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showPromptManager ? "Hide" : "Manage"}
+          </button>
+        </div>
+
+        {showPromptManager && (
+          <div className="glow-card rounded-xl bg-card border border-border p-5 space-y-4">
+            {/* Existing prompts */}
+            <div className="space-y-2">
+              {brainPrompts.map((p) => (
+                <div key={p.id} className="flex items-start gap-3 rounded-lg border border-border bg-background/50 px-4 py-3">
+                  {editingId === p.id ? (
+                    <div className="flex-1 space-y-2">
+                      <input
+                        value={editLabel}
+                        onChange={(e) => setEditLabel(e.target.value)}
+                        placeholder="Label (chip text)"
+                        className="w-full rounded-lg border border-border bg-secondary px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                      <textarea
+                        value={editPrompt}
+                        onChange={(e) => setEditPrompt(e.target.value)}
+                        rows={2}
+                        placeholder="Full prompt sent to the Brain"
+                        className="w-full resize-none rounded-lg border border-border bg-secondary px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            await updatePrompt.mutateAsync({ id: p.id, label: editLabel, prompt: editPrompt });
+                            setEditingId(null);
+                            toast.success("Prompt updated");
+                          }}
+                          className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90"
+                        >
+                          <Check className="h-3 w-3" /> Save
+                        </button>
+                        <button onClick={() => setEditingId(null)} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-cream">{p.label}</p>
+                        <p className="text-[12px] text-muted-foreground mt-0.5 line-clamp-2">{p.prompt}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                        <button
+                          onClick={() => updatePrompt.mutateAsync({ id: p.id, enabled: !p.enabled })}
+                          className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border transition-colors ${
+                            p.enabled
+                              ? "border-accent/30 bg-accent/10 text-accent"
+                              : "border-border bg-muted/20 text-muted-foreground"
+                          }`}
+                        >
+                          {p.enabled ? "On" : "Off"}
+                        </button>
+                        <button
+                          onClick={() => { setEditingId(p.id); setEditLabel(p.label); setEditPrompt(p.prompt); }}
+                          className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={async () => { await deletePrompt.mutateAsync(p.id); toast.success("Prompt removed"); }}
+                          className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Add new prompt */}
+            <div className="border-t border-border pt-4 space-y-2">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Add new prompt</p>
+              <div className="flex gap-2">
+                <input
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  placeholder="Chip label (e.g. Weekly wins)"
+                  className="w-48 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                <input
+                  value={newPrompt}
+                  onChange={(e) => setNewPrompt(e.target.value)}
+                  placeholder="Full prompt text…"
+                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                <button
+                  onClick={async () => {
+                    if (!newLabel.trim() || !newPrompt.trim()) { toast.error("Label and prompt are required"); return; }
+                    await addPrompt.mutateAsync({ label: newLabel.trim(), prompt: newPrompt.trim() });
+                    setNewLabel(""); setNewPrompt("");
+                    toast.success("Prompt added");
+                  }}
+                  disabled={addPrompt.isPending}
+                  className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-xs font-bold text-accent-foreground hover:opacity-90 disabled:opacity-50"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );
