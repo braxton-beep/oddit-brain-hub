@@ -135,6 +135,17 @@ export interface KnowledgeSource {
   updated_at: string;
 }
 
+// Live counts from actual tables, keyed by source_type
+const LIVE_COUNT_TABLES: Record<string, string> = {
+  fireflies: "fireflies_transcripts",
+  cro_audits: "cro_audits",
+  figma_files: "figma_files",
+  google_drive: "google_drive_files",
+  twitter_tweets: "twitter_tweets",
+  clients: "clients",
+  pipeline_projects: "pipeline_projects",
+};
+
 export const useKnowledgeSources = () =>
   useQuery({
     queryKey: ["knowledge-sources"],
@@ -144,7 +155,20 @@ export const useKnowledgeSources = () =>
         .select("*")
         .order("name");
       if (error) throw error;
-      return data as KnowledgeSource[];
+
+      // Fetch live counts in parallel for each source type
+      const withLiveCounts = await Promise.all(
+        (data as KnowledgeSource[]).map(async (src) => {
+          const table = LIVE_COUNT_TABLES[src.source_type];
+          if (!table) return src;
+          const { count } = await (supabase as any)
+            .from(table)
+            .select("*", { count: "exact", head: true });
+          return { ...src, item_count: count ?? src.item_count };
+        })
+      );
+
+      return withLiveCounts as KnowledgeSource[];
     },
   });
 

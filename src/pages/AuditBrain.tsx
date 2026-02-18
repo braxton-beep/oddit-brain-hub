@@ -20,6 +20,11 @@ import {
   X,
   Check,
   Settings2,
+  Twitter,
+  Users,
+  Code2,
+  FolderOpen,
+  Figma,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
@@ -34,6 +39,7 @@ import {
 
 const iconMap: Record<string, LucideIcon> = {
   FileText, Phone, TrendingUp, MessageSquare, Database,
+  Twitter, Users, Code2, FolderOpen, Figma,
 };
 
 const ASK_BRAIN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-brain`;
@@ -336,7 +342,7 @@ const AuditBrain = () => {
               className="ml-auto flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               {isSyncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-              {isSyncing ? "Syncing..." : "Sync Fireflies"}
+              {isSyncing ? "Syncing..." : "Sync Transcripts"}
             </button>
           </div>
           {ksLoading ? (
@@ -349,26 +355,34 @@ const AuditBrain = () => {
             <div className="grid gap-3 sm:grid-cols-2 stagger-children">
               {(knowledgeSources ?? []).map((src, idx) => {
                 const IconComponent = iconMap[src.icon] || FileText;
+                const isEmpty = src.item_count === 0;
                 return (
-                  <div key={src.id} className={`glow-card ${['glow-card-coral', 'glow-card-electric', 'glow-card-gold', 'glow-card-violet', 'glow-card-coral', 'glow-card-electric'][idx % 6]} rounded-xl bg-card p-4 flex items-center gap-4 cursor-pointer hover-scale`}
-                    onClick={() => toast.info(`${src.name}`, { description: `${src.item_count.toLocaleString()} items indexed • ${src.status === "synced" ? "Up to date" : "Sync in progress..."}` })}
+                  <div key={src.id} className={`glow-card ${['glow-card-coral', 'glow-card-electric', 'glow-card-gold', 'glow-card-violet', 'glow-card-coral', 'glow-card-electric'][idx % 6]} rounded-xl bg-card p-4 flex items-center gap-4 cursor-pointer hover-scale ${isEmpty ? "opacity-50" : ""}`}
+                    onClick={() => toast.info(`${src.name}`, { description: `${src.item_count.toLocaleString()} items indexed • ${isEmpty ? "Not yet connected — add credentials in Settings" : src.status === "synced" ? "Up to date" : "Sync in progress..."}` })}
                   >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                      <IconComponent className="h-5 w-5 text-primary" />
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${isEmpty ? "bg-muted" : "bg-primary/10"}`}>
+                      <IconComponent className={`h-5 w-5 ${isEmpty ? "text-muted-foreground" : "text-primary"}`} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-cream">{src.name}</p>
-                      <p className="text-xs text-muted-foreground">{src.item_count.toLocaleString()} items</p>
+                      <p className="text-xs text-muted-foreground">
+                        {isEmpty ? "Not connected" : `${src.item_count.toLocaleString()} items`}
+                      </p>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      {src.status === "synced" ? (
-                        <CheckCircle2 className="h-4 w-4 text-accent" />
+                      {isEmpty ? (
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Empty</span>
+                      ) : src.status === "synced" ? (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 text-accent" />
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-accent">Synced</span>
+                        </>
                       ) : (
-                        <RefreshCw className="h-4 w-4 text-warning animate-spin" />
+                        <>
+                          <RefreshCw className="h-4 w-4 text-warning animate-spin" />
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-warning">{src.status}</span>
+                        </>
                       )}
-                      <span className={`text-[10px] font-semibold uppercase tracking-wider ${src.status === "synced" ? "text-accent" : "text-warning"}`}>
-                        {src.status}
-                      </span>
                     </div>
                   </div>
                 );
