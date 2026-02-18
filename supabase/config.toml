@@ -48,4 +48,13 @@ verify_jwt = false
 [functions.enrich-client]
 verify_jwt = false
 
+[functions.poll-asana-setups]
+verify_jwt = false
+
+[functions.run-report-setup]
+verify_jwt = false
+
+[functions.asana-sync]
+verify_jwt = false
+
 

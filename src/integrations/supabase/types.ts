@@ -796,6 +796,63 @@ export type Database = {
         }
         Relationships: []
       }
+      setup_runs: {
+        Row: {
+          asana_task_gid: string
+          asana_url: string | null
+          client_name: string
+          completed_at: string | null
+          created_at: string
+          error: string | null
+          figma_file_link: string | null
+          figma_slides_link: string | null
+          focus_url: string | null
+          id: string
+          shop_url: string | null
+          started_at: string | null
+          status: string
+          steps: Json | null
+          tier: string
+          updated_at: string
+        }
+        Insert: {
+          asana_task_gid: string
+          asana_url?: string | null
+          client_name?: string
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          figma_file_link?: string | null
+          figma_slides_link?: string | null
+          focus_url?: string | null
+          id?: string
+          shop_url?: string | null
+          started_at?: string | null
+          status?: string
+          steps?: Json | null
+          tier?: string
+          updated_at?: string
+        }
+        Update: {
+          asana_task_gid?: string
+          asana_url?: string | null
+          client_name?: string
+          completed_at?: string | null
+          created_at?: string
+          error?: string | null
+          figma_file_link?: string | null
+          figma_slides_link?: string | null
+          focus_url?: string | null
+          id?: string
+          shop_url?: string | null
+          started_at?: string | null
+          status?: string
+          steps?: Json | null
+          tier?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tweet_drafts: {
         Row: {
           context_tweet_ids: string[] | null

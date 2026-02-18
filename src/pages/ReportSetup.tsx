@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -6,25 +6,25 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
-  Play,
   SkipForward,
   ExternalLink,
   ChevronDown,
   ChevronUp,
-  Zap,
-  ClipboardList,
   Figma,
   Link2,
   ArrowRight,
   Clock,
+  RefreshCw,
+  Activity,
+  Camera,
+  MoveRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 
 // ── Types ────────────────────────────────────────────────────────────────────
-type Tier = "pro" | "essential";
-type StepStatus = "idle" | "running" | "done" | "error" | "skipped";
+type StepStatus = "done" | "error" | "skipped";
+type RunStatus = "pending" | "running" | "done" | "error";
 
 interface StepResult {
   step: number;
@@ -34,169 +34,236 @@ interface StepResult {
   error?: string;
 }
 
-interface RunResult {
-  success: boolean;
-  task_gid?: string;
-  asana_url?: string;
-  figma_file_link?: string | null;
-  figma_slides_link?: string | null;
-  steps: StepResult[];
-  error?: string;
-}
-
-interface RunRecord {
+interface SetupRun {
   id: string;
+  asana_task_gid: string;
   client_name: string;
-  tier: Tier;
-  timestamp: Date;
-  result: RunResult;
+  tier: string;
+  shop_url: string | null;
+  focus_url: string | null;
+  status: RunStatus;
+  steps: StepResult[] | null;
+  figma_file_link: string | null;
+  figma_slides_link: string | null;
+  asana_url: string | null;
+  error: string | null;
+  started_at: string;
+  completed_at: string | null;
+  created_at: string;
 }
-
-// ── Step metadata ─────────────────────────────────────────────────────────────
-const STEP_ICONS: Record<number, React.ComponentType<{ className?: string }>> = {
-  1: ClipboardList,
-  2: ArrowRight,
-  3: Figma,
-  4: Link2,
-  5: Figma,
-  6: Link2,
-  7: CheckCircle2,
-};
 
 // ── Status badge ──────────────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: StepStatus }) {
-  if (status === "idle") return <div className="h-5 w-5 rounded-full border-2 border-border" />;
-  if (status === "running")
-    return <Loader2 className="h-5 w-5 animate-spin text-primary" />;
-  if (status === "done")
-    return <CheckCircle2 className="h-5 w-5 text-green-400" />;
-  if (status === "error")
-    return <XCircle className="h-5 w-5 text-destructive" />;
-  if (status === "skipped")
-    return <SkipForward className="h-5 w-5 text-muted-foreground" />;
-  return null;
+function StepStatusIcon({ status }: { status: StepStatus }) {
+  if (status === "done") return <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />;
+  if (status === "error") return <XCircle className="h-4 w-4 text-destructive shrink-0" />;
+  return <SkipForward className="h-4 w-4 text-muted-foreground shrink-0" />;
 }
 
-// ── Step row ──────────────────────────────────────────────────────────────────
-function StepRow({ step, index, isActive }: { step: StepResult; index: number; isActive: boolean }) {
-  const Icon = STEP_ICONS[step.step] ?? ClipboardList;
-  const isLast = step.step === 7;
+const STEP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  "Screenshot & Figma Injection": Camera,
+  "Link Figma File → Asana": Link2,
+  "Create Figma Slides Report": Figma,
+  "Link Figma Slides → Asana": Link2,
+  "Move to Setup Complete": MoveRight,
+};
 
+function RunStatusBadge({ status }: { status: RunStatus }) {
+  if (status === "running") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Processing
+      </span>
+    );
+  }
+  if (status === "done") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-400">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        Complete
+      </span>
+    );
+  }
+  if (status === "error") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive">
+        <XCircle className="h-3.5 w-3.5" />
+        Error
+      </span>
+    );
+  }
   return (
-    <div className="flex gap-3">
-      {/* Timeline connector */}
-      <div className="flex flex-col items-center">
-        <StatusBadge status={step.status} />
-        {!isLast && (
-          <div
-            className={`w-px flex-1 mt-1 transition-colors duration-500 ${
-              step.status === "done" || step.status === "skipped"
-                ? "bg-green-400/40"
-                : "bg-border"
-            }`}
-            style={{ minHeight: "24px" }}
-          />
-        )}
-      </div>
-
-      {/* Content */}
-      <div className={`pb-4 flex-1 min-w-0 ${isLast ? "" : ""}`}>
-        <div className="flex items-center gap-2 mb-0.5">
-          <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <span
-            className={`text-sm font-medium transition-colors ${
-              step.status === "done"
-                ? "text-foreground"
-                : step.status === "running"
-                ? "text-primary"
-                : step.status === "error"
-                ? "text-destructive"
-                : "text-muted-foreground"
-            }`}
-          >
-            {step.name}
-          </span>
-          {step.status === "running" && (
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-primary animate-pulse">
-              Running…
-            </span>
-          )}
-        </div>
-        {step.detail && (
-          <p className="text-xs text-muted-foreground pl-5 leading-relaxed break-all">{step.detail}</p>
-        )}
-        {step.error && (
-          <p className="text-xs text-destructive pl-5 leading-relaxed break-all">{step.error}</p>
-        )}
-      </div>
-    </div>
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      <Clock className="h-3.5 w-3.5" />
+      Pending
+    </span>
   );
 }
 
-// ── History entry ─────────────────────────────────────────────────────────────
-function HistoryEntry({ record }: { record: RunRecord }) {
-  const [expanded, setExpanded] = useState(false);
-  const allOk = record.result.steps.every((s) => s.status === "done" || s.status === "skipped");
-  const hasError = record.result.steps.some((s) => s.status === "error");
+// ── Individual run card ───────────────────────────────────────────────────────
+function RunCard({ run }: { run: SetupRun }) {
+  const [expanded, setExpanded] = useState(run.status === "running" || run.status === "error");
+  const steps = run.steps ?? [];
+
+  const elapsed = run.completed_at
+    ? Math.round((new Date(run.completed_at).getTime() - new Date(run.started_at).getTime()) / 1000)
+    : null;
 
   return (
-    <div className="border border-border rounded-lg overflow-hidden bg-card">
+    <div
+      className={`rounded-xl border bg-card overflow-hidden transition-all ${
+        run.status === "running"
+          ? "border-primary/40 shadow-sm shadow-primary/10"
+          : run.status === "error"
+          ? "border-destructive/30"
+          : "border-border"
+      }`}
+    >
+      {/* Header */}
       <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
+        onClick={() => setExpanded((e) => !e)}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/20 transition-colors text-left"
       >
         <div className="flex items-center gap-3 min-w-0">
-          {hasError ? (
-            <XCircle className="h-4 w-4 text-destructive shrink-0" />
-          ) : (
-            <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />
+          {/* Running pulse dot */}
+          {run.status === "running" && (
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary" />
+            </span>
           )}
-          <div className="text-left min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">
-              {record.client_name}{" "}
-              <span className="text-xs text-muted-foreground font-normal">
-                ({record.tier === "pro" ? "Pro" : "Essential"})
+          {run.status === "done" && <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />}
+          {run.status === "error" && <XCircle className="h-4 w-4 text-destructive shrink-0" />}
+          {run.status === "pending" && <Clock className="h-4 w-4 text-muted-foreground shrink-0" />}
+
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-semibold text-foreground truncate">
+                {run.client_name}
               </span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {record.timestamp.toLocaleString()}
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize shrink-0">
+                {run.tier}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {run.shop_url || "—"}
+              {elapsed !== null && (
+                <span className="ml-2 text-muted-foreground/60">· {elapsed}s</span>
+              )}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0 ml-3">
-          {record.result.asana_url && (
+
+        <div className="flex items-center gap-4 shrink-0 ml-4">
+          <RunStatusBadge status={run.status} />
+          {run.asana_url && (
             <a
-              href={record.result.asana_url}
+              href={run.asana_url}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="text-xs text-primary hover:underline flex items-center gap-1"
+              className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
             >
               Asana <ExternalLink className="h-3 w-3" />
             </a>
           )}
-          {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          {expanded ? (
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          )}
         </div>
       </button>
 
+      {/* Expanded steps */}
       {expanded && (
-        <div className="border-t border-border px-4 py-4">
-          {record.result.steps.map((step, i) => (
-            <StepRow key={step.step} step={step} index={i} isActive={false} />
-          ))}
-          {(record.result.figma_file_link || record.result.figma_slides_link) && (
-            <div className="mt-2 pt-3 border-t border-border flex gap-4">
-              {record.result.figma_file_link && (
-                <a href={record.result.figma_file_link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
-                  <Figma className="h-3 w-3" /> Figma File
+        <div className="border-t border-border px-5 py-4 space-y-3">
+          {run.status === "running" && steps.length === 0 && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              Starting pipeline…
+            </div>
+          )}
+
+          {steps.map((step, i) => {
+            const Icon = STEP_ICONS[step.name] ?? ArrowRight;
+            const isLast = i === steps.length - 1;
+            return (
+              <div key={step.step} className="flex gap-3">
+                {/* Timeline */}
+                <div className="flex flex-col items-center shrink-0">
+                  <StepStatusIcon status={step.status} />
+                  {!isLast && (
+                    <div
+                      className={`w-px flex-1 mt-1 ${
+                        step.status === "done" ? "bg-green-400/30" : "bg-border"
+                      }`}
+                      style={{ minHeight: 20 }}
+                    />
+                  )}
+                </div>
+
+                {/* Content */}
+                <div className="pb-3 flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span
+                      className={`text-sm font-medium ${
+                        step.status === "done"
+                          ? "text-foreground"
+                          : step.status === "error"
+                          ? "text-destructive"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {step.name}
+                    </span>
+                  </div>
+                  {step.detail && (
+                    <p className="text-xs text-muted-foreground pl-5 mt-0.5 break-all leading-relaxed">
+                      {step.detail}
+                    </p>
+                  )}
+                  {step.error && (
+                    <p className="text-xs text-destructive pl-5 mt-0.5 break-all leading-relaxed">
+                      {step.error}
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Output links */}
+          {(run.figma_file_link || run.figma_slides_link) && (
+            <div className="flex gap-4 pt-2 border-t border-border">
+              {run.figma_file_link && (
+                <a
+                  href={run.figma_file_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+                >
+                  <Figma className="h-3.5 w-3.5" />
+                  Figma File
                 </a>
               )}
-              {record.result.figma_slides_link && (
-                <a href={record.result.figma_slides_link} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
-                  <Figma className="h-3 w-3" /> Figma Slides
+              {run.figma_slides_link && (
+                <a
+                  href={run.figma_slides_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+                >
+                  <Figma className="h-3.5 w-3.5" />
+                  Figma Slides
                 </a>
               )}
             </div>
+          )}
+
+          {run.error && !steps.some((s) => s.error) && (
+            <p className="text-xs text-destructive">{run.error}</p>
           )}
         </div>
       )}
@@ -204,406 +271,201 @@ function HistoryEntry({ record }: { record: RunRecord }) {
   );
 }
 
+// ── Empty state ───────────────────────────────────────────────────────────────
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <Activity className="h-10 w-10 text-muted-foreground/30 mb-4" />
+      <p className="text-sm font-medium text-muted-foreground">No setup runs yet</p>
+      <p className="text-xs text-muted-foreground/60 mt-1 max-w-xs">
+        When an Asana card enters the "Ready For Setup" column and you click <strong>Poll Now</strong>, it will appear here with live progress.
+      </p>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ReportSetup() {
-  const [clientName, setClientName] = useState("");
-  const [shopUrl, setShopUrl] = useState("");
-  const [focusUrl, setFocusUrl] = useState("");
-  const [tier, setTier] = useState<Tier>("pro");
-  const [figmaTemplateKey, setFigmaTemplateKey] = useState("");
-  const [figmaSlidesKey, setFigmaSlidesKey] = useState("");
-  const [existingTaskGid, setExistingTaskGid] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [runs, setRuns] = useState<SetupRun[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [polling, setPolling] = useState(false);
+  const [filter, setFilter] = useState<"all" | RunStatus>("all");
 
-  const [running, setRunning] = useState(false);
-  const [liveSteps, setLiveSteps] = useState<StepResult[]>([]);
-  const [liveResult, setLiveResult] = useState<RunResult | null>(null);
-  const [history, setHistory] = useState<RunRecord[]>([]);
+  // Load existing runs
+  async function loadRuns() {
+    const { data, error } = await supabase
+      .from("setup_runs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50);
 
-  const STEP_NAMES = [
-    "Create Asana Card",
-    "Move to Ready for Setup",
-    "Screenshot & Figma Injection",
-    "Link Figma File to Asana",
-    "Create Figma Slides Report",
-    "Link Figma Slides to Asana",
-    "Move to Setup Complete",
-  ];
-
-  async function handleRun() {
-    if (!clientName.trim() || !shopUrl.trim()) {
-      toast.error("Client name and shop URL are required.");
-      return;
+    if (error) {
+      console.error("Failed to load runs:", error);
+    } else {
+      setRuns((data ?? []) as unknown as SetupRun[]);
     }
+    setLoading(false);
+  }
 
-    setRunning(true);
-    setLiveResult(null);
+  useEffect(() => {
+    loadRuns();
 
-    // Pre-populate steps as idle so the timeline renders immediately
-    setLiveSteps(
-      STEP_NAMES.map((name, i) => ({ step: i + 1, name, status: "idle" as StepStatus }))
-    );
+    // Subscribe to realtime updates
+    const channel = supabase
+      .channel("setup_runs_feed")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "setup_runs" },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            setRuns((prev) => [payload.new as unknown as SetupRun, ...prev]);
+          } else if (payload.eventType === "UPDATE") {
+            setRuns((prev) =>
+              prev.map((r) => (r.id === payload.new.id ? (payload.new as unknown as SetupRun) : r))
+            );
+          }
+        }
+      )
+      .subscribe();
 
-    // Mark step 1 as running immediately for visual feedback
-    setLiveSteps((prev) =>
-      prev.map((s) => (s.step === 1 ? { ...s, status: "running" } : s))
-    );
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
+  async function handlePollNow() {
+    setPolling(true);
     try {
-      const { data, error } = await supabase.functions.invoke("run-report-setup", {
-        body: {
-          client_name: clientName.trim(),
-          shop_url: shopUrl.trim().startsWith("http") ? shopUrl.trim() : `https://${shopUrl.trim()}`,
-          focus_url: focusUrl.trim() ? (focusUrl.trim().startsWith("http") ? focusUrl.trim() : `https://${focusUrl.trim()}`) : undefined,
-          tier,
-          figma_template_key: figmaTemplateKey.trim() || undefined,
-          figma_slides_template_key: figmaSlidesKey.trim() || undefined,
-          existing_task_gid: existingTaskGid.trim() || undefined,
-        },
-      });
-
+      const { data, error } = await supabase.functions.invoke("poll-asana-setups", {});
       if (error) throw error;
 
-      const result: RunResult = data;
-
-      // Animate steps in sequence
-      for (let i = 0; i < result.steps.length; i++) {
-        const step = result.steps[i];
-        setLiveSteps((prev) =>
-          prev.map((s) => (s.step === step.step ? { ...step } : s))
-        );
-        await new Promise((r) => setTimeout(r, 300));
-      }
-
-      setLiveResult(result);
-
-      if (result.success) {
-        toast.success(`Setup complete for ${clientName}!`);
-        setHistory((prev) => [
-          {
-            id: crypto.randomUUID(),
-            client_name: clientName.trim(),
-            tier,
-            timestamp: new Date(),
-            result,
-          },
-          ...prev,
-        ]);
+      if (data?.processed === 0) {
+        toast.info(data?.message ?? "No new cards in Ready For Setup");
       } else {
-        toast.error(result.error ?? "Setup failed — check steps for details.");
+        toast.success(`Started processing ${data?.processed} card${data?.processed === 1 ? "" : "s"}`);
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast.error(`Error: ${msg}`);
-      setLiveSteps((prev) =>
-        prev.map((s) => (s.status === "running" ? { ...s, status: "error", error: msg } : s))
-      );
+      toast.error(`Poll failed: ${msg}`);
     } finally {
-      setRunning(false);
+      setPolling(false);
     }
   }
 
-  function handleReset() {
-    setLiveSteps([]);
-    setLiveResult(null);
-  }
+  const filteredRuns = filter === "all" ? runs : runs.filter((r) => r.status === filter);
+  const runningCount = runs.filter((r) => r.status === "running").length;
+  const errorCount = runs.filter((r) => r.status === "error").length;
+  const doneCount = runs.filter((r) => r.status === "done").length;
 
-  const completedSteps = liveSteps.filter((s) => s.status === "done" || s.status === "skipped").length;
-  const totalSteps = liveSteps.length;
-  const hasSteps = liveSteps.length > 0;
-  const asanaUrl = liveResult?.asana_url;
+  const filterLabels: Array<{ key: "all" | RunStatus; label: string }> = [
+    { key: "all", label: `All (${runs.length})` },
+    { key: "running", label: `Active (${runningCount})` },
+    { key: "done", label: `Done (${doneCount})` },
+    { key: "error", label: `Errors (${errorCount})` },
+  ];
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-8">
+      <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
         {/* Header */}
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Zap className="h-5 w-5 text-primary" />
-            <h1 className="text-2xl font-bold text-foreground">Report Setup Automation</h1>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Activity className="h-5 w-5 text-primary" />
+              <h1 className="text-2xl font-bold text-foreground">Setup Monitor</h1>
+              {runningCount > 0 && (
+                <span className="relative flex h-2 w-2 ml-1">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+                </span>
+              )}
+            </div>
+            <p className="text-muted-foreground text-sm">
+              Watches the <strong className="text-foreground">Oddit Setups</strong> Asana project for cards entering{" "}
+              <strong className="text-foreground">Ready For Setup</strong> — automatically runs screenshots, Figma injection, and card updates.
+            </p>
           </div>
-          <p className="text-muted-foreground text-sm">
-            Trigger the full report fulfillment workflow — Asana card creation, Figma file setup, and column management — in one click.
-          </p>
+
+          <Button
+            onClick={handlePollNow}
+            disabled={polling}
+            className="shrink-0 gap-2"
+          >
+            {polling ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            {polling ? "Polling…" : "Poll Now"}
+          </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* ── Trigger Form ─────────────────────────────────────────────────── */}
-          <div className="space-y-5">
-            <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-              <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider">Trigger Setup</h2>
-
-              <div className="space-y-3">
-                <div>
-                  <Label htmlFor="client-name" className="text-xs text-muted-foreground mb-1.5 block">Client Name *</Label>
-                  <Input
-                    id="client-name"
-                    placeholder="e.g. Acme Store"
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    disabled={running}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="shop-url" className="text-xs text-muted-foreground mb-1.5 block">Website URL *</Label>
-                  <Input
-                    id="shop-url"
-                    placeholder="acmestore.com"
-                    value={shopUrl}
-                    onChange={(e) => setShopUrl(e.target.value)}
-                    disabled={running}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="focus-url" className="text-xs text-muted-foreground mb-1.5 block">
-                    Focus URL
-                    <span className="text-[10px] ml-1 text-muted-foreground/60">(optional — e.g. PDP, landing page)</span>
-                  </Label>
-                  <Input
-                    id="focus-url"
-                    placeholder="acmestore.com/products/best-seller"
-                    value={focusUrl}
-                    onChange={(e) => setFocusUrl(e.target.value)}
-                    disabled={running}
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-xs text-muted-foreground mb-1.5 block">Report Tier</Label>
-                  <div className="flex gap-2">
-                    {(["pro", "essential"] as Tier[]).map((t) => (
-                      <button
-                        key={t}
-                        onClick={() => setTier(t)}
-                        disabled={running}
-                        className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                          tier === t
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-muted/30 text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
-                        }`}
-                      >
-                        {t === "pro" ? "Pro" : "Essential"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Advanced */}
-              <div>
-                <button
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showAdvanced ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                  Advanced options
-                </button>
-
-                {showAdvanced && (
-                  <div className="mt-3 space-y-3 border-t border-border pt-3">
-                    <div>
-                      <Label htmlFor="figma-template" className="text-xs text-muted-foreground mb-1.5 block">
-                        Figma Template File Key
-                        <span className="text-[10px] ml-1 text-muted-foreground/60">(from URL: figma.com/file/KEY/...)</span>
-                      </Label>
-                      <Input
-                        id="figma-template"
-                        placeholder="abc123XYZ..."
-                        value={figmaTemplateKey}
-                        onChange={(e) => setFigmaTemplateKey(e.target.value)}
-                        disabled={running}
-                        className="font-mono text-xs"
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="figma-slides" className="text-xs text-muted-foreground mb-1.5 block">
-                        Figma Slides Template Key
-                        <span className="text-[10px] ml-1 text-muted-foreground/60">(optional)</span>
-                      </Label>
-                      <Input
-                        id="figma-slides"
-                        placeholder="def456..."
-                        value={figmaSlidesKey}
-                        onChange={(e) => setFigmaSlidesKey(e.target.value)}
-                        disabled={running}
-                        className="font-mono text-xs"
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="existing-task" className="text-xs text-muted-foreground mb-1.5 block">
-                        Existing Asana Task GID
-                        <span className="text-[10px] ml-1 text-muted-foreground/60">(update instead of create)</span>
-                      </Label>
-                      <Input
-                        id="existing-task"
-                        placeholder="1234567890..."
-                        value={existingTaskGid}
-                        onChange={(e) => setExistingTaskGid(e.target.value)}
-                        disabled={running}
-                        className="font-mono text-xs"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <Button
-                  onClick={handleRun}
-                  disabled={running || !clientName.trim() || !shopUrl.trim()}
-                  className="flex-1 gap-2"
-                >
-                  {running ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Running…
-                    </>
-                  ) : (
-                    <>
-                      <Play className="h-4 w-4" />
-                      Run Setup
-                    </>
-                  )}
-                </Button>
-                {hasSteps && !running && (
-                  <Button variant="outline" onClick={handleReset} className="px-3">
-                    Reset
-                  </Button>
-                )}
-              </div>
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Total Runs", value: runs.length, color: "text-foreground" },
+            { label: "Completed", value: doneCount, color: "text-green-400" },
+            { label: "Errors", value: errorCount, color: errorCount > 0 ? "text-destructive" : "text-muted-foreground" },
+          ].map((stat) => (
+            <div key={stat.label} className="rounded-xl border border-border bg-card px-4 py-3">
+              <p className="text-xs text-muted-foreground">{stat.label}</p>
+              <p className={`text-2xl font-bold mt-0.5 ${stat.color}`}>{stat.value}</p>
             </div>
+          ))}
+        </div>
 
-            {/* Info card */}
-            <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Project Wired To</h3>
-              <div className="space-y-1.5 text-xs text-muted-foreground">
-                <div className="flex items-center justify-between">
-                  <span>Board</span>
-                  <a
-                    href="https://app.asana.com/0/1203000364658371/board"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline flex items-center gap-1"
-                  >
-                    Oddit Fulfilment <ExternalLink className="h-3 w-3" />
-                  </a>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Start column</span>
-                  <span className="text-foreground font-medium">Client Figma Setup</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>End column</span>
-                  <span className="text-foreground font-medium">Ready for Deck</span>
-                </div>
+        {/* How it works */}
+        <div className="rounded-xl border border-border bg-muted/20 px-5 py-4">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">How it works</p>
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
+            {[
+              "Card moved to Ready For Setup",
+              "Screenshots captured (desktop + mobile)",
+              "Figma template duplicated & injected",
+              "Links posted back to Asana card",
+              "Card moved to Setup Complete",
+            ].map((step, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-foreground shrink-0">
+                  {i + 1}
+                </span>
+                {step}
               </div>
-            </div>
-          </div>
-
-          {/* ── Live Progress ─────────────────────────────────────────────────── */}
-          <div className="space-y-4">
-            <div className="rounded-xl border border-border bg-card p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider">Workflow Progress</h2>
-                {hasSteps && (
-                  <span className="text-xs text-muted-foreground">
-                    {completedSteps}/{totalSteps} steps
-                  </span>
-                )}
-              </div>
-
-              {!hasSteps ? (
-                <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-                  <Zap className="h-8 w-8 mb-3 opacity-20" />
-                  <p className="text-sm">Fill in the form and click <strong className="text-foreground">Run Setup</strong> to start.</p>
-                  <p className="text-xs mt-1 opacity-60">Each step will update in real time.</p>
-                </div>
-              ) : (
-                <div className="space-y-0">
-                  {liveSteps.map((step, i) => (
-                    <StepRow
-                      key={step.step}
-                      step={step}
-                      index={i}
-                      isActive={step.status === "running"}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {/* Progress bar */}
-              {hasSteps && totalSteps > 0 && (
-                <div className="mt-4 pt-4 border-t border-border">
-                  <div className="w-full bg-muted/40 rounded-full h-1.5">
-                    <div
-                      className="bg-primary h-1.5 rounded-full transition-all duration-500"
-                      style={{ width: `${(completedSteps / totalSteps) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Result links */}
-              {liveResult && (
-                <div className="mt-4 pt-4 border-t border-border space-y-2">
-                  {asanaUrl && (
-                    <a
-                      href={asanaUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-sm text-primary hover:underline"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      View task in Asana
-                    </a>
-                  )}
-                  {liveResult.figma_file_link && (
-                    <a
-                      href={liveResult.figma_file_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-sm text-primary hover:underline"
-                    >
-                      <Figma className="h-3.5 w-3.5" />
-                      Open Figma File
-                    </a>
-                  )}
-                  {liveResult.figma_slides_link && (
-                    <a
-                      href={liveResult.figma_slides_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-sm text-primary hover:underline"
-                    >
-                      <Figma className="h-3.5 w-3.5" />
-                      Open Figma Slides
-                    </a>
-                  )}
-                </div>
-              )}
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* ── Run History ─────────────────────────────────────────────────────── */}
-        {history.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider">Run History</h2>
-              <span className="text-xs text-muted-foreground">({history.length} runs this session)</span>
-            </div>
-            <div className="space-y-2">
-              {history.map((record) => (
-                <HistoryEntry key={record.id} record={record} />
-              ))}
-            </div>
+        {/* Filter tabs */}
+        {runs.length > 0 && (
+          <div className="flex gap-1 border-b border-border">
+            {filterLabels.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors -mb-px ${
+                  filter === key
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         )}
+
+        {/* Feed */}
+        <div className="space-y-3">
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : filteredRuns.length === 0 ? (
+            <EmptyState />
+          ) : (
+            filteredRuns.map((run) => <RunCard key={run.id} run={run} />)
+          )}
+        </div>
       </div>
     </DashboardLayout>
   );
