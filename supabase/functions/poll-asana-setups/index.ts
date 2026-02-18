@@ -521,10 +521,12 @@ serve(async (req) => {
       (existingRuns ?? []).map((r) => [r.asana_task_gid, r.status])
     );
 
-    // Only process cards that haven't been started yet
+    // Only process NEW cards: no prior run record at all (never processed before).
+    // Cards with any existing record (pending, running, done, error) are skipped
+    // so that pre-existing cards like La Colombe can be moved freely in Asana
+    // without being re-grabbed by the poller.
     const newTasks = tasks.filter((t: { gid: string }) => {
-      const existing = existingMap.get(t.gid);
-      return !existing || existing === "pending"; // re-try pending ones too
+      return !existingMap.has(t.gid);
     });
 
     if (newTasks.length === 0) {
