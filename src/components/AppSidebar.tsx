@@ -82,8 +82,7 @@ export function AppSidebar() {
                   <OdditEyes size={32} />
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-black tracking-tight text-primary">oddit</span>
-                  <span className="rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider bg-primary/15 text-primary border border-primary/20">v1.2</span>
+                  <span className="text-sm font-black tracking-tight text-primary">Oddit Brain</span>
                 </div>
               </div>
               <button onClick={() => setMobileOpen(false)} className="text-muted-foreground hover:text-foreground">
@@ -126,9 +125,8 @@ export function AppSidebar() {
             <OdditEyes size={32} />
           </div>
           {!collapsed && (
-            <div className="animate-fade-in-left flex items-center gap-2">
-              <span className="text-sm font-black tracking-tight text-primary">oddit</span>
-              <span className="rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider bg-primary/15 text-primary border border-primary/20">v1.2</span>
+                <div className="animate-fade-in-left flex items-center gap-2">
+              <span className="text-sm font-black tracking-tight text-primary">Oddit Brain</span>
             </div>
           )}
         </div>

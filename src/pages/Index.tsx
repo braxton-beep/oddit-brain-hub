@@ -563,7 +563,7 @@ const Index = () => {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xl font-black tracking-tight" style={{ color: "hsl(var(--primary))" }}>oddit</span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border border-border rounded-full px-2 py-0.5">Command Centre</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border border-border rounded-full px-2 py-0.5">Dashboard</span>
             </div>
             <p className="text-[12px] text-muted-foreground flex items-center gap-1.5">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
