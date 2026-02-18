@@ -33,4 +33,7 @@ verify_jwt = false
 [functions.slack-weekly-digest]
 verify_jwt = false
 
+[functions.figma-sync]
+verify_jwt = false
+
 

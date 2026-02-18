@@ -1,17 +1,14 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import {
   CheckCircle2,
-  ExternalLink,
   Link2,
-  Unlink,
   Search,
   Brain,
-  RefreshCw,
   Shield,
 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { useIntegrationCredentials } from "@/hooks/useIntegrationCredentials";
+import { FigmaIntegration } from "@/components/FigmaIntegration";
 
 interface IntegrationDef {
   id: string;
@@ -200,6 +197,9 @@ const Integrations = () => {
           <p className="text-sm">No integrations match your search.</p>
         </div>
       )}
+
+      {/* Figma Integration Section */}
+      <FigmaIntegration />
 
       {/* Footer note */}
       <div className="mt-10 rounded-xl border border-border bg-card p-5 flex items-start gap-4">
