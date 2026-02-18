@@ -1,4 +1,4 @@
-import brainMascot from "@/assets/brain-mascot.png";
+// brain mascot removed — using inline SVG logo
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useEmailDrafts, useUpdateEmailDraft, useActivityLog, type EmailDraft } from "@/hooks/useDashboardData";
 import { useClients } from "@/hooks/useClients";
@@ -551,11 +551,20 @@ const Index = () => {
       {/* ── Header ────────────────────────────────────────── */}
       <div className="mb-8 flex items-center justify-between animate-fade-in">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl overflow-hidden">
-            <img src={brainMascot} alt="Oddit Brain" className="h-11 w-11 object-cover" />
+          {/* Oddit eyes logo mark */}
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[hsl(var(--primary)/0.15)] border border-[hsl(var(--primary)/0.25)]">
+            <svg viewBox="0 0 44 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-6 w-auto">
+              <circle cx="10" cy="12" r="9" stroke="hsl(var(--primary))" strokeWidth="3.5"/>
+              <circle cx="10" cy="12" r="4" fill="hsl(var(--primary))"/>
+              <circle cx="34" cy="12" r="9" stroke="hsl(var(--primary))" strokeWidth="3.5"/>
+              <circle cx="34" cy="12" r="4" fill="hsl(var(--primary))"/>
+            </svg>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-cream">Command Center</h1>
+            <div className="flex items-center gap-2">
+              <span className="text-xl font-black tracking-tight" style={{ color: "hsl(var(--primary))" }}>oddit</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground border border-border rounded-full px-2 py-0.5">Command Centre</span>
+            </div>
             <p className="text-[12px] text-muted-foreground flex items-center gap-1.5">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
               {connectedIds.size} tools connected
