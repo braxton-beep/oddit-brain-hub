@@ -15,6 +15,7 @@ import {
   X,
   Telescope,
   BarChart3,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
 import { useEmailDrafts } from "@/hooks/useDashboardData";
@@ -22,6 +23,7 @@ import { useEmailDrafts } from "@/hooks/useDashboardData";
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Oddit Brain", url: "/oddit-brain", icon: Brain },
+  { title: "Clients", url: "/clients", icon: Users },
   { title: "Reports", url: "/reports", icon: FileText },
   { title: "Dev Pipeline", url: "/dev-pipeline", icon: Code2 },
   { title: "Slack Agent", url: "/slack-agent", icon: MessageSquare },
