@@ -18,9 +18,11 @@ import {
   Activity,
   Camera,
   MoveRight,
+  Play,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type StepStatus = "done" | "error" | "skipped";
@@ -402,6 +404,118 @@ function EmptyState() {
   );
 }
 
+// ── Manual run form ───────────────────────────────────────────────────────────
+function ManualRunForm() {
+  const [open, setOpen] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [form, setForm] = useState({
+    client_name: "",
+    shop_url: "",
+    focus_url: "",
+    tier: "pro" as "pro" | "essential",
+  });
+
+  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const handleRun = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.client_name || !form.shop_url) return;
+    setRunning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("run-report-setup", {
+        body: {
+          client_name: form.client_name.trim(),
+          shop_url: form.shop_url.trim(),
+          focus_url: form.focus_url.trim() || undefined,
+          tier: form.tier,
+        },
+      });
+      if (error) throw error;
+      toast.success(`Pipeline started for ${form.client_name}`);
+      setForm({ client_name: "", shop_url: "", focus_url: "", tier: "pro" });
+      setOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to start pipeline");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/20 transition-colors text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Play className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold text-foreground">Manual Test Run</span>
+          <span className="text-xs text-muted-foreground">— trigger the full pipeline without a Stripe order</span>
+        </div>
+        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+
+      {open && (
+        <form onSubmit={handleRun} className="border-t border-border px-5 py-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Client name *</label>
+              <input
+                type="text"
+                value={form.client_name}
+                onChange={set("client_name")}
+                placeholder="Test Brand"
+                required
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Tier</label>
+              <select
+                value={form.tier}
+                onChange={set("tier")}
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground text-sm focus:outline-none focus:border-primary/50 transition"
+              >
+                <option value="pro">Pro</option>
+                <option value="essential">Essential</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Shop URL *</label>
+              <input
+                type="url"
+                value={form.shop_url}
+                onChange={set("shop_url")}
+                placeholder="https://yourstore.com"
+                required
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Focus URL <span className="text-muted-foreground/50">(optional)</span></label>
+              <input
+                type="url"
+                value={form.focus_url}
+                onChange={set("focus_url")}
+                placeholder="https://yourstore.com/products"
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button type="submit" disabled={running || !form.client_name || !form.shop_url} size="sm" className="gap-2">
+              {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              {running ? "Running…" : "Run Pipeline"}
+            </Button>
+            <p className="text-xs text-muted-foreground">Creates a real Asana card + duplicates both Figma templates</p>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ReportSetup() {
   const [runs, setRuns] = useState<SetupRun[]>([]);
@@ -531,6 +645,9 @@ export default function ReportSetup() {
             </div>
           ))}
         </div>
+
+        {/* Manual test run */}
+        <ManualRunForm />
 
         {/* Workflow pipeline */}
         <WorkflowPipeline />
