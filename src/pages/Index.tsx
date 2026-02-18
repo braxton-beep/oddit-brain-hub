@@ -28,6 +28,10 @@ import {
   ChevronRight,
   BarChart3,
   Sparkles,
+  Twitter,
+  Heart,
+  Repeat2,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow, format } from "date-fns";
@@ -362,6 +366,115 @@ function DraftModal({ draft, onClose, onDismiss }: { draft: EmailDraft; onClose:
   );
 }
 
+// ── Tweet Intel Feed ─────────────────────────────────────
+const INTEL_TOPICS = ["ai", "figma", "shopify", "web development", "webdev", "ux", "design", "cro", "ecommerce", "llm", "gpt"];
+
+function TweetIntelFeed() {
+  const { data: tweets, isLoading } = useQuery({
+    queryKey: ["tweet-intel-feed"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("twitter_tweets")
+        .select("id, text, like_count, retweet_count, impression_count, created_at_twitter, tweet_type, topics")
+        .order("like_count", { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      // Filter client-side to tweets mentioning relevant topics
+      return (data ?? []).filter((t) => {
+        const lower = t.text.toLowerCase();
+        return INTEL_TOPICS.some((kw) => lower.includes(kw));
+      }).slice(0, 8);
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const topicTag = (text: string) => {
+    const lower = text.toLowerCase();
+    if (lower.includes("figma")) return { label: "Figma", cls: "text-violet border-violet/30 bg-violet/10" };
+    if (lower.includes("shopify")) return { label: "Shopify", cls: "text-accent border-accent/30 bg-accent/10" };
+    if (lower.includes("ai") || lower.includes("gpt") || lower.includes("llm")) return { label: "AI", cls: "text-primary border-primary/30 bg-primary/10" };
+    if (lower.includes("webdev") || lower.includes("web development")) return { label: "Web Dev", cls: "text-electric border-electric/30 bg-electric/10" };
+    if (lower.includes("cro") || lower.includes("ecommerce")) return { label: "CRO", cls: "text-gold border-gold/30 bg-gold/10" };
+    return { label: "Design", cls: "text-coral border-coral/30 bg-coral/10" };
+  };
+
+  return (
+    <div className="glow-card rounded-xl bg-card p-5">
+      <SectionHeader
+        icon={Twitter}
+        title="X Tweet Intel"
+        color="text-primary"
+        action={
+          <a
+            href="/twitter"
+            className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+          >
+            View all <ArrowRight className="h-3 w-3" />
+          </a>
+        }
+      />
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="animate-pulse space-y-1.5">
+              <div className="h-3.5 w-full rounded bg-muted" />
+              <div className="h-3 w-2/3 rounded bg-muted/60" />
+            </div>
+          ))}
+        </div>
+      ) : !tweets || tweets.length === 0 ? (
+        <div className="py-8 text-center">
+          <Twitter className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-30" />
+          <p className="text-xs text-muted-foreground">No relevant tweets yet.</p>
+          <a href="/twitter" className="mt-2 inline-block text-xs text-primary hover:underline">
+            Sync tweets →
+          </a>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {tweets.map((tweet) => {
+            const tag = topicTag(tweet.text);
+            return (
+              <div
+                key={tweet.id}
+                className="rounded-xl border border-border bg-secondary p-3.5 hover:border-primary/20 transition-colors"
+              >
+                <p className="text-[12px] text-foreground leading-relaxed mb-2.5 line-clamp-3">{tweet.text}</p>
+                <div className="flex items-center gap-3">
+                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${tag.cls}`}>
+                    {tag.label}
+                  </span>
+                  <div className="flex items-center gap-3 ml-auto text-[10px] text-muted-foreground">
+                    {(tweet.like_count ?? 0) > 0 && (
+                      <span className="flex items-center gap-1">
+                        <Heart className="h-2.5 w-2.5 text-coral" />
+                        {tweet.like_count?.toLocaleString()}
+                      </span>
+                    )}
+                    {(tweet.retweet_count ?? 0) > 0 && (
+                      <span className="flex items-center gap-1">
+                        <Repeat2 className="h-2.5 w-2.5 text-electric" />
+                        {tweet.retweet_count?.toLocaleString()}
+                      </span>
+                    )}
+                    {(tweet.impression_count ?? 0) > 0 && (
+                      <span className="flex items-center gap-1">
+                        <Eye className="h-2.5 w-2.5 text-muted-foreground" />
+                        {tweet.impression_count?.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────
 const Index = () => {
   const navigate = useNavigate();
@@ -518,9 +631,10 @@ const Index = () => {
 
       {/* ── Main Grid ─────────────────────────────────────── */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left col — AI News + Greatest Hits */}
+        {/* Left col — AI News + Tweet Intel + Greatest Hits */}
         <div className="lg:col-span-2 space-y-6">
           <AINewsFeed />
+          <TweetIntelFeed />
           <GreatestHits />
         </div>
 
