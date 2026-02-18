@@ -15,6 +15,7 @@ import CompetitiveIntel from "./pages/CompetitiveIntel";
 import BenchmarkExplorer from "./pages/BenchmarkExplorer";
 import ClientPortal from "./pages/ClientPortal";
 import Clients from "./pages/Clients";
+import TwitterPage from "./pages/TwitterPage";
 import NotFound from "./pages/NotFound";
 import { WelcomeTour } from "./components/WelcomeTour";
 
@@ -39,6 +40,7 @@ const App = () => (
           <Route path="/competitive-intel" element={<CompetitiveIntel />} />
           <Route path="/benchmarks" element={<BenchmarkExplorer />} />
           <Route path="/clients" element={<Clients />} />
+          <Route path="/twitter" element={<TwitterPage />} />
           <Route path="/portal/:token" element={<ClientPortal />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

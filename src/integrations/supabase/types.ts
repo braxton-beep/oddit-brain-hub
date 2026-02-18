@@ -763,6 +763,102 @@ export type Database = {
         }
         Relationships: []
       }
+      tweet_drafts: {
+        Row: {
+          context_tweet_ids: string[] | null
+          created_at: string
+          draft_text: string
+          figma_file_id: string | null
+          figma_file_name: string | null
+          id: string
+          prompt_used: string | null
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          context_tweet_ids?: string[] | null
+          created_at?: string
+          draft_text: string
+          figma_file_id?: string | null
+          figma_file_name?: string | null
+          id?: string
+          prompt_used?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          context_tweet_ids?: string[] | null
+          created_at?: string
+          draft_text?: string
+          figma_file_id?: string | null
+          figma_file_name?: string | null
+          id?: string
+          prompt_used?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      twitter_tweets: {
+        Row: {
+          created_at: string
+          created_at_twitter: string | null
+          figma_file_id: string | null
+          figma_file_name: string | null
+          id: string
+          impression_count: number | null
+          like_count: number | null
+          manually_tagged: boolean | null
+          quote_count: number | null
+          reply_count: number | null
+          retweet_count: number | null
+          synced_at: string | null
+          text: string
+          topics: string[] | null
+          tweet_id: string
+          tweet_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_at_twitter?: string | null
+          figma_file_id?: string | null
+          figma_file_name?: string | null
+          id?: string
+          impression_count?: number | null
+          like_count?: number | null
+          manually_tagged?: boolean | null
+          quote_count?: number | null
+          reply_count?: number | null
+          retweet_count?: number | null
+          synced_at?: string | null
+          text: string
+          topics?: string[] | null
+          tweet_id: string
+          tweet_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_at_twitter?: string | null
+          figma_file_id?: string | null
+          figma_file_name?: string | null
+          id?: string
+          impression_count?: number | null
+          like_count?: number | null
+          manually_tagged?: boolean | null
+          quote_count?: number | null
+          reply_count?: number | null
+          retweet_count?: number | null
+          synced_at?: string | null
+          text?: string
+          topics?: string[] | null
+          tweet_id?: string
+          tweet_type?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       workflows: {
         Row: {
           created_at: string
