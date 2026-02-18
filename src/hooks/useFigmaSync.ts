@@ -23,9 +23,13 @@ export interface FigmaFile {
   project_id: string | null;
   project_name: string | null;
   tags: string[] | null;
+  raw_metadata: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
+
+export const DESIGN_TYPES = ["free_trial", "oddit_report", "landing_page", "new_site_design", "other"] as const;
+export type DesignType = (typeof DESIGN_TYPES)[number];
 
 export const DESIGN_TYPE_LABELS: Record<string, { label: string; color: string }> = {
   free_trial: { label: "Free Trial", color: "text-blue-400 bg-blue-400/10 border-blue-400/30" },
@@ -84,6 +88,41 @@ export function useDeleteFigmaProject() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["figma-projects"] }),
+  });
+}
+
+export function useToggleFigmaProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
+      const { error } = await supabase.from("figma_projects").update({ enabled }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["figma-projects"] }),
+  });
+}
+
+export function useUpdateFigmaFileType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, design_type }: { id: string; design_type: string }) => {
+      // Mark as manually overridden so future syncs preserve this choice
+      const { data: existing } = await supabase
+        .from("figma_files")
+        .select("raw_metadata")
+        .eq("id", id)
+        .single();
+      const metadata = {
+        ...(existing?.raw_metadata as Record<string, unknown> ?? {}),
+        manual_type_override: true,
+      };
+      const { error } = await supabase
+        .from("figma_files")
+        .update({ design_type, raw_metadata: metadata })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["figma-files"] }),
   });
 }
 
