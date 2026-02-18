@@ -269,6 +269,7 @@ export type Database = {
           client_name: string | null
           created_at: string
           design_type: string
+          enabled: boolean
           figma_file_key: string
           figma_url: string | null
           id: string
@@ -285,6 +286,7 @@ export type Database = {
           client_name?: string | null
           created_at?: string
           design_type?: string
+          enabled?: boolean
           figma_file_key: string
           figma_url?: string | null
           id?: string
@@ -301,6 +303,7 @@ export type Database = {
           client_name?: string | null
           created_at?: string
           design_type?: string
+          enabled?: boolean
           figma_file_key?: string
           figma_url?: string | null
           id?: string

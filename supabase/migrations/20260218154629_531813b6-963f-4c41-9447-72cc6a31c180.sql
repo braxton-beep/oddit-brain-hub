@@ -1,0 +1,1 @@
+ALTER TABLE public.figma_files ADD COLUMN IF NOT EXISTS enabled boolean NOT NULL DEFAULT true;

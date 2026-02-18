@@ -10,6 +10,7 @@ import {
   useAddFigmaProject,
   useDeleteFigmaProject,
   useToggleFigmaProject,
+  useToggleFigmaFile,
   useTriggerFigmaSync,
   useUpdateFigmaFileType,
   DESIGN_TYPE_LABELS,
@@ -137,9 +138,20 @@ export function FigmaIntegration() {
   const addProject = useAddFigmaProject();
   const deleteProject = useDeleteFigmaProject();
   const toggleProject = useToggleFigmaProject();
+  const toggleFile = useToggleFigmaFile();
   const triggerSync = useTriggerFigmaSync();
 
+  const handleToggleFile = async (id: string, currentEnabled: boolean, name: string) => {
+    try {
+      await toggleFile.mutateAsync({ id, enabled: !currentEnabled });
+      toast.success(currentEnabled ? `"${name}" excluded from Brain` : `"${name}" included in Brain`);
+    } catch {
+      toast.error("Failed to update file");
+    }
+  };
+
   const filteredFiles = (files ?? []).filter((f) => {
+    if (activeFilter === "__excluded") return f.enabled === false;
     const matchesType = activeFilter === "all" || f.design_type === activeFilter;
     const matchesProject = activeProject === "all" || f.project_id === activeProject;
     return matchesType && matchesProject;
@@ -362,8 +374,29 @@ export function FigmaIntegration() {
                 </button>
               );
             })}
+            {/* Excluded filter */}
+            {(files ?? []).some((f) => f.enabled === false) && (
+              <button
+                onClick={() => setActiveFilter(activeFilter === "__excluded" ? "all" : "__excluded")}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors ${
+                  activeFilter === "__excluded"
+                    ? "bg-destructive/15 text-destructive border border-destructive/30"
+                    : "text-muted-foreground hover:text-foreground bg-card border border-border"
+                }`}
+              >
+                <EyeOff className="h-3 w-3" />
+                Excluded
+                <span className="rounded-full px-1.5 py-0.5 text-[9px] font-bold bg-muted/40 text-muted-foreground">
+                  {(files ?? []).filter((f) => f.enabled === false).length}
+                </span>
+              </button>
+            )}
           </div>
-          <p className="text-[11px] text-muted-foreground">{filteredFiles.length} files</p>
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] text-muted-foreground">
+              {(files ?? []).filter((f) => f.enabled !== false).length} active · {(files ?? []).filter((f) => f.enabled === false).length} excluded
+            </p>
+          </div>
         </div>
 
         {/* Files Grid */}
@@ -385,33 +418,55 @@ export function FigmaIntegration() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {filteredFiles.map((file) => {
               const isManual = (file.raw_metadata as any)?.manual_type_override === true;
+              const isEnabled = file.enabled !== false;
               return (
                 <div
                   key={file.id}
-                  className="glow-card rounded-xl bg-card border border-border p-4 flex flex-col gap-2"
+                  className={`glow-card rounded-xl bg-card border p-4 flex flex-col gap-2 transition-opacity ${
+                    isEnabled ? "border-border" : "border-border opacity-50"
+                  }`}
                 >
                   {file.thumbnail_url && (
-                    <img
-                      src={file.thumbnail_url}
-                      alt={file.name}
-                      className="w-full h-24 object-cover rounded-lg bg-muted/20"
-                    />
+                    <div className="relative">
+                      <img
+                        src={file.thumbnail_url}
+                        alt={file.name}
+                        className={`w-full h-24 object-cover rounded-lg bg-muted/20 ${!isEnabled ? "grayscale" : ""}`}
+                      />
+                      {!isEnabled && (
+                        <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-background/60">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Excluded</span>
+                        </div>
+                      )}
+                    </div>
                   )}
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-xs font-bold text-foreground leading-snug line-clamp-2 flex-1">{file.name}</p>
-                    {file.figma_url && (
-                      <a
-                        href={file.figma_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-foreground shrink-0"
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleToggleFile(file.id, isEnabled, file.name)}
+                        title={isEnabled ? "Exclude from Brain" : "Include in Brain"}
+                        className={`p-1 rounded transition-colors ${
+                          isEnabled
+                            ? "text-accent hover:text-muted-foreground"
+                            : "text-muted-foreground hover:text-accent"
+                        }`}
                       >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
-                    )}
+                        {isEnabled ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                      </button>
+                      {file.figma_url && (
+                        <a
+                          href={file.figma_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-foreground p-1"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {/* Clickable type badge — opens inline dropdown to override */}
                     <FileTypeDropdown fileId={file.id} currentType={file.design_type} />
                     {isManual && (
                       <span className="text-[9px] text-muted-foreground italic">manual</span>
