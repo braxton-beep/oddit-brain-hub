@@ -39,4 +39,10 @@ verify_jwt = false
 [functions.google-drive-sync]
 verify_jwt = false
 
+[functions.sync-tweets]
+verify_jwt = false
+
+[functions.craft-tweet]
+verify_jwt = false
+
 

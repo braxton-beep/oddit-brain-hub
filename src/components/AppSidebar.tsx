@@ -16,6 +16,7 @@ import {
   Telescope,
   BarChart3,
   Users,
+  Twitter,
 } from "lucide-react";
 import { useState } from "react";
 import { useEmailDrafts } from "@/hooks/useDashboardData";
@@ -27,6 +28,7 @@ const navItems = [
   { title: "Reports", url: "/reports", icon: FileText },
   { title: "Dev Pipeline", url: "/dev-pipeline", icon: Code2 },
   { title: "Slack Agent", url: "/slack-agent", icon: MessageSquare },
+  { title: "Twitter / X", url: "/twitter", icon: Twitter },
   { title: "Competitive Intel", url: "/competitive-intel", icon: Telescope },
   { title: "Benchmarks", url: "/benchmarks", icon: BarChart3 },
   { title: "Integrations", url: "/integrations", icon: Link2 },
