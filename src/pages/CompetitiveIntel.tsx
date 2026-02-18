@@ -181,6 +181,7 @@ function CompetitorCard({
 
 const CompetitiveIntel = () => {
   const [clientName, setClientName] = useState("");
+  const [clientUrl, setClientUrl] = useState("");
   const [industry, setIndustry] = useState("");
   const [competitorUrls, setCompetitorUrls] = useState<string[]>(["", ""]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -231,6 +232,10 @@ const CompetitiveIntel = () => {
       toast.error("Enter a client name");
       return;
     }
+    if (!clientUrl.trim()) {
+      toast.error("Enter the client's URL so we can compare accurately");
+      return;
+    }
     if (validUrls.length === 0) {
       toast.error("Add at least one competitor URL");
       return;
@@ -248,6 +253,7 @@ const CompetitiveIntel = () => {
         },
         body: JSON.stringify({
           client_name: clientName.trim(),
+          client_url: clientUrl.trim(),
           competitor_urls: validUrls,
           client_industry: industry.trim() || undefined,
         }),
@@ -332,6 +338,20 @@ const CompetitiveIntel = () => {
                   onChange={(e) => setClientName(e.target.value)}
                   className="w-full rounded-lg border border-border bg-secondary px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-all"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Client URL <span className="text-coral font-bold">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://allbirds.com"
+                  value={clientUrl}
+                  onChange={(e) => setClientUrl(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-secondary px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-all"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Used to identify gaps specific to this brand</p>
               </div>
 
               <div>
