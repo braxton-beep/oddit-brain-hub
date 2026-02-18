@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { client_name, competitor_urls, client_industry } = await req.json();
+    const { client_name, client_url, competitor_urls, client_industry } = await req.json();
 
     if (!client_name || !competitor_urls || !Array.isArray(competitor_urls) || competitor_urls.length === 0) {
       return new Response(
@@ -88,9 +88,14 @@ serve(async (req) => {
       .map((s, i) => `--- COMPETITOR ${i + 1}: ${s.url} ---\n${s.content}`)
       .join("\n\n");
 
+    const clientContext = client_url
+      ? `The client's own website is: ${client_url}. Use this to make gap analysis highly specific — compare what competitors do that this client's site is currently missing.`
+      : "";
+
     const systemPrompt = `You are a senior CRO (Conversion Rate Optimization) strategist at Oddit, a top-tier CRO agency. You specialize in analyzing competitor websites to surface design and copy patterns that clients are missing.
 
-Analyze the provided competitor websites for a ${client_industry || "e-commerce"} client named "${client_name}".
+Analyze the provided competitor websites for a ${client_industry || "e-commerce"} client named "${client_name}" (${client_url || "no URL provided"}).
+${clientContext}
 
 For each competitor, extract:
 1. **design_patterns**: Visual/layout patterns (hero structure, color usage, whitespace, imagery style, navigation patterns)
@@ -98,7 +103,7 @@ For each competitor, extract:
 3. **trust_signals**: Social proof types (reviews, ratings, press logos, certifications, guarantees, customer counts)
 4. **ctas**: Call-to-action strategies (button copy, placement, color contrast, micro-copy below CTAs, sticky CTAs)
 5. **social_proof**: Community/UGC elements (testimonials format, star ratings placement, before/afters, influencer content)
-6. **gaps_for_client**: Specific things this competitor does that "${client_name}" should consider implementing
+6. **gaps_for_client**: Specific things this competitor does that "${client_name}" (${client_url || "unknown URL"}) should consider implementing — be highly specific and actionable
 
 Return a JSON object with this exact structure (no markdown, pure JSON):
 {
