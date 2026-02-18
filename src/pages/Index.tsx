@@ -383,7 +383,7 @@ const Index = () => {
             <img src={brainMascot} alt="Oddit Brain" className="h-11 w-11 object-cover" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-cream">Command Centre</h1>
+            <h1 className="text-xl font-bold text-cream text-center">Command Centre</h1>
             <p className="text-[12px] text-muted-foreground flex items-center gap-1.5">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
               {connectedIds.size} tools connected
