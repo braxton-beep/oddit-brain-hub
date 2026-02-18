@@ -208,6 +208,7 @@ function HistoryEntry({ record }: { record: RunRecord }) {
 export default function ReportSetup() {
   const [clientName, setClientName] = useState("");
   const [shopUrl, setShopUrl] = useState("");
+  const [focusUrl, setFocusUrl] = useState("");
   const [tier, setTier] = useState<Tier>("pro");
   const [figmaTemplateKey, setFigmaTemplateKey] = useState("");
   const [figmaSlidesKey, setFigmaSlidesKey] = useState("");
@@ -222,7 +223,7 @@ export default function ReportSetup() {
   const STEP_NAMES = [
     "Create Asana Card",
     "Move to Ready for Setup",
-    "Figma File Setup",
+    "Screenshot & Figma Injection",
     "Link Figma File to Asana",
     "Create Figma Slides Report",
     "Link Figma Slides to Asana",
@@ -253,6 +254,7 @@ export default function ReportSetup() {
         body: {
           client_name: clientName.trim(),
           shop_url: shopUrl.trim().startsWith("http") ? shopUrl.trim() : `https://${shopUrl.trim()}`,
+          focus_url: focusUrl.trim() ? (focusUrl.trim().startsWith("http") ? focusUrl.trim() : `https://${focusUrl.trim()}`) : undefined,
           tier,
           figma_template_key: figmaTemplateKey.trim() || undefined,
           figma_slides_template_key: figmaSlidesKey.trim() || undefined,
@@ -344,12 +346,26 @@ export default function ReportSetup() {
                 </div>
 
                 <div>
-                  <Label htmlFor="shop-url" className="text-xs text-muted-foreground mb-1.5 block">Shop URL *</Label>
+                  <Label htmlFor="shop-url" className="text-xs text-muted-foreground mb-1.5 block">Website URL *</Label>
                   <Input
                     id="shop-url"
                     placeholder="acmestore.com"
                     value={shopUrl}
                     onChange={(e) => setShopUrl(e.target.value)}
+                    disabled={running}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="focus-url" className="text-xs text-muted-foreground mb-1.5 block">
+                    Focus URL
+                    <span className="text-[10px] ml-1 text-muted-foreground/60">(optional — e.g. PDP, landing page)</span>
+                  </Label>
+                  <Input
+                    id="focus-url"
+                    placeholder="acmestore.com/products/best-seller"
+                    value={focusUrl}
+                    onChange={(e) => setFocusUrl(e.target.value)}
                     disabled={running}
                   />
                 </div>
