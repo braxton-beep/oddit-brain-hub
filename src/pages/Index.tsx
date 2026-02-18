@@ -307,8 +307,8 @@ const Index = () => {
       {/* Header */}
       <div className="mb-10 animate-fade-in">
         <div className="flex items-center gap-3 mb-2">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl overflow-hidden animate-glow-pulse">
-            <img src={brainMascot} alt="Oddit Brain" className="h-10 w-10 object-cover" />
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl overflow-hidden animate-glow-pulse">
+            <img src={brainMascot} alt="Oddit Brain" className="h-12 w-12 object-cover" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-cream">Oddit Brain</h1>

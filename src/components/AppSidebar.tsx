@@ -64,8 +64,8 @@ export function AppSidebar() {
           >
             <div className="flex h-16 items-center justify-between border-b border-border px-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden animate-glow-pulse">
-                  <img src={brainMascot} alt="Oddit Brain" className="h-8 w-8 object-cover" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl overflow-hidden animate-glow-pulse">
+                  <img src={brainMascot} alt="Oddit Brain" className="h-10 w-10 object-cover" />
                 </div>
                 <div>
                   <span className="text-sm font-bold tracking-tight text-cream">oddit</span>
@@ -108,8 +108,8 @@ export function AppSidebar() {
       >
       {/* Logo */}
       <div className="flex h-16 items-center gap-3 border-b border-border px-4">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden animate-glow-pulse">
-          <img src={brainMascot} alt="Oddit Brain" className="h-8 w-8 object-cover" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl overflow-hidden animate-glow-pulse">
+          <img src={brainMascot} alt="Oddit Brain" className="h-10 w-10 object-cover" />
         </div>
         {!collapsed && (
           <div className="animate-fade-in-left">
