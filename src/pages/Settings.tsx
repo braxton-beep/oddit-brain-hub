@@ -59,6 +59,7 @@ const INTEGRATIONS: IntegrationItem[] = [
   // Development
   { id: "github", label: "GitHub", placeholder: "ghp_...", description: "Connect repos so the Brain tracks commits, PRs, and pipeline status.", setupUrl: "https://github.com/settings/tokens", setupLabel: "GitHub Tokens", category: "development" },
   { id: "linear", label: "Linear", placeholder: "lin_api_...", description: "Sync issues and project boards for development progress tracking.", setupUrl: "https://linear.app/settings/api", setupLabel: "Linear API Settings", category: "development" },
+  { id: "asana", label: "Asana", placeholder: "1/...", description: "Automate report fulfillment: create cards, link Figma files, and move tasks through columns automatically.", setupUrl: "https://app.asana.com/0/my-apps", setupLabel: "Asana My Apps", category: "development" },
 ];
 
 const CATEGORIES = [
