@@ -31,6 +31,14 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const sb = createClient(supabaseUrl, supabaseKey);
 
+    // Detect if the query is about a specific call/meeting to decide how much transcript to pull
+    const queryLower = query.toLowerCase();
+    const isCallQuery = queryLower.includes("call") || queryLower.includes("meeting") ||
+      queryLower.includes("transcript") || queryLower.includes("fireflies") ||
+      queryLower.includes("said") || queryLower.includes("discussed") ||
+      queryLower.includes("mentioned") || queryLower.includes("conversation") ||
+      queryLower.includes("client");
+
     const [
       { data: knowledgeSources },
       { data: projects },
@@ -41,7 +49,10 @@ serve(async (req) => {
       sb.from("knowledge_sources").select("*").order("name"),
       sb.from("projects").select("*").order("created_at", { ascending: false }),
       sb.from("integration_credentials").select("integration_id").order("integration_id"),
-      sb.from("fireflies_transcripts").select("title, date, summary, action_items, organizer_email, participants, duration").order("date", { ascending: false }).limit(20),
+      sb.from("fireflies_transcripts")
+        .select("title, date, summary, action_items, organizer_email, participants, duration, transcript_text")
+        .order("date", { ascending: false })
+        .limit(isCallQuery ? 10 : 5),
       sb.from("fireflies_transcripts").select("*", { count: "exact", head: true }),
     ]);
 
@@ -67,18 +78,22 @@ serve(async (req) => {
       ? `Connected integrations: ${connectedIntegrations.join(", ")}`
       : "No integrations connected yet.";
 
-    // Fireflies meeting data
+    // Fireflies meeting data — include full transcript text when available
     let meetingBlock = "";
     if (recentTranscripts && recentTranscripts.length > 0) {
       const meetingLines = recentTranscripts.map((t: any) => {
         const date = t.date ? new Date(t.date).toLocaleDateString() : "Unknown date";
         const dur = t.duration ? `${Math.round(t.duration / 60)}min` : "";
         const participants = t.participants?.join(", ") || "Unknown";
-        const summary = t.summary ? t.summary.substring(0, 200) : "No summary";
-        const actions = t.action_items ? `Action items: ${t.action_items.substring(0, 150)}` : "";
-        return `- "${t.title}" (${date}, ${dur}, participants: ${participants})\n  Summary: ${summary}\n  ${actions}`.trim();
+        const summary = t.summary || "No summary available";
+        const actions = t.action_items ? `\n  Action items: ${t.action_items}` : "";
+        // Include full transcript text if present — this is the primary knowledge source
+        const fullTranscript = t.transcript_text
+          ? `\n  FULL TRANSCRIPT:\n${t.transcript_text}`
+          : "";
+        return `--- MEETING: "${t.title}" (${date}, ${dur}) ---\nParticipants: ${participants}\nSummary: ${summary}${actions}${fullTranscript}`;
       });
-      meetingBlock = `\nFireflies Meeting Data (${totalTranscripts ?? 0} total transcripts, showing ${recentTranscripts.length} most recent):\n${meetingLines.join("\n")}`;
+      meetingBlock = `\nFireflies Meeting Data (${totalTranscripts ?? 0} total transcripts, showing ${recentTranscripts.length} most recent):\n\n${meetingLines.join("\n\n")}`;
     } else {
       meetingBlock = "\nNo Fireflies meeting transcripts have been synced yet.";
     }
@@ -92,7 +107,7 @@ ${projectBlock}
 ${intBlock}
 ${meetingBlock}
 
-Answer questions concisely and specifically using this context. Reference specific meetings, dates, and participants when relevant. If you don't have data on something, say so honestly rather than making up numbers. Keep answers to 2-3 sentences unless more detail is requested.`;
+Answer questions concisely and specifically using this context. When asked about calls or meetings, reference the full transcript text to give precise, detailed answers — quote what was actually said when relevant. Reference specific meetings, dates, and participants when relevant. If you don't have data on something, say so honestly rather than making up numbers. Keep answers to 2-3 sentences unless more detail is requested.`;
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
