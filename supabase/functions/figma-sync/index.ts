@@ -147,6 +147,10 @@ serve(async (req) => {
 
           const clientName = extractClientName(file.name);
 
+          // Only oddit_report and landing_page are in scope for Oddit Brain by default
+          const IN_SCOPE_TYPES = ["oddit_report", "landing_page"];
+          const enabledByDefault = IN_SCOPE_TYPES.includes(designType);
+
           const upsertData: Record<string, any> = {
             figma_file_key: file.key,
             name: file.name,
@@ -158,6 +162,8 @@ serve(async (req) => {
             project_id: project.project_id,
             project_name: project.project_name || data.name || "",
             tags: [designType, ...(clientName ? [clientName.toLowerCase()] : [])],
+            // Only set enabled on first insert — never overwrite a user's manual toggle
+            ...(existing?.id ? {} : { enabled: enabledByDefault }),
           };
 
           // Preserve manual_type_override flag if set
