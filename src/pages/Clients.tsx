@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Users,
   Plus,
@@ -11,6 +12,8 @@ import {
   X,
   ChevronDown,
   Building2,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import {
   useClients,
@@ -50,10 +53,63 @@ function ClientForm({
   isSaving: boolean;
 }) {
   const [form, setForm] = useState<ClientInsert>(initial);
+  const [smartUrl, setSmartUrl] = useState(initial.shopify_url || "");
+  const [isEnriching, setIsEnriching] = useState(false);
   const set = (k: keyof ClientInsert, v: any) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleSmartFill = async () => {
+    if (!smartUrl.trim()) { toast.error("Enter a Shopify URL first"); return; }
+    setIsEnriching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("enrich-client", {
+        body: { url: smartUrl.trim() },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Enrichment failed");
+      setForm((f) => ({ ...f, ...data.data }));
+      toast.success(`Auto-filled from ${data.data.name || "the store"} ✨`, {
+        description: "Review and edit before saving",
+      });
+    } catch (e: any) {
+      toast.error("Smart fill failed", { description: e.message });
+    } finally {
+      setIsEnriching(false);
+    }
+  };
 
   return (
     <div className="rounded-xl border border-border bg-card p-6 space-y-5">
+      {/* Smart fill banner */}
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <span className="text-xs font-bold text-primary uppercase tracking-wider">Smart Fill from URL</span>
+        </div>
+        <p className="text-[11px] text-muted-foreground mb-3">
+          Paste a Shopify store URL — the AI will auto-fill brand name, industry, vertical, revenue tier, and notes.
+        </p>
+        <div className="flex gap-2">
+          <input
+            value={smartUrl}
+            onChange={(e) => setSmartUrl(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSmartFill()}
+            placeholder="https://brand.myshopify.com or https://brand.com"
+            className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+          <button
+            onClick={handleSmartFill}
+            disabled={isEnriching}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-all whitespace-nowrap"
+          >
+            {isEnriching ? (
+              <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Analyzing…</>
+            ) : (
+              <><Sparkles className="h-3.5 w-3.5" /> Auto-Fill</>
+            )}
+          </button>
+        </div>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Name */}
         <div className="space-y-1.5">
@@ -155,11 +211,28 @@ function ClientForm({
         <textarea
           value={form.notes}
           onChange={(e) => set("notes", e.target.value)}
-          rows={2}
-          placeholder="Any context about this client…"
+          rows={3}
+          placeholder="Any context about this client… (auto-filled from AI analysis)"
           className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
       </div>
+
+      {/* AI Tags */}
+      {form.tags && form.tags.length > 0 && (
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">AI-Generated Tags</label>
+          <div className="flex flex-wrap gap-1.5">
+            {form.tags.map((tag) => (
+              <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[10px] font-semibold text-primary">
+                {tag}
+                <button onClick={() => set("tags", form.tags?.filter((t) => t !== tag))} className="hover:text-destructive ml-0.5">
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-2 justify-end pt-1">
         <button onClick={onCancel} className="rounded-lg px-4 py-2 text-xs font-bold text-muted-foreground hover:text-foreground border border-border bg-card transition-colors">

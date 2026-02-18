@@ -45,4 +45,7 @@ verify_jwt = false
 [functions.craft-tweet]
 verify_jwt = false
 
+[functions.enrich-client]
+verify_jwt = false
+
 
