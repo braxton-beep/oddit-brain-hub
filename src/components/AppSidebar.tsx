@@ -113,8 +113,11 @@ export function AppSidebar() {
         </div>
         {!collapsed && (
           <div className="animate-fade-in-left">
-            <span className="text-sm font-bold tracking-tight text-cream">oddit</span>
-            <span className="ml-1 text-xs font-medium text-accent">brain</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold tracking-tight text-cream">oddit</span>
+              <span className="text-xs font-medium text-accent">brain</span>
+              <span className="rounded px-1 py-0.5 text-[9px] font-bold tracking-wider bg-primary/15 text-primary border border-primary/20">v1.2</span>
+            </div>
           </div>
         )}
       </div>
