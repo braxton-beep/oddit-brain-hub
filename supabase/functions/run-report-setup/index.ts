@@ -9,21 +9,14 @@ const corsHeaders = {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const ASANA_PROJECT_GID = "1207443359385412"; // Oddit Setups
-
-// Figma template keys — duplicated automatically for every new report purchase
-const DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY  = "3EfexlsSpqIciz7PkcSPwu"; // Oddit Report Template (design)
-const DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY = "7iTirmji3y4s35Xyrk2Cwg"; // Oddit Report Template (slides)
-const SECTION_CLIENT_FIGMA_SETUP = "1207443359385417"; // "Ready for Setup" section in Oddit Setups
-const SECTION_READY_FOR_DECK = "1207443359385418";     // "Setup Complete" section in Oddit Setups
+const SECTION_READY_FOR_SETUP = "1207443359385417";
+const SECTION_SETUP_COMPLETE = "1207443359385418";
 const ASANA_API = "https://app.asana.com/api/1.0";
 const FIGMA_API = "https://api.figma.com/v1";
 const FIRECRAWL_API = "https://api.firecrawl.dev/v1";
 
-// Figma frame names to target (must match template exactly)
-const FRAME_DESKTOP_MAIN  = "Desktop Screenshot";
-const FRAME_MOBILE_MAIN   = "Mobile Screenshot";
-const FRAME_DESKTOP_FOCUS = "Desktop Focus";
-const FRAME_MOBILE_FOCUS  = "Mobile Focus";
+const DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY = "3EfexlsSpqIciz7PkcSPwu";
+const DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY = "7iTirmji3y4s35Xyrk2Cwg";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type StepStatus = "running" | "done" | "error" | "skipped";
@@ -35,7 +28,7 @@ interface StepResult {
   error?: string;
 }
 
-// ── Asana helpers ─────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 async function asanaFetch(path: string, token: string, options: RequestInit = {}) {
   const res = await fetch(`${ASANA_API}${path}`, {
     ...options,
@@ -68,98 +61,81 @@ async function getFigmaToken(sb: ReturnType<typeof createClient>): Promise<strin
   return cred?.api_key ?? null;
 }
 
-async function getFirecrawlKey(): Promise<string | null> {
+function getFirecrawlKey(): string | null {
   return Deno.env.get("FIRECRAWL_API_KEY") ?? null;
 }
 
-// ── Parse URLs from Asana task description ────────────────────────────────────
-// Handles "Website URL: https://..." and "Focus URL: https://..." lines
-function parseUrlsFromNotes(notes: string): { websiteUrl: string | null; focusUrls: string[] } {
-  const lines = notes.split("\n").map((l) => l.trim());
-  let websiteUrl: string | null = null;
-  const focusUrls: string[] = [];
-
-  for (const line of lines) {
-    const lower = line.toLowerCase();
-    // Match "website url: ..." or "website: ..."
-    if (lower.startsWith("website url:") || lower.startsWith("website:")) {
-      const url = line.split(":").slice(1).join(":").trim();
-      if (url.startsWith("http")) websiteUrl = url;
-    }
-    // Match "focus url: ..." or "focus page: ..."
-    else if (lower.startsWith("focus url:") || lower.startsWith("focus page:") || lower.startsWith("focus:")) {
-      const url = line.split(":").slice(1).join(":").trim();
-      if (url.startsWith("http")) focusUrls.push(url);
-    }
-  }
-
-  // Fallback: if no labelled URL found, grab first raw http URL as website
-  if (!websiteUrl) {
-    for (const line of lines) {
-      if (line.startsWith("http")) {
-        websiteUrl = line;
-        break;
-      }
-    }
-  }
-
-  return { websiteUrl, focusUrls };
-}
-
-// ── Screenshot via Firecrawl ──────────────────────────────────────────────────
+// ── Screenshot capture via Firecrawl ──────────────────────────────────────────
 async function captureScreenshot(
   url: string,
   firecrawlKey: string,
   viewport: "desktop" | "mobile"
-): Promise<string | null> {
-  // Firecrawl screenshot format returns base64-encoded PNG in screenshot field
-  const res = await fetch(`${FIRECRAWL_API}/scrape`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${firecrawlKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      url,
-      formats: ["screenshot"],
-      // Firecrawl uses mobile user-agent / viewport via location options
-      // We pass a hint via actions (supported in newer Firecrawl versions)
-      ...(viewport === "mobile"
-        ? { mobile: true }
-        : {}),
-      waitFor: 2000,
-    }),
-  });
+): Promise<Uint8Array | null> {
+  try {
+    const res = await fetch(`${FIRECRAWL_API}/scrape`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${firecrawlKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        url,
+        formats: ["screenshot"],
+        ...(viewport === "mobile" ? { mobile: true } : {}),
+        waitFor: 2000,
+      }),
+    });
 
-  if (!res.ok) {
-    console.error(`Firecrawl screenshot failed for ${url} [${viewport}]:`, await res.text());
+    if (!res.ok) {
+      console.error(`Firecrawl screenshot failed for ${url} [${viewport}]:`, await res.text());
+      return null;
+    }
+
+    const data = await res.json();
+    const screenshotField: string | null = data?.data?.screenshot ?? data?.screenshot ?? null;
+    if (!screenshotField) {
+      console.error(`No screenshot field in Firecrawl response for ${url} [${viewport}]. Keys:`, Object.keys(data?.data ?? data ?? {}));
+      return null;
+    }
+
+    console.log(`Screenshot field type for ${viewport}: starts with "${screenshotField.substring(0, 30)}..."`);
+
+    // If it's a URL, fetch the image bytes directly
+    if (screenshotField.startsWith("http")) {
+      const imgRes = await fetch(screenshotField);
+      if (!imgRes.ok) {
+        console.error(`Failed to fetch screenshot URL [${imgRes.status}]:`, screenshotField);
+        return null;
+      }
+      return new Uint8Array(await imgRes.arrayBuffer());
+    }
+
+    // Handle data URI or raw base64
+    const raw = screenshotField.replace(/^data:image\/[a-z]+;base64,/, "");
+    // Pad base64 if needed
+    const padded = raw + "=".repeat((4 - (raw.length % 4)) % 4);
+    const binaryStr = atob(padded);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
+    }
+    return bytes;
+  } catch (e) {
+    console.error(`captureScreenshot error [${viewport}]:`, e);
     return null;
   }
-
-  const data = await res.json();
-  // screenshot field is a data URI: "data:image/png;base64,..."
-  const screenshotDataUri: string | null = data?.screenshot ?? data?.data?.screenshot ?? null;
-  if (!screenshotDataUri) return null;
-
-  // Strip data URI prefix to get raw base64
-  const base64 = screenshotDataUri.replace(/^data:image\/[a-z]+;base64,/, "");
-  return base64;
 }
 
-// ── Upload image to Supabase storage, return public URL ───────────────────────
-async function uploadScreenshotToStorage(
+// ── Upload to Supabase storage ────────────────────────────────────────────────
+async function uploadToStorage(
   sb: ReturnType<typeof createClient>,
-  base64Png: string,
+  pngBytes: Uint8Array,
   filename: string
 ): Promise<string | null> {
   try {
-    const bytes = Uint8Array.from(atob(base64Png), (c) => c.charCodeAt(0));
-    const { data, error } = await sb.storage
+    const { error } = await sb.storage
       .from("audit-assets")
-      .upload(`screenshots/${filename}`, bytes, {
-        contentType: "image/png",
-        upsert: true,
-      });
+      .upload(`screenshots/${filename}`, pngBytes, { contentType: "image/png", upsert: true });
     if (error) {
       console.error("Storage upload error:", error);
       return null;
@@ -167,110 +143,63 @@ async function uploadScreenshotToStorage(
     const { data: urlData } = sb.storage.from("audit-assets").getPublicUrl(`screenshots/${filename}`);
     return urlData?.publicUrl ?? null;
   } catch (e) {
-    console.error("uploadScreenshotToStorage error:", e);
+    console.error("uploadToStorage error:", e);
     return null;
   }
 }
 
-// ── Upload image bytes to Figma file, get imageHash ──────────────────────────
-async function uploadImageToFigma(
-  figmaToken: string,
-  fileKey: string,
-  base64Png: string
+// ── Asana: find or create a tag ───────────────────────────────────────────────
+async function findOrCreateAsanaTag(
+  tagName: string,
+  workspaceGid: string,
+  asanaToken: string
 ): Promise<string | null> {
   try {
-    const bytes = Uint8Array.from(atob(base64Png), (c) => c.charCodeAt(0));
-    const formData = new FormData();
-    const blob = new Blob([bytes], { type: "image/png" });
-    formData.append("image", blob, "screenshot.png");
+    // Search for existing tag
+    const searchRes = await asanaFetch(
+      `/workspaces/${workspaceGid}/tags?opt_fields=name&limit=100`,
+      asanaToken
+    );
+    const existing = (searchRes as Array<{ gid: string; name: string }>)
+      .find((t) => t.name.toLowerCase() === tagName.toLowerCase());
+    if (existing) return existing.gid;
 
-    const res = await fetch(`${FIGMA_API}/images/${fileKey}`, {
+    // Create new tag
+    const newTag = await asanaFetch("/tags", asanaToken, {
       method: "POST",
-      headers: { "X-Figma-Token": figmaToken },
-      body: formData,
+      body: JSON.stringify({ data: { name: tagName, workspace: workspaceGid } }),
     });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error(`Figma image upload failed [${res.status}]:`, errText);
-      return null;
-    }
-
-    const data = await res.json();
-    // Response: { imageHash: "abc123..." }
-    return data?.imageHash ?? null;
+    return newTag.gid ?? null;
   } catch (e) {
-    console.error("uploadImageToFigma error:", e);
+    console.error(`Tag creation failed for "${tagName}":`, e);
     return null;
   }
 }
 
-// ── Find a Figma node by name (depth-limited search) ─────────────────────────
-function findNodeByName(nodes: Record<string, unknown>[], targetName: string): string | null {
-  for (const node of nodes) {
-    if ((node as { name?: string }).name === targetName) {
-      return (node as { id?: string }).id ?? null;
-    }
-    const children = (node as { children?: Record<string, unknown>[] }).children;
-    if (children) {
-      const found = findNodeByName(children, targetName);
-      if (found) return found;
+// ── Parse URLs from Asana card notes ──────────────────────────────────────────
+function parseUrlsFromNotes(notes: string): { websiteUrl: string | null; focusUrls: string[] } {
+  const lines = notes.split("\n").map((l) => l.trim());
+  let websiteUrl: string | null = null;
+  const focusUrls: string[] = [];
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    if (lower.startsWith("website url:") || lower.startsWith("website:")) {
+      const url = line.split(":").slice(1).join(":").trim();
+      if (url.startsWith("http")) websiteUrl = url;
+    } else if (lower.startsWith("focus url:") || lower.startsWith("focus page:") || lower.startsWith("focus:")) {
+      const url = line.split(":").slice(1).join(":").trim();
+      if (url.startsWith("http")) focusUrls.push(url);
     }
   }
-  return null;
-}
 
-// ── Set image fill on a Figma node ────────────────────────────────────────────
-async function setFigmaNodeImageFill(
-  figmaToken: string,
-  fileKey: string,
-  nodeId: string,
-  imageHash: string
-): Promise<boolean> {
-  try {
-    const res = await fetch(`${FIGMA_API}/files/${fileKey}/nodes`, {
-      method: "GET",
-      headers: { "X-Figma-Token": figmaToken },
-    });
-    // We need to use the REST plugin API for node updates — Figma's REST API
-    // supports setting fills via the "image fills" endpoint:
-    // POST /v1/files/:file_key/nodes/:node_id/properties
-    // Actually, Figma REST API doesn't support writing fills directly.
-    // We set the image via the "images" route and then patch via the
-    // undocumented nodes endpoint that exists for integrations.
-    // The correct approach: use PUT /v1/files/:key/nodes with properties patch.
-    const patchRes = await fetch(`${FIGMA_API}/files/${fileKey}/nodes`, {
-      method: "PUT",
-      headers: {
-        "X-Figma-Token": figmaToken,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        nodes: {
-          [nodeId]: {
-            fills: [
-              {
-                type: "IMAGE",
-                scaleMode: "FIT",
-                imageRef: imageHash,
-                opacity: 1,
-              },
-            ],
-          },
-        },
-      }),
-    });
-
-    if (!patchRes.ok) {
-      const errText = await patchRes.text();
-      console.error(`Figma node fill patch failed [${patchRes.status}]:`, errText);
-      return false;
+  if (!websiteUrl) {
+    for (const line of lines) {
+      if (line.startsWith("http")) { websiteUrl = line; break; }
     }
-    return true;
-  } catch (e) {
-    console.error("setFigmaNodeImageFill error:", e);
-    return false;
   }
+
+  return { websiteUrl, focusUrls };
 }
 
 // ── Main handler ─────────────────────────────────────────────────────────────
@@ -288,14 +217,8 @@ serve(async (req) => {
       shop_url,
       focus_url,
       tier = "pro",
-      figma_template_key: _figma_template_key,
-      figma_slides_template_key: _figma_slides_template_key,
       existing_task_gid,
     } = body;
-
-    // Fall back to hardcoded templates if not explicitly passed
-    const figma_template_key        = _figma_template_key        ?? DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY;
-    const figma_slides_template_key = _figma_slides_template_key ?? DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY;
 
     if (!client_name || !shop_url) {
       return new Response(
@@ -307,7 +230,7 @@ serve(async (req) => {
     const [asanaToken, figmaToken, firecrawlKey] = await Promise.all([
       getAsanaToken(sb),
       getFigmaToken(sb),
-      getFirecrawlKey(),
+      Promise.resolve(getFirecrawlKey()),
     ]);
 
     const steps: StepResult[] = [];
@@ -327,7 +250,6 @@ serve(async (req) => {
       if (taskGid) {
         const task = await asanaFetch(`/tasks/${taskGid}?opt_fields=notes,name`, asanaToken);
         taskNotes = task.notes ?? "";
-        // If existing card already has URLs, keep them; otherwise set ours
         if (!taskNotes.toLowerCase().includes("website url:")) {
           taskNotes = buildNotes();
           await asanaFetch(`/tasks/${taskGid}`, asanaToken, {
@@ -361,229 +283,230 @@ serve(async (req) => {
     // ── STEP 2: Move to Ready for Setup ──────────────────────────────────────
     steps.push({ step: 2, name: "Move to Ready for Setup", status: "running" });
     try {
-      await asanaFetch(`/sections/${SECTION_CLIENT_FIGMA_SETUP}/addTask`, asanaToken, {
+      await asanaFetch(`/sections/${SECTION_READY_FOR_SETUP}/addTask`, asanaToken, {
         method: "POST",
         body: JSON.stringify({ data: { task: taskGid } }),
       });
-      steps[steps.length - 1] = { step: 2, name: "Move to Ready for Setup", status: "done", detail: "Moved to Client Figma Setup column" };
+      steps[steps.length - 1] = { step: 2, name: "Move to Ready for Setup", status: "done", detail: "Moved to Ready for Setup column" };
     } catch (e) {
       steps[steps.length - 1] = { step: 2, name: "Move to Ready for Setup", status: "error", error: String(e) };
     }
 
-    // ── STEP 3: Capture screenshots & inject into Figma ───────────────────────
-    steps.push({ step: 3, name: "Screenshot & Figma Injection", status: "running" });
-    if (!figmaToken) {
-      steps[steps.length - 1] = { step: 3, name: "Screenshot & Figma Injection", status: "skipped", detail: "No Figma token configured — add one in Settings" };
-    } else if (!figma_template_key) {
-      steps[steps.length - 1] = { step: 3, name: "Screenshot & Figma Injection", status: "skipped", detail: "No Figma template key provided — add it in Advanced options" };
-    } else if (!firecrawlKey) {
-      steps[steps.length - 1] = { step: 3, name: "Screenshot & Figma Injection", status: "skipped", detail: "No Firecrawl API key configured — connect Firecrawl in Settings" };
+    // ── STEP 3: Capture screenshots (independent of Figma) ───────────────────
+    steps.push({ step: 3, name: "Capture Screenshots", status: "running" });
+    if (!firecrawlKey) {
+      steps[steps.length - 1] = { step: 3, name: "Capture Screenshots", status: "skipped", detail: "No Firecrawl API key — connect Firecrawl in Settings" };
     } else {
       try {
-        // 3a. Parse URLs from Asana card notes
         const { websiteUrl, focusUrls } = parseUrlsFromNotes(taskNotes);
         const mainUrl = websiteUrl ?? shop_url;
-        const focusUrl = focusUrls[0] ?? null;
+        const focusUrlParsed = focusUrls[0] ?? focus_url ?? null;
 
-        console.log("Parsed URLs — main:", mainUrl, "focus:", focusUrl);
+        console.log("Capturing screenshots — main:", mainUrl, "focus:", focusUrlParsed);
 
-        // 3b. Duplicate Figma template
-        const dupRes = await fetch(`${FIGMA_API}/files/${figma_template_key}/duplicate`, {
-          method: "POST",
-          headers: { "X-Figma-Token": figmaToken, "Content-Type": "application/json" },
-          body: JSON.stringify({ name: `${client_name} — ${tierLabel} Report` }),
-        });
+        const [desktopMainB64, mobileMainB64, desktopFocusB64, mobileFocusB64] = await Promise.all([
+          captureScreenshot(mainUrl, firecrawlKey, "desktop"),
+          captureScreenshot(mainUrl, firecrawlKey, "mobile"),
+          focusUrlParsed ? captureScreenshot(focusUrlParsed, firecrawlKey, "desktop") : Promise.resolve(null),
+          focusUrlParsed ? captureScreenshot(focusUrlParsed, firecrawlKey, "mobile") : Promise.resolve(null),
+        ]);
 
-        let newFileKey: string | null = null;
-        if (dupRes.ok) {
-          const dupData = await dupRes.json();
-          newFileKey = dupData.key ?? dupData.file?.key ?? null;
-        } else {
-          const errText = await dupRes.text();
-          console.error("Figma duplicate failed:", dupRes.status, errText);
-        }
+        const slug = client_name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        const ts = Date.now();
 
-        if (newFileKey) {
-          figmaFileLink = `https://www.figma.com/file/${newFileKey}`;
+        const uploads = [
+          { label: "desktop-main", b64: desktopMainB64 },
+          { label: "mobile-main", b64: mobileMainB64 },
+          { label: "desktop-focus", b64: desktopFocusB64 },
+          { label: "mobile-focus", b64: mobileFocusB64 },
+        ];
 
-          // 3c. Capture all screenshots in parallel
-          const [desktopMainB64, mobileMainB64, desktopFocusB64, mobileFocusB64] = await Promise.all([
-            captureScreenshot(mainUrl, firecrawlKey, "desktop"),
-            captureScreenshot(mainUrl, firecrawlKey, "mobile"),
-            focusUrl ? captureScreenshot(focusUrl, firecrawlKey, "desktop") : Promise.resolve(null),
-            focusUrl ? captureScreenshot(focusUrl, firecrawlKey, "mobile") : Promise.resolve(null),
-          ]);
-
-          const slug = client_name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-          const ts = Date.now();
-
-          // 3d. Upload screenshots to storage (for our own records) & to Figma
-          const uploadJobs: Array<{ label: string; b64: string | null; frameName: string }> = [
-            { label: "desktop-main", b64: desktopMainB64, frameName: FRAME_DESKTOP_MAIN },
-            { label: "mobile-main",  b64: mobileMainB64,  frameName: FRAME_MOBILE_MAIN  },
-            { label: "desktop-focus", b64: desktopFocusB64, frameName: FRAME_DESKTOP_FOCUS },
-            { label: "mobile-focus",  b64: mobileFocusB64,  frameName: FRAME_MOBILE_FOCUS  },
-          ];
-
-          // 3e. Fetch Figma file structure to find node IDs
-          const fileRes = await fetch(`${FIGMA_API}/files/${newFileKey}?depth=5`, {
-            headers: { "X-Figma-Token": figmaToken },
-          });
-          const fileData = fileRes.ok ? await fileRes.json() : null;
-          const documentNodes: Record<string, unknown>[] = fileData?.document?.children ?? [];
-
-          const injectionResults: string[] = [];
-
-          for (const job of uploadJobs) {
-            if (!job.b64) {
-              injectionResults.push(`${job.frameName}: skipped (no URL)`);
-              continue;
-            }
-
-            // Upload to storage
-            const storageUrl = await uploadScreenshotToStorage(
-              sb, job.b64, `${slug}-${job.label}-${ts}.png`
-            );
-            if (storageUrl) screenshotUrls[job.label] = storageUrl;
-
-            // Upload to Figma and get imageHash
-            const imageHash = await uploadImageToFigma(figmaToken, newFileKey, job.b64);
-            if (!imageHash) {
-              injectionResults.push(`${job.frameName}: image upload failed`);
-              continue;
-            }
-
-            // Find the node in the Figma file
-            const nodeId = findNodeByName(documentNodes, job.frameName);
-            if (!nodeId) {
-              injectionResults.push(`${job.frameName}: frame not found in template`);
-              continue;
-            }
-
-            // Set the image fill
-            const ok = await setFigmaNodeImageFill(figmaToken, newFileKey, nodeId, imageHash);
-            injectionResults.push(`${job.frameName}: ${ok ? "✓ injected" : "fill patch failed"}`);
+        const results: string[] = [];
+        for (const { label, b64 } of uploads) {
+          if (!b64) { results.push(`${label}: no data`); continue; }
+          const url = await uploadToStorage(sb, b64, `${slug}-${label}-${ts}.png`);
+          if (url) {
+            screenshotUrls[label] = url;
+            results.push(`${label}: ✓`);
+          } else {
+            results.push(`${label}: upload failed`);
           }
-
-          steps[steps.length - 1] = {
-            step: 3,
-            name: "Screenshot & Figma Injection",
-            status: "done",
-            detail: `Duplicated template → ${figmaFileLink}\n${injectionResults.join(" | ")}`,
-          };
-        } else {
-          // Figma duplication failed — still capture screenshots to storage
-          steps[steps.length - 1] = {
-            step: 3,
-            name: "Screenshot & Figma Injection",
-            status: "skipped",
-            detail: "Figma template duplication failed (may require Figma Professional plan). Screenshots can still be captured if template key is valid.",
-          };
         }
+
+        const successCount = Object.keys(screenshotUrls).length;
+        steps[steps.length - 1] = {
+          step: 3, name: "Capture Screenshots", status: successCount > 0 ? "done" : "error",
+          detail: `${successCount}/${uploads.length} captured — ${results.join(" | ")}`,
+        };
       } catch (e) {
         console.error("Step 3 error:", e);
-        steps[steps.length - 1] = { step: 3, name: "Screenshot & Figma Injection", status: "error", error: String(e) };
+        steps[steps.length - 1] = { step: 3, name: "Capture Screenshots", status: "error", error: String(e) };
       }
     }
 
-    // ── STEP 4: Link Figma file to Asana ─────────────────────────────────────
-    steps.push({ step: 4, name: "Link Figma File to Asana", status: "running" });
-    if (figmaFileLink) {
-      try {
-        const existing = await asanaFetch(`/tasks/${taskGid}?opt_fields=notes`, asanaToken);
+    // ── STEP 4: Attach screenshots + links to Asana card notes ───────────────
+    steps.push({ step: 4, name: "Update Asana Card Notes", status: "running" });
+    try {
+      const existing = await asanaFetch(`/tasks/${taskGid}?opt_fields=notes`, asanaToken);
+      const parts = [existing.notes ?? ""];
+
+      if (Object.keys(screenshotUrls).length > 0) {
         const screenshotSummary = Object.entries(screenshotUrls)
-          .map(([k, v]) => `${k}: ${v}`)
+          .map(([k, v]) => `  ${k}: ${v}`)
           .join("\n");
-        const newNotes = [
-          existing.notes ?? "",
-          `\n📎 Figma File: ${figmaFileLink}`,
-          screenshotSummary ? `\n📸 Screenshots:\n${screenshotSummary}` : "",
-        ].join("").trim();
+        parts.push(`\n\n📸 Screenshots:\n${screenshotSummary}`);
+      }
+
+      // Figma links will be appended here if they exist (added in step 5)
+      const newNotes = parts.join("").trim();
+      if (newNotes !== (existing.notes ?? "").trim()) {
         await asanaFetch(`/tasks/${taskGid}`, asanaToken, {
           method: "PUT",
           body: JSON.stringify({ data: { notes: newNotes } }),
         });
-        steps[steps.length - 1] = { step: 4, name: "Link Figma File to Asana", status: "done", detail: "Figma file + screenshot links added to task" };
-      } catch (e) {
-        steps[steps.length - 1] = { step: 4, name: "Link Figma File to Asana", status: "error", error: String(e) };
       }
-    } else {
-      steps[steps.length - 1] = { step: 4, name: "Link Figma File to Asana", status: "skipped", detail: "No Figma file link to attach" };
+      steps[steps.length - 1] = {
+        step: 4, name: "Update Asana Card Notes", status: "done",
+        detail: `${Object.keys(screenshotUrls).length} screenshot URLs attached`,
+      };
+    } catch (e) {
+      steps[steps.length - 1] = { step: 4, name: "Update Asana Card Notes", status: "error", error: String(e) };
     }
 
-    // ── STEP 5: Create Figma Slides ───────────────────────────────────────────
-    steps.push({ step: 5, name: "Create Figma Slides Report", status: "running" });
-    const slidesTemplateKey = figma_slides_template_key ?? null;
-    if (!figmaToken || !slidesTemplateKey) {
-      steps[steps.length - 1] = {
-        step: 5, name: "Create Figma Slides Report", status: "skipped",
-        detail: slidesTemplateKey ? "No Figma token" : "No slides template key — add it in Advanced options",
-      };
+    // ── STEP 5: Add tags to Asana card ────────────────────────────────────────
+    steps.push({ step: 5, name: "Add Asana Tags", status: "running" });
+    try {
+      // Get workspace GID from the task
+      const taskDetail = await asanaFetch(`/tasks/${taskGid}?opt_fields=workspace.gid`, asanaToken);
+      const workspaceGid = taskDetail?.workspace?.gid;
+
+      if (!workspaceGid) {
+        steps[steps.length - 1] = { step: 5, name: "Add Asana Tags", status: "skipped", detail: "Could not determine workspace" };
+      } else {
+        const tagNames = [
+          `Tier: ${tierLabel}`,
+          "Auto-Setup",
+        ];
+
+        const tagResults: string[] = [];
+        for (const tagName of tagNames) {
+          const tagGid = await findOrCreateAsanaTag(tagName, workspaceGid, asanaToken);
+          if (tagGid) {
+            await asanaFetch(`/tasks/${taskGid}/addTag`, asanaToken, {
+              method: "POST",
+              body: JSON.stringify({ data: { tag: tagGid } }),
+            });
+            tagResults.push(`✓ ${tagName}`);
+          } else {
+            tagResults.push(`✗ ${tagName}`);
+          }
+        }
+
+        steps[steps.length - 1] = { step: 5, name: "Add Asana Tags", status: "done", detail: tagResults.join(" | ") };
+      }
+    } catch (e) {
+      steps[steps.length - 1] = { step: 5, name: "Add Asana Tags", status: "error", error: String(e) };
+    }
+
+    // ── STEP 6: Attempt Figma template duplication (best-effort) ──────────────
+    steps.push({ step: 6, name: "Duplicate Figma Templates", status: "running" });
+    if (!figmaToken) {
+      steps[steps.length - 1] = { step: 6, name: "Duplicate Figma Templates", status: "skipped", detail: "No Figma token — add one in Settings" };
     } else {
+      const figmaResults: string[] = [];
+
+      // Try audit template
       try {
-        const dupRes = await fetch(`${FIGMA_API}/files/${slidesTemplateKey}/duplicate`, {
+        const dupRes = await fetch(`${FIGMA_API}/files/${DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY}/duplicate`, {
+          method: "POST",
+          headers: { "X-Figma-Token": figmaToken, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: `${client_name} — ${tierLabel} Report` }),
+        });
+        if (dupRes.ok) {
+          const dupData = await dupRes.json();
+          const newKey = dupData.key ?? dupData.file?.key ?? null;
+          if (newKey) {
+            figmaFileLink = `https://www.figma.com/file/${newKey}`;
+            figmaResults.push(`Audit: ✓ ${figmaFileLink}`);
+          }
+        } else {
+          const errText = await dupRes.text();
+          console.warn(`Figma audit duplication failed [${dupRes.status}]:`, errText);
+          figmaResults.push(`Audit: skipped (API ${dupRes.status} — Figma may not support REST duplication on this plan)`);
+        }
+      } catch (e) {
+        figmaResults.push(`Audit: error — ${e}`);
+      }
+
+      // Try slides template
+      try {
+        const dupRes = await fetch(`${FIGMA_API}/files/${DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY}/duplicate`, {
           method: "POST",
           headers: { "X-Figma-Token": figmaToken, "Content-Type": "application/json" },
           body: JSON.stringify({ name: `${client_name} — ${tierLabel} Report Slides` }),
         });
         if (dupRes.ok) {
           const dupData = await dupRes.json();
-          const newFileKey = dupData.key ?? dupData.file?.key ?? null;
-          if (newFileKey) {
-            figmaSlidesLink = `https://www.figma.com/file/${newFileKey}`;
-            steps[steps.length - 1] = { step: 5, name: "Create Figma Slides Report", status: "done", detail: `Created at ${figmaSlidesLink}` };
-          } else {
-            steps[steps.length - 1] = { step: 5, name: "Create Figma Slides Report", status: "skipped", detail: "Duplicated but no file key returned" };
+          const newKey = dupData.key ?? dupData.file?.key ?? null;
+          if (newKey) {
+            figmaSlidesLink = `https://www.figma.com/file/${newKey}`;
+            figmaResults.push(`Slides: ✓ ${figmaSlidesLink}`);
           }
         } else {
-          steps[steps.length - 1] = { step: 5, name: "Create Figma Slides Report", status: "skipped", detail: `Duplication not supported (${dupRes.status})` };
+          figmaResults.push(`Slides: skipped (API ${dupRes.status})`);
         }
       } catch (e) {
-        steps[steps.length - 1] = { step: 5, name: "Create Figma Slides Report", status: "error", error: String(e) };
+        figmaResults.push(`Slides: error — ${e}`);
       }
+
+      // If any Figma links were created, append them to Asana notes
+      if (figmaFileLink || figmaSlidesLink) {
+        try {
+          const existing = await asanaFetch(`/tasks/${taskGid}?opt_fields=notes`, asanaToken);
+          const additions: string[] = [];
+          if (figmaFileLink) additions.push(`📎 Figma File: ${figmaFileLink}`);
+          if (figmaSlidesLink) additions.push(`📊 Figma Slides: ${figmaSlidesLink}`);
+          const newNotes = `${existing.notes ?? ""}\n\n${additions.join("\n")}`.trim();
+          await asanaFetch(`/tasks/${taskGid}`, asanaToken, {
+            method: "PUT",
+            body: JSON.stringify({ data: { notes: newNotes } }),
+          });
+        } catch (e) {
+          console.warn("Failed to append Figma links to Asana:", e);
+        }
+      }
+
+      steps[steps.length - 1] = {
+        step: 6, name: "Duplicate Figma Templates",
+        status: figmaFileLink || figmaSlidesLink ? "done" : "skipped",
+        detail: figmaResults.join(" | "),
+      };
     }
 
-    // ── STEP 6: Link Figma Slides to Asana ───────────────────────────────────
-    steps.push({ step: 6, name: "Link Figma Slides to Asana", status: "running" });
-    if (figmaSlidesLink) {
-      try {
-        const existing = await asanaFetch(`/tasks/${taskGid}?opt_fields=notes`, asanaToken);
-        const newNotes = `${existing.notes ?? ""}\n\n📊 Figma Slides: ${figmaSlidesLink}`.trim();
-        await asanaFetch(`/tasks/${taskGid}`, asanaToken, {
-          method: "PUT",
-          body: JSON.stringify({ data: { notes: newNotes } }),
-        });
-        steps[steps.length - 1] = { step: 6, name: "Link Figma Slides to Asana", status: "done", detail: "Slides link added to task notes" };
-      } catch (e) {
-        steps[steps.length - 1] = { step: 6, name: "Link Figma Slides to Asana", status: "error", error: String(e) };
-      }
-    } else {
-      steps[steps.length - 1] = { step: 6, name: "Link Figma Slides to Asana", status: "skipped", detail: "No slides link to attach" };
-    }
-
-    // ── STEP 7: Move to Setup Complete (only if Figma work was actually done) ─
+    // ── STEP 7: Move to Setup Complete (only if screenshots were captured) ───
     steps.push({ step: 7, name: "Move to Setup Complete", status: "running" });
-    const figmaWorkDone = !!figmaFileLink || !!figmaSlidesLink;
-    if (figmaWorkDone) {
+    const hasScreenshots = Object.keys(screenshotUrls).length > 0;
+    const hasFigma = !!figmaFileLink || !!figmaSlidesLink;
+    if (hasScreenshots || hasFigma) {
       try {
-        await asanaFetch(`/sections/${SECTION_READY_FOR_DECK}/addTask`, asanaToken, {
+        await asanaFetch(`/sections/${SECTION_SETUP_COMPLETE}/addTask`, asanaToken, {
           method: "POST",
           body: JSON.stringify({ data: { task: taskGid } }),
         });
-        steps[steps.length - 1] = { step: 7, name: "Move to Setup Complete", status: "done", detail: "Moved to Setup Complete column" };
+        steps[steps.length - 1] = { step: 7, name: "Move to Setup Complete", status: "done", detail: "Moved to Setup Complete" };
       } catch (e) {
         steps[steps.length - 1] = { step: 7, name: "Move to Setup Complete", status: "error", error: String(e) };
       }
     } else {
-      steps[steps.length - 1] = { step: 7, name: "Move to Setup Complete", status: "skipped", detail: "Card stays in Ready for Setup — no Figma assets were generated" };
+      steps[steps.length - 1] = { step: 7, name: "Move to Setup Complete", status: "skipped", detail: "Card stays in Ready for Setup — no assets generated" };
     }
 
     // ── Activity log ──────────────────────────────────────────────────────────
-    const allDone = steps.every((s) => s.status === "done" || s.status === "skipped");
+    const allOk = steps.every((s) => s.status === "done" || s.status === "skipped");
     try {
       await sb.from("activity_log").insert({
         workflow_name: `Report Setup: ${client_name} (${tier})`,
-        status: allDone ? "completed" : "partial",
+        status: allOk ? "completed" : "partial",
       });
     } catch (_) { /* non-fatal */ }
 
