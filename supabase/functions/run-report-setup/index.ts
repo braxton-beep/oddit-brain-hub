@@ -108,73 +108,84 @@ async function identifyCROSections(
   apiKey: string
 ): Promise<CROSection[]> {
   const truncated = markdown.slice(0, 12000);
-  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        {
-          role: "system",
-          content: `You are a world-class CRO expert at Oddit (11,000+ audits completed). Analyze this e-commerce page and identify the top 5-8 key sections that need CRO optimization. Focus on: hero/header, navigation, product displays, trust signals, social proof, CTAs, conversion blocks, footer CTAs, review sections, pricing areas.`,
+  const MODELS = ["google/gemini-2.5-flash", "google/gemini-2.5-flash-lite", "openai/gpt-5-mini"];
+
+  for (const model of MODELS) {
+    console.log(`[CRO AI] Trying model: ${model}`);
+    try {
+      const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
-        {
-          role: "user",
-          content: `Analyze this page and identify the key sections to optimize.\n\nURL: ${url}\n\nPage content:\n${truncated}`,
-        },
-      ],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "identify_sections",
-            description: "Return 5-8 key page sections for CRO optimization",
-            parameters: {
-              type: "object",
-              properties: {
-                sections: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      section_name: { type: "string", description: "Short label e.g. 'Hero', 'Review Section', 'CTA Block'" },
-                      scroll_percent: { type: "number", description: "Estimated scroll depth 0-100 where this section lives" },
-                      why_optimize: { type: "string", description: "One sentence on why this section matters for CRO" },
-                      css_selector: { type: "string", description: "Best CSS selector to target this element" },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "system",
+              content: `You are a world-class CRO expert at Oddit (11,000+ audits completed). Analyze this e-commerce page and identify the top 5-8 key sections that need CRO optimization. Focus on: hero/header, navigation, product displays, trust signals, social proof, CTAs, conversion blocks, footer CTAs, review sections, pricing areas.`,
+            },
+            {
+              role: "user",
+              content: `Analyze this page and identify the key sections to optimize.\n\nURL: ${url}\n\nPage content:\n${truncated}`,
+            },
+          ],
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "identify_sections",
+                description: "Return 5-8 key page sections for CRO optimization",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    sections: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          section_name: { type: "string", description: "Short label e.g. 'Hero', 'Review Section', 'CTA Block'" },
+                          scroll_percent: { type: "number", description: "Estimated scroll depth 0-100 where this section lives" },
+                          why_optimize: { type: "string", description: "One sentence on why this section matters for CRO" },
+                          css_selector: { type: "string", description: "Best CSS selector to target this element" },
+                        },
+                        required: ["section_name", "scroll_percent", "why_optimize", "css_selector"],
+                        additionalProperties: false,
+                      },
                     },
-                    required: ["section_name", "scroll_percent", "why_optimize", "css_selector"],
-                    additionalProperties: false,
                   },
+                  required: ["sections"],
+                  additionalProperties: false,
                 },
               },
-              required: ["sections"],
-              additionalProperties: false,
             },
-          },
-        },
-      ],
-      tool_choice: { type: "function", function: { name: "identify_sections" } },
-    }),
-  });
+          ],
+          tool_choice: { type: "function", function: { name: "identify_sections" } },
+        }),
+      });
 
-  if (!resp.ok) {
-    console.error("AI section identification failed:", resp.status, await resp.text());
-    return [];
-  }
+      if (!resp.ok) {
+        console.error(`[CRO AI] Model ${model} failed: ${resp.status}`);
+        continue;
+      }
 
-  const data = await resp.json();
-  const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-  if (toolCall?.function?.arguments) {
-    try {
-      const parsed = JSON.parse(toolCall.function.arguments);
-      return (parsed.sections || []) as CROSection[];
+      const data = await resp.json();
+      const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+      if (toolCall?.function?.arguments) {
+        const parsed = JSON.parse(toolCall.function.arguments);
+        const sections = (parsed.sections || []) as CROSection[];
+        if (sections.length > 0) {
+          console.log(`[CRO AI] Success with ${model}: ${sections.length} sections`);
+          return sections;
+        }
+      }
     } catch (e) {
-      console.error("Failed to parse sections:", e);
+      console.error(`[CRO AI] Model ${model} error:`, e);
     }
   }
+
+  console.error("[CRO AI] All models failed");
   return [];
 }
 
@@ -261,8 +272,14 @@ async function captureSectionScreenshot(
     // The action-based screenshot may be in different locations
     let screenshotField = "";
     
-    // Check actions results first (where action screenshots typically land)
-    if (data.data?.actions?.results) {
+    // Check actions.screenshots array (Firecrawl's actual response format)
+    if (data.data?.actions?.screenshots && data.data.actions.screenshots.length > 0) {
+      screenshotField = data.data.actions.screenshots[data.data.actions.screenshots.length - 1];
+      console.log(`[Screenshot] Found in actions.screenshots for "${section.section_name}"`);
+    }
+    
+    // Check actions.results (alternative format)
+    if (!screenshotField && data.data?.actions?.results) {
       for (const result of data.data.actions.results) {
         if (result?.screenshot) {
           screenshotField = result.screenshot;
@@ -275,13 +292,10 @@ async function captureSectionScreenshot(
     // Fallback to top-level screenshot fields
     if (!screenshotField) {
       screenshotField = data.data?.screenshot || data.screenshot || "";
-      if (screenshotField) {
-        console.log(`[Screenshot] Found in data.screenshot for "${section.section_name}", type: ${screenshotField.substring(0, 30)}...`);
-      }
     }
     
     if (!screenshotField) {
-      console.warn(`[Screenshot] No screenshot data found for "${section.section_name}". Full response: ${JSON.stringify(data).substring(0, 1000)}`);
+      console.warn(`[Screenshot] No screenshot data found for "${section.section_name}"`);
       return null;
     }
 
@@ -494,7 +508,7 @@ serve(async (req) => {
             data: {
               name: `${client_name} — ${tierLabel} Report`,
               notes: taskNotes,
-              memberships: [{ project: ASANA_PROJECT_GID, section: SECTION_READY_FOR_SETUP }],
+              projects: [ASANA_PROJECT_GID],
               custom_fields: customFields,
             },
           }),
