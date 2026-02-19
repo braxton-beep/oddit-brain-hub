@@ -136,7 +136,8 @@ You MUST respond with valid JSON only — no markdown, no code fences, no explan
       "current_issue": "Detailed description of what's currently wrong or suboptimal (the 'before' state). Be specific about the element, its placement, and why it hurts conversions.",
       "recommended_change": "Detailed description of what the improved version should look like (the 'after' state). Include specific design recommendations like layout, copy changes, color usage, CTA placement.",
       "expected_impact": "Estimated conversion impact (e.g., '+12-18% click-through rate on hero CTA')",
-      "mockup_prompt": "A detailed image generation prompt that would create a clean, professional UI mockup of the IMPROVED version of this section. Describe colors, layout, typography, and key elements. Start with 'A professional e-commerce website section mockup showing...'"
+      "mockup_prompt": "A detailed image generation prompt that would create a clean, professional UI mockup of the IMPROVED version of this section. Describe colors, layout, typography, and key elements. Start with 'A professional e-commerce website section mockup showing...'",
+      "scroll_percentage": 0
     }
   ]
 }
@@ -145,7 +146,8 @@ Guidelines:
 - Focus on above-the-fold content, CTAs, trust signals, social proof, navigation, product presentation, and checkout friction
 - Be extremely specific — reference actual text, images, or layout patterns from the scraped content
 - Order by severity (high impact first)
-- The mockup_prompt should describe a realistic, professional web design mockup`,
+- The mockup_prompt should describe a realistic, professional web design mockup
+- scroll_percentage: estimate what percentage down the page (0-100) this section lives. Hero/nav = 0-10, above fold features = 10-25, mid-page = 25-60, lower sections = 60-85, footer = 85-100`,
           },
           {
             role: "user",
@@ -173,8 +175,9 @@ Guidelines:
                         recommended_change: { type: "string" },
                         expected_impact: { type: "string" },
                         mockup_prompt: { type: "string" },
+                        scroll_percentage: { type: "number" },
                       },
-                      required: ["id", "section", "severity", "current_issue", "recommended_change", "expected_impact", "mockup_prompt"],
+                      required: ["id", "section", "severity", "current_issue", "recommended_change", "expected_impact", "mockup_prompt", "scroll_percentage"],
                       additionalProperties: false,
                     },
                   },
@@ -238,6 +241,86 @@ Guidelines:
           console.error("Failed to parse content:", e);
         }
       }
+    }
+
+    // Step 3: Capture targeted section screenshots per recommendation
+    if (recommendations.length > 0) {
+      console.log("Capturing targeted section screenshots...");
+      await supabase.from("cro_audits").update({ status: "screenshotting" }).eq("id", auditId);
+
+      // Use Firecrawl's actions API to scroll to each section before screenshotting
+      // We batch by deduped scroll positions to reduce API calls (within 10% proximity = same shot)
+      const screenshotPromises = recommendations.map(async (rec: any) => {
+        const scrollPct = typeof rec.scroll_percentage === "number"
+          ? Math.max(0, Math.min(100, rec.scroll_percentage))
+          : 0;
+
+        try {
+          const scrapePayload: any = {
+            url: formattedUrl,
+            formats: ["screenshot"],
+            waitFor: 2000,
+            actions: [
+              { type: "wait", milliseconds: 1500 },
+              { type: "scroll", direction: "down", amount: Math.round(scrollPct * 80) }, // approx pixel offset
+              { type: "wait", milliseconds: 800 },
+            ],
+          };
+
+          const resp = await fetch("https://api.firecrawl.dev/v1/scrape", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(scrapePayload),
+          });
+
+          if (!resp.ok) {
+            console.warn(`Section screenshot failed for rec ${rec.id}: ${resp.status}`);
+            return { recId: rec.id, url: null };
+          }
+
+          const data = await resp.json();
+          const base64 = data.data?.screenshot || data.screenshot || "";
+          if (!base64) return { recId: rec.id, url: null };
+
+          const cleanBase64 = base64.replace(/^data:image\/\w+;base64,/, "");
+          const binary = Uint8Array.from(atob(cleanBase64), (c) => c.charCodeAt(0));
+          const filePath = `screenshots/${auditId}/rec-${rec.id}.png`;
+
+          const { error: upErr } = await supabase.storage
+            .from("audit-assets")
+            .upload(filePath, binary, { contentType: "image/png", upsert: true });
+
+          if (upErr) {
+            console.warn(`Upload failed for rec ${rec.id}:`, upErr.message);
+            return { recId: rec.id, url: null };
+          }
+
+          const { data: urlData } = supabase.storage.from("audit-assets").getPublicUrl(filePath);
+          return { recId: rec.id, url: urlData.publicUrl };
+        } catch (e) {
+          console.warn(`Section screenshot error for rec ${rec.id}:`, e);
+          return { recId: rec.id, url: null };
+        }
+      });
+
+      // Run up to 3 at a time to avoid hammering Firecrawl
+      const results: { recId: number; url: string | null }[] = [];
+      for (let i = 0; i < screenshotPromises.length; i += 3) {
+        const batch = await Promise.all(screenshotPromises.slice(i, i + 3));
+        results.push(...batch);
+      }
+
+      // Attach section_screenshot_url to each recommendation
+      const screenshotMap = new Map(results.map((r) => [r.recId, r.url]));
+      recommendations = recommendations.map((rec: any) => ({
+        ...rec,
+        section_screenshot_url: screenshotMap.get(rec.id) || null,
+      }));
+
+      console.log(`Section screenshots done: ${results.filter((r) => r.url).length}/${results.length} successful`);
     }
 
     // Save recommendations to DB
