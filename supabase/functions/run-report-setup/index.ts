@@ -15,6 +15,31 @@ const ASANA_API = "https://app.asana.com/api/1.0";
 const FIGMA_API = "https://api.figma.com/v1";
 const FIRECRAWL_API = "https://api.firecrawl.dev/v1";
 
+// ── Asana Custom Field GIDs ──────────────────────────────────────────────────
+const CF_TYPE = "1205565239136671";
+const CF_TYPE_REPORT = "1205565239136672";
+
+// Note: "Not Started" (1205789138669683) is disabled in Asana — skipping Project Status
+// const CF_PROJECT_STATUS = "1205789138669682";
+// const CF_PROJECT_STATUS_NOT_STARTED = "1205789138669683";
+
+const CF_BREAKPOINTS = "1206927655441547";
+const CF_BREAKPOINTS_BOTH = "1206927655441550";
+
+const CF_NUM_PAGES = "1206927655441553";
+const CF_NUM_PAGES_MAP: Record<number, string> = {
+  1: "1206927655441556",
+  2: "1206927655441557",
+  3: "1206927655441558",
+  4: "1206927655441559",
+  5: "1206927655443645",
+  6: "1206927655443646",
+  7: "1207661312443019",
+  8: "1207661312443020",
+  9: "1207661312443021",
+  10: "1207661312443022",
+};
+
 const DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY = "3EfexlsSpqIciz7PkcSPwu";
 const DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY = "7iTirmji3y4s35Xyrk2Cwg";
 
@@ -218,6 +243,8 @@ serve(async (req) => {
       focus_url,
       tier = "pro",
       existing_task_gid,
+      pages,
+      extra_urls,
     } = body;
 
     if (!client_name || !shop_url) {
@@ -241,11 +268,25 @@ serve(async (req) => {
     const screenshotUrls: Record<string, string> = {};
     const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
 
+    // Determine page count for the custom field
+    const pageCount: number | null = tier === "pro" && pages ? Number(pages) : (
+      tier === "essential" && extra_urls ? (extra_urls as string[]).length + 1 : null
+    );
+
+    // Build custom fields for every new card
+    const customFields: Record<string, string> = {
+      [CF_TYPE]: CF_TYPE_REPORT,
+      [CF_BREAKPOINTS]: CF_BREAKPOINTS_BOTH,
+    };
+    if (pageCount && CF_NUM_PAGES_MAP[pageCount]) {
+      customFields[CF_NUM_PAGES] = CF_NUM_PAGES_MAP[pageCount];
+    }
+
     // ── STEP 1: Create / update Asana card ───────────────────────────────────
     steps.push({ step: 1, name: "Create Asana Card", status: "running" });
     try {
       const buildNotes = () =>
-        `Client: ${client_name}\nWebsite URL: ${shop_url}${focus_url ? `\nFocus URL: ${focus_url}` : ""}\nTier: ${tier.toUpperCase()}\n\nTriggered via Oddit Brain automation.`;
+        `Client: ${client_name}\nWebsite URL: ${shop_url}${focus_url ? `\nFocus URL: ${focus_url}` : ""}\nTier: ${tier.toUpperCase()}${pageCount ? `\nPages: ${pageCount}` : ""}\n\nTriggered via Oddit Brain automation.`;
 
       if (taskGid) {
         const task = await asanaFetch(`/tasks/${taskGid}?opt_fields=notes,name`, asanaToken);
@@ -254,7 +295,7 @@ serve(async (req) => {
           taskNotes = buildNotes();
           await asanaFetch(`/tasks/${taskGid}`, asanaToken, {
             method: "PUT",
-            body: JSON.stringify({ data: { notes: taskNotes } }),
+            body: JSON.stringify({ data: { notes: taskNotes, custom_fields: customFields } }),
           });
         }
         steps[steps.length - 1] = { step: 1, name: "Create Asana Card", status: "done", detail: `Updated existing task ${taskGid}` };
@@ -267,11 +308,12 @@ serve(async (req) => {
               name: `${client_name} — ${tierLabel} Report`,
               notes: taskNotes,
               projects: [ASANA_PROJECT_GID],
+              custom_fields: customFields,
             },
           }),
         });
         taskGid = task.gid;
-        steps[steps.length - 1] = { step: 1, name: "Create Asana Card", status: "done", detail: `Created task ${taskGid}` };
+        steps[steps.length - 1] = { step: 1, name: "Create Asana Card", status: "done", detail: `Created task ${taskGid} with custom fields` };
       }
     } catch (e) {
       steps[steps.length - 1] = { step: 1, name: "Create Asana Card", status: "error", error: String(e) };

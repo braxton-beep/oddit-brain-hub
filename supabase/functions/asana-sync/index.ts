@@ -226,8 +226,25 @@ serve(async (req) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const task = await asanaFetch(`/tasks/${task_gid}?opt_fields=gid,name,memberships.project.gid,memberships.project.name,memberships.section.gid,memberships.section.name`, ASANA_TOKEN);
+      const task = await asanaFetch(`/tasks/${task_gid}?opt_fields=gid,name,memberships.project.gid,memberships.project.name,memberships.section.gid,memberships.section.name,custom_fields.gid,custom_fields.name,custom_fields.enum_value.gid,custom_fields.enum_value.name`, ASANA_TOKEN);
       return new Response(JSON.stringify({ success: true, task }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ── Action: list_custom_field_settings ─────────
+    if (action === "list_custom_field_settings") {
+      const { project_gid } = body;
+      if (!project_gid) {
+        return new Response(JSON.stringify({ error: "project_gid required" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const settings = await asanaFetch(
+        `/projects/${project_gid}/custom_field_settings?opt_fields=custom_field.name,custom_field.gid,custom_field.enum_options.gid,custom_field.enum_options.name,custom_field.enum_options.enabled`,
+        ASANA_TOKEN
+      );
+      return new Response(JSON.stringify({ success: true, settings }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
