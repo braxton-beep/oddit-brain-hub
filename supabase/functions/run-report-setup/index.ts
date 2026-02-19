@@ -251,7 +251,7 @@ async function captureSectionScreenshot(
           { type: "wait", milliseconds: 2000 },
           { type: "executeJavascript", script: scrollJs },
           { type: "wait", milliseconds: 1500 },
-          { type: "screenshot" },
+          { type: "screenshot", fullPage: false },
         ],
       }),
     });
