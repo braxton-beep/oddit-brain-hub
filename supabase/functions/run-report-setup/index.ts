@@ -10,7 +10,7 @@ const corsHeaders = {
 // ── Constants ────────────────────────────────────────────────────────────────
 const ASANA_PROJECT_GID = "1207443359385412"; // Oddit Setups
 const SECTION_READY_FOR_SETUP = "1207443359385417";
-const SECTION_SETUP_COMPLETE = "1207443359385418";
+// SECTION_SETUP_COMPLETE removed — cards must NOT be moved there by automation
 const ASANA_API = "https://app.asana.com/api/1.0";
 const FIGMA_API = "https://api.figma.com/v1";
 const FIRECRAWL_API = "https://api.firecrawl.dev/v1";
@@ -90,14 +90,141 @@ function getFirecrawlKey(): string | null {
   return Deno.env.get("FIRECRAWL_API_KEY") ?? null;
 }
 
-// ── Screenshot capture via Firecrawl ──────────────────────────────────────────
-async function captureScreenshot(
+function getLovableApiKey(): string | null {
+  return Deno.env.get("LOVABLE_API_KEY") ?? null;
+}
+
+// ── AI-driven section identification ──────────────────────────────────────────
+interface CROSection {
+  section_name: string;
+  scroll_percent: number;
+  why_optimize: string;
+  css_selector: string;
+}
+
+async function identifyCROSections(
   url: string,
-  firecrawlKey: string,
-  viewport: "desktop" | "mobile"
+  markdown: string,
+  apiKey: string
+): Promise<CROSection[]> {
+  const truncated = markdown.slice(0, 12000);
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        {
+          role: "system",
+          content: `You are a world-class CRO expert at Oddit (11,000+ audits completed). Analyze this e-commerce page and identify the top 5-8 key sections that need CRO optimization. Focus on: hero/header, navigation, product displays, trust signals, social proof, CTAs, conversion blocks, footer CTAs, review sections, pricing areas.`,
+        },
+        {
+          role: "user",
+          content: `Analyze this page and identify the key sections to optimize.\n\nURL: ${url}\n\nPage content:\n${truncated}`,
+        },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "identify_sections",
+            description: "Return 5-8 key page sections for CRO optimization",
+            parameters: {
+              type: "object",
+              properties: {
+                sections: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      section_name: { type: "string", description: "Short label e.g. 'Hero', 'Review Section', 'CTA Block'" },
+                      scroll_percent: { type: "number", description: "Estimated scroll depth 0-100 where this section lives" },
+                      why_optimize: { type: "string", description: "One sentence on why this section matters for CRO" },
+                      css_selector: { type: "string", description: "Best CSS selector to target this element" },
+                    },
+                    required: ["section_name", "scroll_percent", "why_optimize", "css_selector"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ["sections"],
+              additionalProperties: false,
+            },
+          },
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "identify_sections" } },
+    }),
+  });
+
+  if (!resp.ok) {
+    console.error("AI section identification failed:", resp.status, await resp.text());
+    return [];
+  }
+
+  const data = await resp.json();
+  const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+  if (toolCall?.function?.arguments) {
+    try {
+      const parsed = JSON.parse(toolCall.function.arguments);
+      return (parsed.sections || []) as CROSection[];
+    } catch (e) {
+      console.error("Failed to parse sections:", e);
+    }
+  }
+  return [];
+}
+
+// ── Targeted section screenshot via Firecrawl ─────────────────────────────────
+async function captureSectionScreenshot(
+  url: string,
+  section: CROSection,
+  firecrawlKey: string
 ): Promise<Uint8Array | null> {
+  const DEFAULT_PAGE_HEIGHT = 6000;
+  const scrollPx = Math.round((section.scroll_percent / 100) * DEFAULT_PAGE_HEIGHT);
+  const selector = section.css_selector.replace(/'/g, "\\'");
+  const sectionKeyword = section.section_name.toLowerCase().split(" ")[0].replace(/'/g, "\\'");
+
+  const scrollJs = `
+    (function() {
+      // Hide sticky/fixed elements for clean screenshot
+      document.querySelectorAll('*').forEach(function(node) {
+        var s = getComputedStyle(node);
+        if (s.position === 'fixed' || s.position === 'sticky') {
+          node.style.setProperty('visibility', 'hidden', 'important');
+        }
+      });
+      // Try exact CSS selector
+      var el = document.querySelector('${selector}');
+      // Fallback: fuzzy match by section keyword
+      if (!el) {
+        var tags = ['section', 'div', 'header', 'footer', 'main', 'article'];
+        for (var i = 0; i < tags.length; i++) {
+          var all = document.querySelectorAll(tags[i]);
+          for (var j = 0; j < all.length; j++) {
+            var text = (all[j].className || '') + ' ' + (all[j].id || '') + ' ' + (all[j].textContent || '').substring(0, 200);
+            if (text.toLowerCase().indexOf('${sectionKeyword}') !== -1) {
+              el = all[j]; break;
+            }
+          }
+          if (el) break;
+        }
+      }
+      if (el) {
+        el.scrollIntoView({ block: 'center', behavior: 'instant' });
+        return 'found';
+      }
+      window.scrollTo(0, ${scrollPx});
+      return 'fallback';
+    })()
+  `;
+
   try {
-    const res = await fetch(`${FIRECRAWL_API}/scrape`, {
+    const resp = await fetch(`${FIRECRAWL_API}/scrape`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${firecrawlKey}`,
@@ -106,48 +233,69 @@ async function captureScreenshot(
       body: JSON.stringify({
         url,
         formats: ["screenshot"],
-        ...(viewport === "mobile" ? { mobile: true } : {}),
         waitFor: 2000,
+        actions: [
+          { type: "wait", milliseconds: 1500 },
+          { type: "executeJavascript", script: scrollJs },
+          { type: "wait", milliseconds: 1000 },
+          { type: "screenshot" },
+        ],
       }),
     });
 
-    if (!res.ok) {
-      console.error(`Firecrawl screenshot failed for ${url} [${viewport}]:`, await res.text());
+    if (!resp.ok) {
+      console.warn(`Section screenshot failed for "${section.section_name}": ${resp.status}`);
       return null;
     }
 
-    const data = await res.json();
-    const screenshotField: string | null = data?.data?.screenshot ?? data?.screenshot ?? null;
-    if (!screenshotField) {
-      console.error(`No screenshot field in Firecrawl response for ${url} [${viewport}]. Keys:`, Object.keys(data?.data ?? data ?? {}));
-      return null;
-    }
+    const data = await resp.json();
+    const screenshotField = data.data?.screenshot || data.screenshot || "";
+    if (!screenshotField) return null;
 
-    console.log(`Screenshot field type for ${viewport}: starts with "${screenshotField.substring(0, 30)}..."`);
-
-    // If it's a URL, fetch the image bytes directly
+    // Handle URL or base64
     if (screenshotField.startsWith("http")) {
       const imgRes = await fetch(screenshotField);
-      if (!imgRes.ok) {
-        console.error(`Failed to fetch screenshot URL [${imgRes.status}]:`, screenshotField);
-        return null;
-      }
+      if (!imgRes.ok) return null;
       return new Uint8Array(await imgRes.arrayBuffer());
     }
 
-    // Handle data URI or raw base64
     const raw = screenshotField.replace(/^data:image\/[a-z]+;base64,/, "");
-    // Pad base64 if needed
     const padded = raw + "=".repeat((4 - (raw.length % 4)) % 4);
     const binaryStr = atob(padded);
     const bytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) {
-      bytes[i] = binaryStr.charCodeAt(i);
-    }
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
     return bytes;
   } catch (e) {
-    console.error(`captureScreenshot error [${viewport}]:`, e);
+    console.error(`Section screenshot error for "${section.section_name}":`, e);
     return null;
+  }
+}
+
+// ── Attach image to Asana task ────────────────────────────────────────────────
+async function attachImageToAsana(
+  taskGid: string,
+  asanaToken: string,
+  imageBytes: Uint8Array,
+  filename: string
+): Promise<boolean> {
+  try {
+    const formData = new FormData();
+    formData.append("file", new Blob([imageBytes], { type: "image/png" }), filename);
+    const res = await fetch(`${ASANA_API}/tasks/${taskGid}/attachments`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${asanaToken}`,
+      },
+      body: formData,
+    });
+    if (!res.ok) {
+      console.warn(`Asana attachment failed for ${filename}:`, res.status, await res.text());
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error(`Asana attachment error for ${filename}:`, e);
+    return false;
   }
 }
 
@@ -307,7 +455,7 @@ serve(async (req) => {
             data: {
               name: `${client_name} — ${tierLabel} Report`,
               notes: taskNotes,
-              projects: [ASANA_PROJECT_GID],
+              memberships: [{ project: ASANA_PROJECT_GID, section: SECTION_READY_FOR_SETUP }],
               custom_fields: customFields,
             },
           }),
@@ -334,59 +482,93 @@ serve(async (req) => {
       steps[steps.length - 1] = { step: 2, name: "Move to Ready for Setup", status: "error", error: String(e) };
     }
 
-    // ── STEP 3: Capture screenshots (independent of Figma) ───────────────────
-    steps.push({ step: 3, name: "Capture Screenshots", status: "running" });
+    // ── STEP 3: AI-driven targeted section screenshots ─────────────────────
+    steps.push({ step: 3, name: "CRO Section Screenshots", status: "running" });
+    const lovableApiKey = getLovableApiKey();
     if (!firecrawlKey) {
-      steps[steps.length - 1] = { step: 3, name: "Capture Screenshots", status: "skipped", detail: "No Firecrawl API key — connect Firecrawl in Settings" };
+      steps[steps.length - 1] = { step: 3, name: "CRO Section Screenshots", status: "skipped", detail: "No Firecrawl API key — connect Firecrawl in Settings" };
+    } else if (!lovableApiKey) {
+      steps[steps.length - 1] = { step: 3, name: "CRO Section Screenshots", status: "skipped", detail: "No LOVABLE_API_KEY configured" };
     } else {
       try {
-        const { websiteUrl, focusUrls } = parseUrlsFromNotes(taskNotes);
-        const mainUrl = websiteUrl ?? shop_url;
-        const focusUrlParsed = focusUrls[0] ?? focus_url ?? null;
-
-        console.log("Capturing screenshots — main:", mainUrl, "focus:", focusUrlParsed);
-
-        const [desktopMainB64, mobileMainB64, desktopFocusB64, mobileFocusB64] = await Promise.all([
-          captureScreenshot(mainUrl, firecrawlKey, "desktop"),
-          captureScreenshot(mainUrl, firecrawlKey, "mobile"),
-          focusUrlParsed ? captureScreenshot(focusUrlParsed, firecrawlKey, "desktop") : Promise.resolve(null),
-          focusUrlParsed ? captureScreenshot(focusUrlParsed, firecrawlKey, "mobile") : Promise.resolve(null),
-        ]);
-
+        const mainUrl = shop_url;
         const slug = client_name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
         const ts = Date.now();
 
-        const uploads = [
-          { label: "desktop-main", b64: desktopMainB64 },
-          { label: "mobile-main", b64: mobileMainB64 },
-          { label: "desktop-focus", b64: desktopFocusB64 },
-          { label: "mobile-focus", b64: mobileFocusB64 },
-        ];
+        // 3A: Scrape the page to get markdown for AI analysis
+        console.log("Scraping page for CRO section identification:", mainUrl);
+        const scrapeResp = await fetch(`${FIRECRAWL_API}/scrape`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${firecrawlKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ url: mainUrl, formats: ["markdown"], onlyMainContent: true, waitFor: 2000 }),
+        });
 
-        const results: string[] = [];
-        for (const { label, b64 } of uploads) {
-          if (!b64) { results.push(`${label}: no data`); continue; }
-          const url = await uploadToStorage(sb, b64, `${slug}-${label}-${ts}.png`);
-          if (url) {
-            screenshotUrls[label] = url;
-            results.push(`${label}: ✓`);
-          } else {
-            results.push(`${label}: upload failed`);
-          }
+        let markdown = "";
+        if (scrapeResp.ok) {
+          const scrapeData = await scrapeResp.json();
+          markdown = scrapeData.data?.markdown || scrapeData.markdown || "";
         }
 
-        const successCount = Object.keys(screenshotUrls).length;
-        steps[steps.length - 1] = {
-          step: 3, name: "Capture Screenshots", status: successCount > 0 ? "done" : "error",
-          detail: `${successCount}/${uploads.length} captured — ${results.join(" | ")}`,
-        };
+        // 3B: AI identifies key CRO sections
+        console.log("Identifying CRO sections with AI...");
+        const sections = await identifyCROSections(mainUrl, markdown, lovableApiKey);
+        console.log(`AI identified ${sections.length} sections`);
+
+        if (sections.length === 0) {
+          steps[steps.length - 1] = { step: 3, name: "CRO Section Screenshots", status: "error", detail: "AI could not identify sections" };
+        } else {
+          // 3C: Capture targeted screenshot for each section (3 at a time)
+          const sectionResults: string[] = [];
+          for (let i = 0; i < sections.length; i += 3) {
+            const batch = sections.slice(i, i + 3);
+            const batchResults = await Promise.all(
+              batch.map(async (section) => {
+                const bytes = await captureSectionScreenshot(mainUrl, section, firecrawlKey);
+                if (!bytes) return { section, url: null, bytes: null };
+
+                const sectionSlug = section.section_name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+                const filename = `${slug}-${sectionSlug}-${ts}.png`;
+                const url = await uploadToStorage(sb, bytes, filename);
+                return { section, url, bytes };
+              })
+            );
+
+            for (const result of batchResults) {
+              if (result.url) {
+                screenshotUrls[result.section.section_name] = result.url;
+                sectionResults.push(`✓ ${result.section.section_name}`);
+
+                // 3D: Attach to Asana task as attachment
+                if (taskGid && result.bytes) {
+                  await attachImageToAsana(
+                    taskGid,
+                    asanaToken,
+                    result.bytes,
+                    `${result.section.section_name}.png`
+                  );
+                }
+              } else {
+                sectionResults.push(`✗ ${result.section.section_name}`);
+              }
+            }
+          }
+
+          const successCount = Object.keys(screenshotUrls).length;
+          steps[steps.length - 1] = {
+            step: 3, name: "CRO Section Screenshots", status: successCount > 0 ? "done" : "error",
+            detail: `${successCount}/${sections.length} sections captured — ${sectionResults.join(" | ")}`,
+          };
+        }
       } catch (e) {
         console.error("Step 3 error:", e);
-        steps[steps.length - 1] = { step: 3, name: "Capture Screenshots", status: "error", error: String(e) };
+        steps[steps.length - 1] = { step: 3, name: "CRO Section Screenshots", status: "error", error: String(e) };
       }
     }
 
-    // ── STEP 4: Attach screenshots + links to Asana card notes ───────────────
+    // ── STEP 4: Update Asana card notes with section screenshots ─────────────
     steps.push({ step: 4, name: "Update Asana Card Notes", status: "running" });
     try {
       const existing = await asanaFetch(`/tasks/${taskGid}?opt_fields=notes`, asanaToken);
@@ -394,12 +576,11 @@ serve(async (req) => {
 
       if (Object.keys(screenshotUrls).length > 0) {
         const screenshotSummary = Object.entries(screenshotUrls)
-          .map(([k, v]) => `  ${k}: ${v}`)
+          .map(([section, url]) => `  📌 ${section}: ${url}`)
           .join("\n");
-        parts.push(`\n\n📸 Screenshots:\n${screenshotSummary}`);
+        parts.push(`\n\n📸 Section Screenshots:\n${screenshotSummary}`);
       }
 
-      // Figma links will be appended here if they exist (added in step 5)
       const newNotes = parts.join("").trim();
       if (newNotes !== (existing.notes ?? "").trim()) {
         await asanaFetch(`/tasks/${taskGid}`, asanaToken, {
@@ -409,7 +590,7 @@ serve(async (req) => {
       }
       steps[steps.length - 1] = {
         step: 4, name: "Update Asana Card Notes", status: "done",
-        detail: `${Object.keys(screenshotUrls).length} screenshot URLs attached`,
+        detail: `${Object.keys(screenshotUrls).length} section screenshot URLs in notes`,
       };
     } catch (e) {
       steps[steps.length - 1] = { step: 4, name: "Update Asana Card Notes", status: "error", error: String(e) };
@@ -525,23 +706,11 @@ serve(async (req) => {
       };
     }
 
-    // ── STEP 7: Move to Setup Complete (only if screenshots were captured) ───
-    steps.push({ step: 7, name: "Move to Setup Complete", status: "running" });
-    const hasScreenshots = Object.keys(screenshotUrls).length > 0;
-    const hasFigma = !!figmaFileLink || !!figmaSlidesLink;
-    if (hasScreenshots || hasFigma) {
-      try {
-        await asanaFetch(`/sections/${SECTION_SETUP_COMPLETE}/addTask`, asanaToken, {
-          method: "POST",
-          body: JSON.stringify({ data: { task: taskGid } }),
-        });
-        steps[steps.length - 1] = { step: 7, name: "Move to Setup Complete", status: "done", detail: "Moved to Setup Complete" };
-      } catch (e) {
-        steps[steps.length - 1] = { step: 7, name: "Move to Setup Complete", status: "error", error: String(e) };
-      }
-    } else {
-      steps[steps.length - 1] = { step: 7, name: "Move to Setup Complete", status: "skipped", detail: "Card stays in Ready for Setup — no assets generated" };
-    }
+    // ── STEP 7: Keep card in Ready for Setup (human moves to Setup Complete) ──
+    // IMPORTANT: Do NOT move to Setup Complete automatically.
+    // An Asana automation rule moves cards from Setup Complete → Oddit Design.
+    // Only a human should trigger that transition.
+    steps.push({ step: 7, name: "Card Placement", status: "done", detail: "Card stays in Ready for Setup — human moves to Setup Complete when ready" });
 
     // ── Activity log ──────────────────────────────────────────────────────────
     const allOk = steps.every((s) => s.status === "done" || s.status === "skipped");

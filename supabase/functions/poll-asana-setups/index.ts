@@ -17,7 +17,7 @@ const ASANA_PROJECT_GID = "1207443359385412";
 // The "Ready For Setup" column that triggers the pipeline
 const SECTION_READY_FOR_SETUP = "1207443359385417"; // "Ready For Setup"
 // The "Setup Complete" column the card moves to after pipeline finishes
-const SECTION_SETUP_COMPLETE = "1207443359385418"; // "Setup Complete"
+// SECTION_SETUP_COMPLETE removed — cards must NOT be moved there by automation
 
 // Figma frame names to inject screenshots into
 const FRAME_DESKTOP_MAIN  = "Desktop Screenshot";
@@ -113,43 +113,183 @@ function parseTaskNotes(notes: string): {
   return { clientName, websiteUrl, focusUrls, tier };
 }
 
-// ── Screenshot via Firecrawl ──────────────────────────────────────────────────
-async function captureScreenshot(
+// ── AI-driven CRO section identification ──────────────────────────────────────
+interface CROSection {
+  section_name: string;
+  scroll_percent: number;
+  why_optimize: string;
+  css_selector: string;
+}
+
+async function identifyCROSections(
   url: string,
-  firecrawlKey: string,
-  viewport: "desktop" | "mobile"
-): Promise<string | null> {
-  const res = await fetch(`${FIRECRAWL_API}/scrape`, {
+  markdown: string,
+  apiKey: string
+): Promise<CROSection[]> {
+  const truncated = markdown.slice(0, 12000);
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${firecrawlKey}`,
+      Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      url,
-      formats: ["screenshot"],
-      ...(viewport === "mobile" ? { mobile: true } : {}),
-      waitFor: 2000,
+      model: "google/gemini-2.5-flash",
+      messages: [
+        {
+          role: "system",
+          content: `You are a world-class CRO expert at Oddit (11,000+ audits completed). Analyze this e-commerce page and identify the top 5-8 key sections that need CRO optimization. Focus on: hero/header, navigation, product displays, trust signals, social proof, CTAs, conversion blocks, footer CTAs, review sections, pricing areas.`,
+        },
+        {
+          role: "user",
+          content: `Analyze this page and identify the key sections to optimize.\n\nURL: ${url}\n\nPage content:\n${truncated}`,
+        },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "identify_sections",
+            description: "Return 5-8 key page sections for CRO optimization",
+            parameters: {
+              type: "object",
+              properties: {
+                sections: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      section_name: { type: "string" },
+                      scroll_percent: { type: "number" },
+                      why_optimize: { type: "string" },
+                      css_selector: { type: "string" },
+                    },
+                    required: ["section_name", "scroll_percent", "why_optimize", "css_selector"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ["sections"],
+              additionalProperties: false,
+            },
+          },
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "identify_sections" } },
     }),
   });
-  if (!res.ok) {
-    console.error(`Firecrawl screenshot failed for ${url} [${viewport}]:`, await res.text());
-    return null;
+
+  if (!resp.ok) {
+    console.error("AI section identification failed:", resp.status, await resp.text());
+    return [];
   }
-  const data = await res.json();
-  const screenshotDataUri: string | null = data?.screenshot ?? data?.data?.screenshot ?? null;
-  if (!screenshotDataUri) return null;
-  return screenshotDataUri.replace(/^data:image\/[a-z]+;base64,/, "");
+
+  const data = await resp.json();
+  const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+  if (toolCall?.function?.arguments) {
+    try {
+      const parsed = JSON.parse(toolCall.function.arguments);
+      return (parsed.sections || []) as CROSection[];
+    } catch (e) {
+      console.error("Failed to parse sections:", e);
+    }
+  }
+  return [];
 }
 
-// ── Upload base64 PNG to Supabase storage ─────────────────────────────────────
-async function uploadScreenshotToStorage(
+// ── Targeted section screenshot via Firecrawl ─────────────────────────────────
+async function captureSectionScreenshot(
+  url: string,
+  section: CROSection,
+  firecrawlKey: string
+): Promise<Uint8Array | null> {
+  const DEFAULT_PAGE_HEIGHT = 6000;
+  const scrollPx = Math.round((section.scroll_percent / 100) * DEFAULT_PAGE_HEIGHT);
+  const selector = section.css_selector.replace(/'/g, "\\'");
+  const sectionKeyword = section.section_name.toLowerCase().split(" ")[0].replace(/'/g, "\\'");
+
+  const scrollJs = `
+    (function() {
+      document.querySelectorAll('*').forEach(function(node) {
+        var s = getComputedStyle(node);
+        if (s.position === 'fixed' || s.position === 'sticky') {
+          node.style.setProperty('visibility', 'hidden', 'important');
+        }
+      });
+      var el = document.querySelector('${selector}');
+      if (!el) {
+        var tags = ['section', 'div', 'header', 'footer', 'main', 'article'];
+        for (var i = 0; i < tags.length; i++) {
+          var all = document.querySelectorAll(tags[i]);
+          for (var j = 0; j < all.length; j++) {
+            var text = (all[j].className || '') + ' ' + (all[j].id || '') + ' ' + (all[j].textContent || '').substring(0, 200);
+            if (text.toLowerCase().indexOf('${sectionKeyword}') !== -1) {
+              el = all[j]; break;
+            }
+          }
+          if (el) break;
+        }
+      }
+      if (el) {
+        el.scrollIntoView({ block: 'center', behavior: 'instant' });
+        return 'found';
+      }
+      window.scrollTo(0, ${scrollPx});
+      return 'fallback';
+    })()
+  `;
+
+  try {
+    const resp = await fetch(`${FIRECRAWL_API}/scrape`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${firecrawlKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        url,
+        formats: ["screenshot"],
+        waitFor: 2000,
+        actions: [
+          { type: "wait", milliseconds: 1500 },
+          { type: "executeJavascript", script: scrollJs },
+          { type: "wait", milliseconds: 1000 },
+          { type: "screenshot" },
+        ],
+      }),
+    });
+
+    if (!resp.ok) return null;
+
+    const data = await resp.json();
+    const screenshotField = data.data?.screenshot || data.screenshot || "";
+    if (!screenshotField) return null;
+
+    if (screenshotField.startsWith("http")) {
+      const imgRes = await fetch(screenshotField);
+      if (!imgRes.ok) return null;
+      return new Uint8Array(await imgRes.arrayBuffer());
+    }
+
+    const raw = screenshotField.replace(/^data:image\/[a-z]+;base64,/, "");
+    const padded = raw + "=".repeat((4 - (raw.length % 4)) % 4);
+    const binaryStr = atob(padded);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    return bytes;
+  } catch (e) {
+    console.error(`Section screenshot error for "${section.section_name}":`, e);
+    return null;
+  }
+}
+
+// ── Upload bytes to Supabase storage ──────────────────────────────────────────
+async function uploadToStorage(
   sb: ReturnType<typeof createClient>,
-  base64Png: string,
+  bytes: Uint8Array,
   filename: string
 ): Promise<string | null> {
   try {
-    const bytes = Uint8Array.from(atob(base64Png), (c) => c.charCodeAt(0));
     const { error } = await sb.storage
       .from("audit-assets")
       .upload(`screenshots/${filename}`, bytes, { contentType: "image/png", upsert: true });
@@ -158,6 +298,32 @@ async function uploadScreenshotToStorage(
     return data?.publicUrl ?? null;
   } catch {
     return null;
+  }
+}
+
+// ── Attach image to Asana task ────────────────────────────────────────────────
+async function attachImageToAsana(
+  taskGid: string,
+  asanaToken: string,
+  imageBytes: Uint8Array,
+  filename: string
+): Promise<boolean> {
+  try {
+    const formData = new FormData();
+    formData.append("file", new Blob([imageBytes], { type: "image/png" }), filename);
+    const res = await fetch(`${ASANA_API}/tasks/${taskGid}/attachments`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${asanaToken}` },
+      body: formData,
+    });
+    if (!res.ok) {
+      console.warn(`Asana attachment failed for ${filename}:`, res.status);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error(`Asana attachment error for ${filename}:`, e);
+    return false;
   }
 }
 
@@ -275,128 +441,116 @@ async function processCard(
   let figmaSlidesLink: string | null = null;
   const screenshotUrls: Record<string, string> = {};
 
-  // ── STEP 1: Screenshot & Figma Injection ─────────────────────────────────
-  const figmaTemplateKey = DEFAULT_FIGMA_TEMPLATE_KEY || null;
+  // ── STEP 1: AI-driven CRO Section Screenshots ────────────────────────────
+  const lovableApiKey = Deno.env.get("LOVABLE_API_KEY") ?? null;
 
-  if (!figmaToken) {
-    push({ step: 1, name: "Screenshot & Figma Injection", status: "skipped", detail: "No Figma token configured" });
-  } else if (!figmaTemplateKey) {
-    push({ step: 1, name: "Screenshot & Figma Injection", status: "skipped", detail: "No Figma template key configured" });
-  } else if (!firecrawlKey) {
-    push({ step: 1, name: "Screenshot & Figma Injection", status: "skipped", detail: "No Firecrawl key configured" });
+  if (!firecrawlKey) {
+    push({ step: 1, name: "CRO Section Screenshots", status: "skipped", detail: "No Firecrawl key configured" });
+  } else if (!lovableApiKey) {
+    push({ step: 1, name: "CRO Section Screenshots", status: "skipped", detail: "No LOVABLE_API_KEY configured" });
   } else if (!websiteUrl) {
-    push({ step: 1, name: "Screenshot & Figma Injection", status: "skipped", detail: "No Website URL found on Asana card" });
+    push({ step: 1, name: "CRO Section Screenshots", status: "skipped", detail: "No Website URL found on Asana card" });
   } else {
     try {
-      // Duplicate Figma template
-      const dupRes = await fetch(`${FIGMA_API}/files/${figmaTemplateKey}/duplicate`, {
+      const slug = displayClient.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const ts = Date.now();
+
+      // 1A: Scrape page for AI analysis
+      console.log("Scraping page for CRO section identification:", websiteUrl);
+      const scrapeResp = await fetch(`${FIRECRAWL_API}/scrape`, {
         method: "POST",
-        headers: { "X-Figma-Token": figmaToken, "Content-Type": "application/json" },
-        body: JSON.stringify({ name: `${displayClient} — ${tierLabel} Report` }),
+        headers: {
+          Authorization: `Bearer ${firecrawlKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url: websiteUrl, formats: ["markdown"], onlyMainContent: true, waitFor: 2000 }),
       });
 
-      let newFileKey: string | null = null;
-      if (dupRes.ok) {
-        const dupData = await dupRes.json();
-        newFileKey = dupData.key ?? dupData.file?.key ?? null;
+      let markdown = "";
+      if (scrapeResp.ok) {
+        const scrapeData = await scrapeResp.json();
+        markdown = scrapeData.data?.markdown || scrapeData.markdown || "";
       }
 
-      if (!newFileKey) {
-        push({
-          step: 1,
-          name: "Screenshot & Figma Injection",
-          status: "error",
-          error: `Template duplication failed (${dupRes.status}). Check Figma plan & template key.`,
-        });
+      // 1B: AI identifies key CRO sections
+      console.log("Identifying CRO sections with AI...");
+      const sections = await identifyCROSections(websiteUrl, markdown, lovableApiKey);
+      console.log(`AI identified ${sections.length} sections`);
+
+      if (sections.length === 0) {
+        push({ step: 1, name: "CRO Section Screenshots", status: "error", detail: "AI could not identify sections" });
       } else {
-        figmaFileLink = `https://www.figma.com/file/${newFileKey}`;
+        // 1C: Capture targeted screenshot for each section (3 at a time)
+        const sectionResults: string[] = [];
+        for (let i = 0; i < sections.length; i += 3) {
+          const batch = sections.slice(i, i + 3);
+          const batchResults = await Promise.all(
+            batch.map(async (section) => {
+              const bytes = await captureSectionScreenshot(websiteUrl, section, firecrawlKey);
+              if (!bytes) return { section, url: null, bytes: null };
 
-        // Capture all screenshots in parallel
-        const [desktopMainB64, mobileMainB64, desktopFocusB64, mobileFocusB64] = await Promise.all([
-          captureScreenshot(websiteUrl, firecrawlKey, "desktop"),
-          captureScreenshot(websiteUrl, firecrawlKey, "mobile"),
-          focusUrl ? captureScreenshot(focusUrl, firecrawlKey, "desktop") : Promise.resolve(null),
-          focusUrl ? captureScreenshot(focusUrl, firecrawlKey, "mobile") : Promise.resolve(null),
-        ]);
+              const sectionSlug = section.section_name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+              const filename = `${slug}-${sectionSlug}-${ts}.png`;
+              const url = await uploadToStorage(sb, bytes, filename);
+              return { section, url, bytes };
+            })
+          );
 
-        const slug = displayClient.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-        const ts = Date.now();
+          for (const result of batchResults) {
+            if (result.url) {
+              screenshotUrls[result.section.section_name] = result.url;
+              sectionResults.push(`✓ ${result.section.section_name}`);
 
-        const uploadJobs = [
-          { label: "desktop-main",  b64: desktopMainB64,  frameName: FRAME_DESKTOP_MAIN },
-          { label: "mobile-main",   b64: mobileMainB64,   frameName: FRAME_MOBILE_MAIN  },
-          { label: "desktop-focus", b64: desktopFocusB64, frameName: FRAME_DESKTOP_FOCUS },
-          { label: "mobile-focus",  b64: mobileFocusB64,  frameName: FRAME_MOBILE_FOCUS  },
-        ];
-
-        // Fetch Figma document structure to find node IDs
-        const fileRes = await fetch(`${FIGMA_API}/files/${newFileKey}?depth=5`, {
-          headers: { "X-Figma-Token": figmaToken },
-        });
-        const fileData = fileRes.ok ? await fileRes.json() : null;
-        const documentNodes: Record<string, unknown>[] = fileData?.document?.children ?? [];
-
-        const injectionResults: string[] = [];
-
-        for (const job of uploadJobs) {
-          if (!job.b64) {
-            injectionResults.push(`${job.frameName}: skipped`);
-            continue;
+              // Attach to Asana task
+              if (result.bytes) {
+                await attachImageToAsana(task.gid, asanaToken, result.bytes, `${result.section.section_name}.png`);
+              }
+            } else {
+              sectionResults.push(`✗ ${result.section.section_name}`);
+            }
           }
-
-          const storageUrl = await uploadScreenshotToStorage(sb, job.b64, `${slug}-${job.label}-${ts}.png`);
-          if (storageUrl) screenshotUrls[job.label] = storageUrl;
-
-          const imageHash = await uploadImageToFigma(figmaToken, newFileKey, job.b64);
-          if (!imageHash) {
-            injectionResults.push(`${job.frameName}: upload failed`);
-            continue;
-          }
-
-          const nodeId = findNodeByName(documentNodes, job.frameName);
-          if (!nodeId) {
-            injectionResults.push(`${job.frameName}: frame not found`);
-            continue;
-          }
-
-          const ok = await setFigmaNodeImageFill(figmaToken, newFileKey, nodeId, imageHash);
-          injectionResults.push(`${job.frameName}: ${ok ? "✓" : "fill failed"}`);
         }
 
+        const successCount = Object.keys(screenshotUrls).length;
         push({
           step: 1,
-          name: "Screenshot & Figma Injection",
-          status: "done",
-          detail: `${figmaFileLink} | ${injectionResults.join(" · ")}`,
+          name: "CRO Section Screenshots",
+          status: successCount > 0 ? "done" : "error",
+          detail: `${successCount}/${sections.length} sections captured — ${sectionResults.join(" | ")}`,
         });
       }
     } catch (e) {
-      push({ step: 1, name: "Screenshot & Figma Injection", status: "error", error: String(e) });
+      push({ step: 1, name: "CRO Section Screenshots", status: "error", error: String(e) });
     }
   }
 
   // ── STEP 2: Link Figma file back to Asana ────────────────────────────────
-  if (figmaFileLink) {
-    try {
-      const existing = await asanaFetch(`/tasks/${task.gid}?opt_fields=notes`, asanaToken);
+  // ── STEP 2: Update Asana notes with section screenshots + Figma links ──
+  try {
+    const existing = await asanaFetch(`/tasks/${task.gid}?opt_fields=notes`, asanaToken);
+    const parts = [existing.notes ?? ""];
+
+    if (figmaFileLink) {
+      parts.push(`\n\nInternal Figma: ${figmaFileLink}`);
+    }
+
+    if (Object.keys(screenshotUrls).length > 0) {
       const screenshotSummary = Object.entries(screenshotUrls)
-        .map(([k, v]) => `${k}: ${v}`)
+        .map(([section, url]) => `  📌 ${section}: ${url}`)
         .join("\n");
-      const newNotes = [
-        existing.notes ?? "",
-        `\n\nInternal Figma: ${figmaFileLink}`,
-        screenshotSummary ? `\n📸 Screenshots:\n${screenshotSummary}` : "",
-      ].join("").trim();
+      parts.push(`\n\n📸 Section Screenshots:\n${screenshotSummary}`);
+    }
+
+    const newNotes = parts.join("").trim();
+    if (newNotes !== (existing.notes ?? "").trim()) {
       await asanaFetch(`/tasks/${task.gid}`, asanaToken, {
         method: "PUT",
         body: JSON.stringify({ data: { notes: newNotes } }),
       });
-      push({ step: 2, name: "Link Figma File → Asana", status: "done", detail: "Internal Figma link added to card" });
-    } catch (e) {
-      push({ step: 2, name: "Link Figma File → Asana", status: "error", error: String(e) });
     }
-  } else {
-    push({ step: 2, name: "Link Figma File → Asana", status: "skipped", detail: "No Figma file to link" });
+    push({ step: 2, name: "Update Asana Notes", status: "done", detail: `${Object.keys(screenshotUrls).length} section URLs + Figma links in notes` });
+  } catch (e) {
+    push({ step: 2, name: "Update Asana Notes", status: "error", error: String(e) });
   }
 
   // ── STEP 3: Create Figma Slides report ───────────────────────────────────
@@ -451,16 +605,11 @@ async function processCard(
     push({ step: 4, name: "Link Figma Slides → Asana", status: "skipped", detail: "No slides to link" });
   }
 
-  // ── STEP 5: Move card to Setup Complete ──────────────────────────────────
-  try {
-    await asanaFetch(`/sections/${SECTION_SETUP_COMPLETE}/addTask`, asanaToken, {
-      method: "POST",
-      body: JSON.stringify({ data: { task: task.gid } }),
-    });
-    push({ step: 5, name: "Move to Setup Complete", status: "done", detail: "Card moved to Setup Complete column" });
-  } catch (e) {
-    push({ step: 5, name: "Move to Setup Complete", status: "error", error: String(e) });
-  }
+  // ── STEP 5: Keep card in Ready For Setup (human moves to Setup Complete) ──
+  // IMPORTANT: Do NOT move to Setup Complete automatically.
+  // An Asana automation rule moves cards from Setup Complete → Oddit Design.
+  // Only a human should trigger that transition.
+  push({ step: 5, name: "Card Placement", status: "done", detail: "Card stays in Ready For Setup — human moves to Setup Complete when ready" });
 
   // ── Finalise run record ───────────────────────────────────────────────────
   const allOk = steps.every((s) => s.status === "done" || s.status === "skipped");
