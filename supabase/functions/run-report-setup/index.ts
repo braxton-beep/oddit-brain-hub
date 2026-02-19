@@ -561,16 +561,21 @@ serve(async (req) => {
       steps[steps.length - 1] = { step: 6, name: "Link Figma Slides to Asana", status: "skipped", detail: "No slides link to attach" };
     }
 
-    // ── STEP 7: Move to Setup Complete ───────────────────────────────────────
+    // ── STEP 7: Move to Setup Complete (only if Figma work was actually done) ─
     steps.push({ step: 7, name: "Move to Setup Complete", status: "running" });
-    try {
-      await asanaFetch(`/sections/${SECTION_READY_FOR_DECK}/addTask`, asanaToken, {
-        method: "POST",
-        body: JSON.stringify({ data: { task: taskGid } }),
-      });
-      steps[steps.length - 1] = { step: 7, name: "Move to Setup Complete", status: "done", detail: "Moved to Ready for Deck column" };
-    } catch (e) {
-      steps[steps.length - 1] = { step: 7, name: "Move to Setup Complete", status: "error", error: String(e) };
+    const figmaWorkDone = !!figmaFileLink || !!figmaSlidesLink;
+    if (figmaWorkDone) {
+      try {
+        await asanaFetch(`/sections/${SECTION_READY_FOR_DECK}/addTask`, asanaToken, {
+          method: "POST",
+          body: JSON.stringify({ data: { task: taskGid } }),
+        });
+        steps[steps.length - 1] = { step: 7, name: "Move to Setup Complete", status: "done", detail: "Moved to Setup Complete column" };
+      } catch (e) {
+        steps[steps.length - 1] = { step: 7, name: "Move to Setup Complete", status: "error", error: String(e) };
+      }
+    } else {
+      steps[steps.length - 1] = { step: 7, name: "Move to Setup Complete", status: "skipped", detail: "Card stays in Ready for Setup — no Figma assets were generated" };
     }
 
     // ── Activity log ──────────────────────────────────────────────────────────

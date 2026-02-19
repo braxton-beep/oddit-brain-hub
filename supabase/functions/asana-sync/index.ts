@@ -218,6 +218,20 @@ serve(async (req) => {
       });
     }
 
+    // ── Action: get_task ──────────────────────────
+    if (action === "get_task") {
+      const { task_gid } = body;
+      if (!task_gid) {
+        return new Response(JSON.stringify({ error: "task_gid required" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const task = await asanaFetch(`/tasks/${task_gid}?opt_fields=gid,name,memberships.project.gid,memberships.project.name,memberships.section.gid,memberships.section.name`, ASANA_TOKEN);
+      return new Response(JSON.stringify({ success: true, task }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ── Action: list_tags ──────────────────────────
     if (action === "list_tags") {
       const { workspace_gid } = body;
@@ -236,7 +250,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ error: `Unknown action: ${action}. Valid actions: get_me, list_workspaces, list_projects, list_sections, create_task, update_task, move_task_to_section, add_attachment, list_tags` }),
+      JSON.stringify({ error: `Unknown action: ${action}. Valid actions: get_me, list_workspaces, list_projects, list_sections, create_task, update_task, move_task_to_section, add_attachment, get_task, list_tags` }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
