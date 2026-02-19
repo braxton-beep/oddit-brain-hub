@@ -137,6 +137,7 @@ You MUST respond with valid JSON only — no markdown, no code fences, no explan
       "recommended_change": "Detailed description of what the improved version should look like (the 'after' state). Include specific design recommendations like layout, copy changes, color usage, CTA placement.",
       "expected_impact": "Estimated conversion impact (e.g., '+12-18% click-through rate on hero CTA')",
       "mockup_prompt": "A detailed image generation prompt that would create a clean, professional UI mockup of the IMPROVED version of this section. Describe colors, layout, typography, and key elements. Start with 'A professional e-commerce website section mockup showing...'",
+      "css_selector": "A precise CSS selector that targets the specific section or element being analyzed (e.g., 'header', 'section.hero', '#product-grid', '.testimonials', 'footer', '[data-section=reviews]', 'main > section:nth-child(3)'). Use semantic HTML elements, class names, IDs, or structural selectors you can infer from the page content. Be as specific as possible.",
       "scroll_percentage": 0
     }
   ]
@@ -147,6 +148,7 @@ Guidelines:
 - Be extremely specific — reference actual text, images, or layout patterns from the scraped content
 - Order by severity (high impact first)
 - The mockup_prompt should describe a realistic, professional web design mockup
+- css_selector: provide the BEST CSS selector you can infer from the page markup to target the exact section/element. Use class names, IDs, semantic tags, or nth-child selectors. If multiple selectors could work, pick the most specific one.
 - scroll_percentage: estimate what percentage down the page (0-100) this section lives. Hero/nav = 0-10, above fold features = 10-25, mid-page = 25-60, lower sections = 60-85, footer = 85-100`,
           },
           {
@@ -175,9 +177,10 @@ Guidelines:
                         recommended_change: { type: "string" },
                         expected_impact: { type: "string" },
                         mockup_prompt: { type: "string" },
+                        css_selector: { type: "string" },
                         scroll_percentage: { type: "number" },
                       },
-                      required: ["id", "section", "severity", "current_issue", "recommended_change", "expected_impact", "mockup_prompt", "scroll_percentage"],
+                      required: ["id", "section", "severity", "current_issue", "recommended_change", "expected_impact", "mockup_prompt", "css_selector", "scroll_percentage"],
                       additionalProperties: false,
                     },
                   },
@@ -251,19 +254,60 @@ Guidelines:
       // Use Firecrawl's actions API to scroll to each section before screenshotting
       // We batch by deduped scroll positions to reduce API calls (within 10% proximity = same shot)
       const screenshotPromises = recommendations.map(async (rec: any) => {
+        const selector = rec.css_selector || "";
         const scrollPct = typeof rec.scroll_percentage === "number"
           ? Math.max(0, Math.min(100, rec.scroll_percentage))
           : 0;
 
         try {
+          // Build JS that scrolls the target element into the center of the viewport
+          // and optionally hides sticky headers/footers for a clean crop
+          const scrollJs = selector
+            ? `
+              (function() {
+                // Try to find the element with the AI-provided selector
+                let el = document.querySelector('${selector.replace(/'/g, "\\'")}');
+                // Fallback: try partial matches on common patterns
+                if (!el) {
+                  const candidates = ['section', 'div', 'header', 'footer', 'main', 'article', 'aside'];
+                  for (const tag of candidates) {
+                    const all = document.querySelectorAll(tag);
+                    for (const c of all) {
+                      const text = (c.className || '') + ' ' + (c.id || '');
+                      if (text.toLowerCase().includes('${rec.section.toLowerCase().split(" ")[0].replace(/'/g, "\\'")}')) {
+                        el = c; break;
+                      }
+                    }
+                    if (el) break;
+                  }
+                }
+                if (el) {
+                  // Hide sticky/fixed elements that overlay the section
+                  document.querySelectorAll('*').forEach(function(node) {
+                    const s = getComputedStyle(node);
+                    if (s.position === 'fixed' || s.position === 'sticky') {
+                      node.style.setProperty('visibility', 'hidden', 'important');
+                    }
+                  });
+                  el.scrollIntoView({ block: 'center', behavior: 'instant' });
+                  return 'found';
+                }
+                // Fallback: scroll by percentage
+                window.scrollTo(0, document.body.scrollHeight * ${scrollPct / 100});
+                return 'fallback';
+              })()
+            `
+            : `window.scrollTo(0, document.body.scrollHeight * ${scrollPct / 100}); 'fallback'`;
+
           const scrapePayload: any = {
             url: formattedUrl,
             formats: ["screenshot"],
             waitFor: 2000,
             actions: [
               { type: "wait", milliseconds: 1500 },
-              { type: "scroll", direction: "down", amount: Math.round(scrollPct * 80) }, // approx pixel offset
-              { type: "wait", milliseconds: 800 },
+              { type: "executeJavascript", script: scrollJs },
+              { type: "wait", milliseconds: 1000 },
+              { type: "screenshot" },
             ],
           };
 
