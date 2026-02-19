@@ -189,24 +189,22 @@ async function captureSectionScreenshot(
   const selector = section.css_selector.replace(/'/g, "\\'");
   const sectionKeyword = section.section_name.toLowerCase().split(" ")[0].replace(/'/g, "\\'");
 
+  // JavaScript that scrolls the target element into view and hides overlays
   const scrollJs = `
     (function() {
-      // Hide sticky/fixed elements for clean screenshot
       document.querySelectorAll('*').forEach(function(node) {
         var s = getComputedStyle(node);
         if (s.position === 'fixed' || s.position === 'sticky') {
-          node.style.setProperty('visibility', 'hidden', 'important');
+          node.style.setProperty('display', 'none', 'important');
         }
       });
-      // Try exact CSS selector
       var el = document.querySelector('${selector}');
-      // Fallback: fuzzy match by section keyword
       if (!el) {
-        var tags = ['section', 'div', 'header', 'footer', 'main', 'article'];
+        var tags = ['section', 'div', 'header', 'footer', 'main', 'article', 'aside'];
         for (var i = 0; i < tags.length; i++) {
           var all = document.querySelectorAll(tags[i]);
           for (var j = 0; j < all.length; j++) {
-            var text = (all[j].className || '') + ' ' + (all[j].id || '') + ' ' + (all[j].textContent || '').substring(0, 200);
+            var text = (all[j].className || '') + ' ' + (all[j].id || '') + ' ' + (all[j].textContent || '').substring(0, 300);
             if (text.toLowerCase().indexOf('${sectionKeyword}') !== -1) {
               el = all[j]; break;
             }
@@ -216,14 +214,18 @@ async function captureSectionScreenshot(
       }
       if (el) {
         el.scrollIntoView({ block: 'center', behavior: 'instant' });
-        return 'found';
+        return 'found:' + el.tagName + '.' + (el.className || '').substring(0, 50);
       }
       window.scrollTo(0, ${scrollPx});
-      return 'fallback';
+      return 'fallback:scrolled_to_' + ${scrollPx} + 'px';
     })()
   `;
 
+  console.log(`[Screenshot] Capturing "${section.section_name}" — selector: "${section.css_selector}", scroll: ${section.scroll_percent}%`);
+
   try {
+    // IMPORTANT: Do NOT include "screenshot" in formats — that captures a full-page screenshot.
+    // Instead, use the actions-based screenshot which captures only the current viewport.
     const resp = await fetch(`${FIRECRAWL_API}/scrape`, {
       method: "POST",
       headers: {
@@ -232,41 +234,78 @@ async function captureSectionScreenshot(
       },
       body: JSON.stringify({
         url,
-        formats: ["screenshot"],
-        waitFor: 2000,
+        formats: [],
+        waitFor: 3000,
         actions: [
-          { type: "wait", milliseconds: 1500 },
+          { type: "wait", milliseconds: 2000 },
           { type: "executeJavascript", script: scrollJs },
-          { type: "wait", milliseconds: 1000 },
+          { type: "wait", milliseconds: 1500 },
           { type: "screenshot" },
         ],
       }),
     });
 
     if (!resp.ok) {
-      console.warn(`Section screenshot failed for "${section.section_name}": ${resp.status}`);
+      const errBody = await resp.text();
+      console.error(`[Screenshot] Firecrawl error for "${section.section_name}": ${resp.status} — ${errBody.substring(0, 500)}`);
       return null;
     }
 
     const data = await resp.json();
-    const screenshotField = data.data?.screenshot || data.screenshot || "";
-    if (!screenshotField) return null;
+    
+    // Log the response structure to debug
+    const topKeys = Object.keys(data);
+    const dataKeys = data.data ? Object.keys(data.data) : [];
+    console.log(`[Screenshot] Response keys: top=[${topKeys}], data=[${dataKeys}]`);
 
-    // Handle URL or base64
+    // The action-based screenshot may be in different locations
+    let screenshotField = "";
+    
+    // Check actions results first (where action screenshots typically land)
+    if (data.data?.actions?.results) {
+      for (const result of data.data.actions.results) {
+        if (result?.screenshot) {
+          screenshotField = result.screenshot;
+          console.log(`[Screenshot] Found in actions.results for "${section.section_name}"`);
+          break;
+        }
+      }
+    }
+    
+    // Fallback to top-level screenshot fields
+    if (!screenshotField) {
+      screenshotField = data.data?.screenshot || data.screenshot || "";
+      if (screenshotField) {
+        console.log(`[Screenshot] Found in data.screenshot for "${section.section_name}", type: ${screenshotField.substring(0, 30)}...`);
+      }
+    }
+    
+    if (!screenshotField) {
+      console.warn(`[Screenshot] No screenshot data found for "${section.section_name}". Full response: ${JSON.stringify(data).substring(0, 1000)}`);
+      return null;
+    }
+
+    // Handle URL (Google Cloud Storage) or base64
     if (screenshotField.startsWith("http")) {
+      console.log(`[Screenshot] Downloading from URL for "${section.section_name}"`);
       const imgRes = await fetch(screenshotField);
-      if (!imgRes.ok) return null;
+      if (!imgRes.ok) {
+        console.error(`[Screenshot] Image download failed: ${imgRes.status}`);
+        return null;
+      }
       return new Uint8Array(await imgRes.arrayBuffer());
     }
 
+    // Base64 decode
     const raw = screenshotField.replace(/^data:image\/[a-z]+;base64,/, "");
     const padded = raw + "=".repeat((4 - (raw.length % 4)) % 4);
     const binaryStr = atob(padded);
     const bytes = new Uint8Array(binaryStr.length);
     for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    console.log(`[Screenshot] Decoded base64 for "${section.section_name}" — ${bytes.length} bytes`);
     return bytes;
   } catch (e) {
-    console.error(`Section screenshot error for "${section.section_name}":`, e);
+    console.error(`[Screenshot] Error for "${section.section_name}":`, e);
     return null;
   }
 }
@@ -513,9 +552,12 @@ serve(async (req) => {
         }
 
         // 3B: AI identifies key CRO sections
-        console.log("Identifying CRO sections with AI...");
+        console.log(`[Step 3B] Identifying CRO sections with AI (markdown length: ${markdown.length})...`);
         const sections = await identifyCROSections(mainUrl, markdown, lovableApiKey);
-        console.log(`AI identified ${sections.length} sections`);
+        console.log(`[Step 3B] AI identified ${sections.length} sections:`);
+        for (const s of sections) {
+          console.log(`  → "${s.section_name}" at ${s.scroll_percent}% — selector: "${s.css_selector}"`);
+        }
 
         if (sections.length === 0) {
           steps[steps.length - 1] = { step: 3, name: "CRO Section Screenshots", status: "error", detail: "AI could not identify sections" };
