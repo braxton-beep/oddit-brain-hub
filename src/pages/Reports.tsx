@@ -45,6 +45,8 @@ interface Recommendation {
   expected_impact: string;
   mockup_prompt: string;
   mockup_url?: string;
+  section_screenshot_url?: string;
+  scroll_percentage?: number;
 }
 
 interface CroAudit {
@@ -105,6 +107,7 @@ const statusIcon: Record<string, typeof CheckCircle2> = {
   failed: AlertCircle,
   scraping: Loader2,
   analyzing: Loader2,
+  screenshotting: Loader2,
   generating: Loader2,
 };
 
@@ -640,7 +643,8 @@ const Reports = () => {
                       <span className={`hidden sm:inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${sev.bg}`}>
                         {rec.severity}
                       </span>
-                      {rec.mockup_url && <ImageIcon className="h-4 w-4 text-accent shrink-0" />}
+                      {rec.section_screenshot_url && <ImageIcon className="h-4 w-4 text-muted-foreground shrink-0" />}
+                      {rec.mockup_url && <Sparkles className="h-4 w-4 text-accent shrink-0" />}
                       {expanded ? (
                         <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
                       ) : (
@@ -651,6 +655,55 @@ const Reports = () => {
                     {/* Expanded content */}
                     {expanded && (
                       <div className="px-3 sm:px-4 pb-4 pt-0 space-y-3 sm:space-y-4">
+
+                        {/* Before / After screenshots row */}
+                        {(rec.section_screenshot_url || rec.mockup_url) && (
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {/* Before: section screenshot */}
+                            <div>
+                              <p className="text-[10px] font-bold text-destructive uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                <AlertTriangle className="h-3 w-3" /> Before — Current State
+                              </p>
+                              {rec.section_screenshot_url ? (
+                                <img
+                                  src={rec.section_screenshot_url}
+                                  alt={`Current state of ${rec.section}`}
+                                  className="w-full rounded-lg border border-destructive/20 object-cover max-h-52"
+                                />
+                              ) : (
+                                <div className="w-full h-32 rounded-lg border border-destructive/20 bg-destructive/5 flex items-center justify-center text-[11px] text-muted-foreground">
+                                  Screenshot not available
+                                </div>
+                              )}
+                            </div>
+                            {/* After: AI mockup */}
+                            <div>
+                              <p className="text-[10px] font-bold text-accent uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                <Sparkles className="h-3 w-3" /> After — AI Concept
+                              </p>
+                              {rec.mockup_url ? (
+                                <img
+                                  src={rec.mockup_url}
+                                  alt={`Mockup for ${rec.section}`}
+                                  className="w-full rounded-lg border border-accent/20 object-cover max-h-52"
+                                />
+                              ) : (
+                                <button
+                                  onClick={() => handleGenerateMockup(viewingAudit, rec)}
+                                  disabled={isMockupLoading}
+                                  className="w-full h-32 rounded-lg border border-dashed border-accent/30 bg-accent/5 flex flex-col items-center justify-center gap-2 text-xs font-bold text-accent hover:bg-accent/10 transition-colors disabled:opacity-50"
+                                >
+                                  {isMockupLoading ? (
+                                    <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
+                                  ) : (
+                                    <><ImageIcon className="h-4 w-4" /> Generate AI Concept</>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="grid gap-3 sm:gap-4 sm:grid-cols-2">
                           {/* Before */}
                           <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 sm:p-4">
@@ -688,19 +741,8 @@ const Reports = () => {
                           <span className="text-xs text-muted-foreground">{rec.expected_impact}</span>
                         </div>
 
-                        {/* Mockup */}
-                        {rec.mockup_url ? (
-                          <div>
-                            <p className="text-[11px] font-bold text-cream uppercase tracking-wider mb-2">
-                              AI-Generated Concept Mockup
-                            </p>
-                            <img
-                              src={rec.mockup_url}
-                              alt={`Mockup for ${rec.section}`}
-                              className="w-full rounded-lg border border-border"
-                            />
-                          </div>
-                        ) : (
+                        {/* If no screenshots at all, show standalone mockup section */}
+                        {!rec.section_screenshot_url && !rec.mockup_url && (
                           <button
                             onClick={() => handleGenerateMockup(viewingAudit, rec)}
                             disabled={isMockupLoading}
