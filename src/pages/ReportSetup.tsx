@@ -408,20 +408,23 @@ function EmptyState() {
 function ManualRunForm() {
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState(false);
+  const [submitted, setSubmitted] = useState<{ tier: string; pages: number; client: string } | null>(null);
   const [form, setForm] = useState({
     client_name: "",
     shop_url: "",
     focus_url: "",
     tier: "pro" as "pro" | "essential",
+    pages: 5,
   });
 
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((f) => ({ ...f, [key]: e.target.value }));
+    setForm((f) => ({ ...f, [key]: key === "pages" ? Number(e.target.value) : e.target.value }));
 
   const handleRun = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.client_name || !form.shop_url) return;
     setRunning(true);
+    setSubmitted(null);
     try {
       const { data, error } = await supabase.functions.invoke("run-report-setup", {
         body: {
@@ -429,12 +432,13 @@ function ManualRunForm() {
           shop_url: form.shop_url.trim(),
           focus_url: form.focus_url.trim() || undefined,
           tier: form.tier,
+          pages: form.tier === "pro" ? form.pages : undefined,
         },
       });
       if (error) throw error;
+      setSubmitted({ tier: form.tier, pages: form.tier === "pro" ? form.pages : 1, client: form.client_name });
       toast.success(`Pipeline started for ${form.client_name}`);
-      setForm({ client_name: "", shop_url: "", focus_url: "", tier: "pro" });
-      setOpen(false);
+      setForm({ client_name: "", shop_url: "", focus_url: "", tier: "pro", pages: 5 });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start pipeline");
     } finally {
@@ -445,7 +449,7 @@ function ManualRunForm() {
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => { setOpen((o) => !o); setSubmitted(null); }}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/20 transition-colors text-left"
       >
         <div className="flex items-center gap-2">
@@ -456,7 +460,7 @@ function ManualRunForm() {
         {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
       </button>
 
-      {open && (
+      {open && !submitted && (
         <form onSubmit={handleRun} className="border-t border-border px-5 py-4 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -502,15 +506,51 @@ function ManualRunForm() {
                 className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition"
               />
             </div>
+            {form.tier === "pro" && (
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Pages to audit <span className="text-muted-foreground/50">(1–10)</span></label>
+                <select
+                  value={form.pages}
+                  onChange={set("pages")}
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground text-sm focus:outline-none focus:border-primary/50 transition"
+                >
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>{n} {n === 1 ? "page" : "pages"}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <Button type="submit" disabled={running || !form.client_name || !form.shop_url} size="sm" className="gap-2">
               {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
               {running ? "Running…" : "Run Pipeline"}
             </Button>
-            <p className="text-xs text-muted-foreground">Creates a real Asana card + duplicates both Figma templates</p>
+            <p className="text-xs text-muted-foreground">Creates a real Asana card + captures screenshots + applies tags</p>
           </div>
         </form>
+      )}
+
+      {open && submitted && (
+        <div className="border-t border-border px-5 py-6 text-center space-y-3">
+          <CheckCircle2 className="h-8 w-8 text-green-400 mx-auto" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">Thank you — report submitted!</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              <strong className="text-foreground capitalize">{submitted.tier}</strong> tier
+              {submitted.tier === "pro" && <> · <strong className="text-foreground">{submitted.pages} {submitted.pages === 1 ? "page" : "pages"}</strong></>}
+              {" "}· Client: <strong className="text-foreground">{submitted.client}</strong>
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSubmitted(null)}
+            className="mt-2"
+          >
+            Run another
+          </Button>
+        </div>
       )}
     </div>
   );
@@ -605,6 +645,9 @@ export default function ReportSetup() {
             <div className="flex items-center gap-2 mb-1">
               <Activity className="h-5 w-5 text-primary" />
               <h1 className="text-2xl font-bold text-foreground">Setup Monitor</h1>
+              <Badge variant="outline" className="text-[10px] px-2 py-0.5 text-muted-foreground border-dashed">
+                Internal testing only — remove once live pipeline is confirmed
+              </Badge>
               {runningCount > 0 && (
                 <span className="relative flex h-2 w-2 ml-1">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
