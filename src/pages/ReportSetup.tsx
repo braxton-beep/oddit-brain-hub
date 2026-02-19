@@ -408,7 +408,7 @@ function EmptyState() {
 function ManualRunForm() {
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState(false);
-  const [submitted, setSubmitted] = useState<{ tier: string; pages: number; client: string } | null>(null);
+  const [submitted, setSubmitted] = useState<{ tier: string; pages: number; client: string; urlCount: number } | null>(null);
   const [form, setForm] = useState({
     client_name: "",
     shop_url: "",
@@ -416,6 +416,7 @@ function ManualRunForm() {
     tier: "pro" as "pro" | "essential",
     pages: 5,
   });
+  const [extraUrls, setExtraUrls] = useState<string[]>([]);
 
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [key]: key === "pages" ? Number(e.target.value) : e.target.value }));
@@ -425,26 +426,36 @@ function ManualRunForm() {
     if (!form.client_name || !form.shop_url) return;
     setRunning(true);
     setSubmitted(null);
+    const allUrls = [form.shop_url.trim(), ...extraUrls.map((u) => u.trim()).filter(Boolean)];
     try {
       const { data, error } = await supabase.functions.invoke("run-report-setup", {
         body: {
           client_name: form.client_name.trim(),
-          shop_url: form.shop_url.trim(),
+          shop_url: allUrls[0],
           focus_url: form.focus_url.trim() || undefined,
           tier: form.tier,
           pages: form.tier === "pro" ? form.pages : undefined,
+          extra_urls: allUrls.length > 1 ? allUrls.slice(1) : undefined,
         },
       });
       if (error) throw error;
-      setSubmitted({ tier: form.tier, pages: form.tier === "pro" ? form.pages : 1, client: form.client_name });
+      setSubmitted({
+        tier: form.tier,
+        pages: form.tier === "pro" ? form.pages : 1,
+        client: form.client_name,
+        urlCount: allUrls.length,
+      });
       toast.success(`Pipeline started for ${form.client_name}`);
       setForm({ client_name: "", shop_url: "", focus_url: "", tier: "pro", pages: 5 });
+      setExtraUrls([]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start pipeline");
     } finally {
       setRunning(false);
     }
   };
+
+  const inputClass = "w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition";
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -465,55 +476,56 @@ function ManualRunForm() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">Client name *</label>
-              <input
-                type="text"
-                value={form.client_name}
-                onChange={set("client_name")}
-                placeholder="Test Brand"
-                required
-                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition"
-              />
+              <input type="text" value={form.client_name} onChange={set("client_name")} placeholder="Test Brand" required className={inputClass} />
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">Tier</label>
-              <select
-                value={form.tier}
-                onChange={set("tier")}
-                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground text-sm focus:outline-none focus:border-primary/50 transition"
-              >
+              <select value={form.tier} onChange={set("tier")} className={inputClass}>
                 <option value="pro">Pro</option>
                 <option value="essential">Essential</option>
               </select>
             </div>
-            <div>
+            <div className={form.tier === "essential" ? "sm:col-span-2" : ""}>
               <label className="block text-xs font-medium text-muted-foreground mb-1">Shop URL *</label>
-              <input
-                type="url"
-                value={form.shop_url}
-                onChange={set("shop_url")}
-                placeholder="https://yourstore.com"
-                required
-                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition"
-              />
+              <input type="url" value={form.shop_url} onChange={set("shop_url")} placeholder="https://yourstore.com" required className={inputClass} />
             </div>
+            {form.tier === "essential" && extraUrls.map((url, i) => (
+              <div key={i} className="sm:col-span-2 flex gap-2">
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => setExtraUrls((prev) => prev.map((u, j) => j === i ? e.target.value : u))}
+                  placeholder={`https://yourstore.com/page-${i + 2}`}
+                  className={inputClass + " flex-1"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setExtraUrls((prev) => prev.filter((_, j) => j !== i))}
+                  className="px-2 text-muted-foreground hover:text-destructive transition-colors text-sm"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            {form.tier === "essential" && (
+              <div className="sm:col-span-2">
+                <button
+                  type="button"
+                  onClick={() => setExtraUrls((prev) => [...prev, ""])}
+                  className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+                >
+                  + Add URL
+                </button>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">Focus URL <span className="text-muted-foreground/50">(optional)</span></label>
-              <input
-                type="url"
-                value={form.focus_url}
-                onChange={set("focus_url")}
-                placeholder="https://yourstore.com/products"
-                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition"
-              />
+              <input type="url" value={form.focus_url} onChange={set("focus_url")} placeholder="https://yourstore.com/products" className={inputClass} />
             </div>
             {form.tier === "pro" && (
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Pages to audit <span className="text-muted-foreground/50">(1–10)</span></label>
-                <select
-                  value={form.pages}
-                  onChange={set("pages")}
-                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground text-sm focus:outline-none focus:border-primary/50 transition"
-                >
+                <select value={form.pages} onChange={set("pages")} className={inputClass}>
                   {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                     <option key={n} value={n}>{n} {n === 1 ? "page" : "pages"}</option>
                   ))}
@@ -539,15 +551,11 @@ function ManualRunForm() {
             <p className="text-xs text-muted-foreground mt-1">
               <strong className="text-foreground capitalize">{submitted.tier}</strong> tier
               {submitted.tier === "pro" && <> · <strong className="text-foreground">{submitted.pages} {submitted.pages === 1 ? "page" : "pages"}</strong></>}
+              {submitted.urlCount > 1 && <> · <strong className="text-foreground">{submitted.urlCount} URLs</strong></>}
               {" "}· Client: <strong className="text-foreground">{submitted.client}</strong>
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSubmitted(null)}
-            className="mt-2"
-          >
+          <Button variant="outline" size="sm" onClick={() => setSubmitted(null)} className="mt-2">
             Run another
           </Button>
         </div>
@@ -582,7 +590,10 @@ export default function ReportSetup() {
   useEffect(() => {
     loadRuns();
 
-    // Subscribe to realtime updates
+    // Auto-poll every 5 seconds to keep stats and list fresh
+    const interval = setInterval(loadRuns, 5000);
+
+    // Subscribe to realtime updates for instant feedback
     const channel = supabase
       .channel("setup_runs_feed")
       .on(
@@ -601,6 +612,7 @@ export default function ReportSetup() {
       .subscribe();
 
     return () => {
+      clearInterval(interval);
       supabase.removeChannel(channel);
     };
   }, []);
