@@ -8,13 +8,13 @@ const corsHeaders = {
 };
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const ASANA_PROJECT_GID = "1203000364658371"; // Oddit Fulfilment
+const ASANA_PROJECT_GID = "1207443359385412"; // Oddit Setups
 
 // Figma template keys — duplicated automatically for every new report purchase
 const DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY  = "3EfexlsSpqIciz7PkcSPwu"; // Oddit Report Template (design)
 const DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY = "7iTirmji3y4s35Xyrk2Cwg"; // Oddit Report Template (slides)
-const SECTION_CLIENT_FIGMA_SETUP = "1207466847448691"; // "Client Figma Setup" = Ready for Setup
-const SECTION_READY_FOR_DECK = "1203000364658378";     // "Ready for Deck" = Setup Complete
+const SECTION_CLIENT_FIGMA_SETUP = "1207443359385417"; // "Ready for Setup" section in Oddit Setups
+const SECTION_READY_FOR_DECK = "1207443359385418";     // "Setup Complete" section in Oddit Setups
 const ASANA_API = "https://app.asana.com/api/1.0";
 const FIGMA_API = "https://api.figma.com/v1";
 const FIRECRAWL_API = "https://api.firecrawl.dev/v1";
