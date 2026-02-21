@@ -10,7 +10,6 @@ const corsHeaders = {
 // ── Constants ────────────────────────────────────────────────────────────────
 const ASANA_PROJECT_GID = "1207443359385412"; // Oddit Setups
 const SECTION_READY_FOR_SETUP = "1207443359385417";
-// SECTION_SETUP_COMPLETE removed — cards must NOT be moved there by automation
 const ASANA_API = "https://app.asana.com/api/1.0";
 const FIGMA_API = "https://api.figma.com/v1";
 const FIRECRAWL_API = "https://api.firecrawl.dev/v1";
@@ -18,25 +17,13 @@ const FIRECRAWL_API = "https://api.firecrawl.dev/v1";
 // ── Asana Custom Field GIDs ──────────────────────────────────────────────────
 const CF_TYPE = "1205565239136671";
 const CF_TYPE_REPORT = "1205565239136672";
-
-// Note: "Not Started" (1205789138669683) is disabled in Asana — skipping Project Status
-// const CF_PROJECT_STATUS = "1205789138669682";
-// const CF_PROJECT_STATUS_NOT_STARTED = "1205789138669683";
-
 const CF_BREAKPOINTS = "1206927655441547";
 const CF_BREAKPOINTS_BOTH = "1206927655441550";
-
 const CF_NUM_PAGES = "1206927655441553";
 const CF_NUM_PAGES_MAP: Record<number, string> = {
-  1: "1206927655441556",
-  2: "1206927655441557",
-  3: "1206927655441558",
-  4: "1206927655441559",
-  5: "1206927655443645",
-  6: "1206927655443646",
-  7: "1207661312443019",
-  8: "1207661312443020",
-  9: "1207661312443021",
+  1: "1206927655441556", 2: "1206927655441557", 3: "1206927655441558",
+  4: "1206927655441559", 5: "1206927655443645", 6: "1206927655443646",
+  7: "1207661312443019", 8: "1207661312443020", 9: "1207661312443021",
   10: "1207661312443022",
 };
 
@@ -90,153 +77,15 @@ function getFirecrawlKey(): string | null {
   return Deno.env.get("FIRECRAWL_API_KEY") ?? null;
 }
 
-function getLovableApiKey(): string | null {
-  return Deno.env.get("LOVABLE_API_KEY") ?? null;
-}
-
-// ── AI-driven section identification ──────────────────────────────────────────
-interface CROSection {
-  section_name: string;
-  scroll_percent: number;
-  why_optimize: string;
-  css_selector: string;
-}
-
-async function identifyCROSections(
+// ── Simple homepage screenshot via Firecrawl ──────────────────────────────────
+async function captureHomepageScreenshot(
   url: string,
-  markdown: string,
-  apiKey: string
-): Promise<CROSection[]> {
-  const truncated = markdown.slice(0, 12000);
-  const MODELS = ["google/gemini-2.5-flash", "google/gemini-2.5-flash-lite", "openai/gpt-5-mini"];
-
-  for (const model of MODELS) {
-    console.log(`[CRO AI] Trying model: ${model}`);
-    try {
-      const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: "system",
-              content: `You are a world-class CRO expert at Oddit (11,000+ audits completed). Analyze this e-commerce page and identify the top 5-8 key sections that need CRO optimization. Focus on: hero/header, navigation, product displays, trust signals, social proof, CTAs, conversion blocks, footer CTAs, review sections, pricing areas.`,
-            },
-            {
-              role: "user",
-              content: `Analyze this page and identify the key sections to optimize.\n\nURL: ${url}\n\nPage content:\n${truncated}`,
-            },
-          ],
-          tools: [
-            {
-              type: "function",
-              function: {
-                name: "identify_sections",
-                description: "Return 5-8 key page sections for CRO optimization",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    sections: {
-                      type: "array",
-                      items: {
-                        type: "object",
-                        properties: {
-                          section_name: { type: "string", description: "Short label e.g. 'Hero', 'Review Section', 'CTA Block'" },
-                          scroll_percent: { type: "number", description: "Estimated scroll depth 0-100 where this section lives" },
-                          why_optimize: { type: "string", description: "One sentence on why this section matters for CRO" },
-                          css_selector: { type: "string", description: "Best CSS selector to target this element" },
-                        },
-                        required: ["section_name", "scroll_percent", "why_optimize", "css_selector"],
-                        additionalProperties: false,
-                      },
-                    },
-                  },
-                  required: ["sections"],
-                  additionalProperties: false,
-                },
-              },
-            },
-          ],
-          tool_choice: { type: "function", function: { name: "identify_sections" } },
-        }),
-      });
-
-      if (!resp.ok) {
-        console.error(`[CRO AI] Model ${model} failed: ${resp.status}`);
-        continue;
-      }
-
-      const data = await resp.json();
-      const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-      if (toolCall?.function?.arguments) {
-        const parsed = JSON.parse(toolCall.function.arguments);
-        const sections = (parsed.sections || []) as CROSection[];
-        if (sections.length > 0) {
-          console.log(`[CRO AI] Success with ${model}: ${sections.length} sections`);
-          return sections;
-        }
-      }
-    } catch (e) {
-      console.error(`[CRO AI] Model ${model} error:`, e);
-    }
-  }
-
-  console.error("[CRO AI] All models failed");
-  return [];
-}
-
-// ── Targeted section screenshot via Firecrawl ─────────────────────────────────
-async function captureSectionScreenshot(
-  url: string,
-  section: CROSection,
-  firecrawlKey: string
+  firecrawlKey: string,
+  viewport: { width: number; height: number },
+  label: string
 ): Promise<Uint8Array | null> {
-  const DEFAULT_PAGE_HEIGHT = 6000;
-  const scrollPx = Math.round((section.scroll_percent / 100) * DEFAULT_PAGE_HEIGHT);
-  const selector = section.css_selector.replace(/'/g, "\\'");
-  const sectionKeyword = section.section_name.toLowerCase().split(" ")[0].replace(/'/g, "\\'");
-
-  // JavaScript that scrolls the target element into view and hides overlays
-  const scrollJs = `
-    (function() {
-      document.querySelectorAll('*').forEach(function(node) {
-        var s = getComputedStyle(node);
-        if (s.position === 'fixed' || s.position === 'sticky') {
-          node.style.setProperty('display', 'none', 'important');
-        }
-      });
-      var el = document.querySelector('${selector}');
-      if (!el) {
-        var tags = ['section', 'div', 'header', 'footer', 'main', 'article', 'aside'];
-        for (var i = 0; i < tags.length; i++) {
-          var all = document.querySelectorAll(tags[i]);
-          for (var j = 0; j < all.length; j++) {
-            var text = (all[j].className || '') + ' ' + (all[j].id || '') + ' ' + (all[j].textContent || '').substring(0, 300);
-            if (text.toLowerCase().indexOf('${sectionKeyword}') !== -1) {
-              el = all[j]; break;
-            }
-          }
-          if (el) break;
-        }
-      }
-      if (el) {
-        el.scrollIntoView({ block: 'center', behavior: 'instant' });
-        return 'found:' + el.tagName + '.' + (el.className || '').substring(0, 50);
-      }
-      window.scrollTo(0, ${scrollPx});
-      return 'fallback:scrolled_to_' + ${scrollPx} + 'px';
-    })()
-  `;
-
-  console.log(`[Screenshot] Capturing "${section.section_name}" — selector: "${section.css_selector}", scroll: ${section.scroll_percent}%`);
-
+  console.log(`[Screenshot] Capturing ${label} (${viewport.width}x${viewport.height}): ${url}`);
   try {
-    // IMPORTANT: Do NOT include "screenshot" in formats — that captures a full-page screenshot.
-    // Instead, use the actions-based screenshot which captures only the current viewport.
     const resp = await fetch(`${FIRECRAWL_API}/scrape`, {
       method: "POST",
       headers: {
@@ -245,81 +94,53 @@ async function captureSectionScreenshot(
       },
       body: JSON.stringify({
         url,
-        formats: [],
+        formats: ["screenshot@fullPage"],
         waitFor: 3000,
         actions: [
           { type: "wait", milliseconds: 2000 },
-          { type: "executeJavascript", script: scrollJs },
-          { type: "wait", milliseconds: 1500 },
-          { type: "screenshot", fullPage: false },
+          { type: "screenshot", fullPage: true },
         ],
       }),
     });
 
     if (!resp.ok) {
       const errBody = await resp.text();
-      console.error(`[Screenshot] Firecrawl error for "${section.section_name}": ${resp.status} — ${errBody.substring(0, 500)}`);
+      console.error(`[Screenshot] Firecrawl error for ${label}: ${resp.status} — ${errBody.substring(0, 500)}`);
       return null;
     }
 
     const data = await resp.json();
-    
-    // Log the response structure to debug
-    const topKeys = Object.keys(data);
-    const dataKeys = data.data ? Object.keys(data.data) : [];
-    console.log(`[Screenshot] Response keys: top=[${topKeys}], data=[${dataKeys}]`);
 
-    // The action-based screenshot may be in different locations
+    // Find screenshot in response (actions.screenshots or top-level)
     let screenshotField = "";
-    
-    // Check actions.screenshots array (Firecrawl's actual response format)
-    if (data.data?.actions?.screenshots && data.data.actions.screenshots.length > 0) {
+    if (data.data?.actions?.screenshots?.length > 0) {
       screenshotField = data.data.actions.screenshots[data.data.actions.screenshots.length - 1];
-      console.log(`[Screenshot] Found in actions.screenshots for "${section.section_name}"`);
     }
-    
-    // Check actions.results (alternative format)
-    if (!screenshotField && data.data?.actions?.results) {
-      for (const result of data.data.actions.results) {
-        if (result?.screenshot) {
-          screenshotField = result.screenshot;
-          console.log(`[Screenshot] Found in actions.results for "${section.section_name}"`);
-          break;
-        }
-      }
-    }
-    
-    // Fallback to top-level screenshot fields
     if (!screenshotField) {
       screenshotField = data.data?.screenshot || data.screenshot || "";
     }
-    
+
     if (!screenshotField) {
-      console.warn(`[Screenshot] No screenshot data found for "${section.section_name}"`);
+      console.warn(`[Screenshot] No screenshot data for ${label}`);
       return null;
     }
 
-    // Handle URL (Google Cloud Storage) or base64
+    // Handle URL or base64
     if (screenshotField.startsWith("http")) {
-      console.log(`[Screenshot] Downloading from URL for "${section.section_name}"`);
       const imgRes = await fetch(screenshotField);
-      if (!imgRes.ok) {
-        console.error(`[Screenshot] Image download failed: ${imgRes.status}`);
-        return null;
-      }
+      if (!imgRes.ok) return null;
       return new Uint8Array(await imgRes.arrayBuffer());
     }
 
-    // Base64 decode
     const raw = screenshotField.replace(/^data:image\/[a-z]+;base64,/, "");
     const padded = raw + "=".repeat((4 - (raw.length % 4)) % 4);
     const binaryStr = atob(padded);
     const bytes = new Uint8Array(binaryStr.length);
     for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-    console.log(`[Screenshot] Decoded base64 for "${section.section_name}" — ${bytes.length} bytes`);
+    console.log(`[Screenshot] ${label}: ${bytes.length} bytes`);
     return bytes;
   } catch (e) {
-    console.error(`[Screenshot] Error for "${section.section_name}":`, e);
+    console.error(`[Screenshot] Error for ${label}:`, e);
     return null;
   }
 }
@@ -336,9 +157,7 @@ async function attachImageToAsana(
     formData.append("file", new Blob([imageBytes], { type: "image/png" }), filename);
     const res = await fetch(`${ASANA_API}/tasks/${taskGid}/attachments`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${asanaToken}`,
-      },
+      headers: { Authorization: `Bearer ${asanaToken}` },
       body: formData,
     });
     if (!res.ok) {
@@ -362,10 +181,7 @@ async function uploadToStorage(
     const { error } = await sb.storage
       .from("audit-assets")
       .upload(`screenshots/${filename}`, pngBytes, { contentType: "image/png", upsert: true });
-    if (error) {
-      console.error("Storage upload error:", error);
-      return null;
-    }
+    if (error) { console.error("Storage upload error:", error); return null; }
     const { data: urlData } = sb.storage.from("audit-assets").getPublicUrl(`screenshots/${filename}`);
     return urlData?.publicUrl ?? null;
   } catch (e) {
@@ -376,21 +192,16 @@ async function uploadToStorage(
 
 // ── Asana: find or create a tag ───────────────────────────────────────────────
 async function findOrCreateAsanaTag(
-  tagName: string,
-  workspaceGid: string,
-  asanaToken: string
+  tagName: string, workspaceGid: string, asanaToken: string
 ): Promise<string | null> {
   try {
-    // Search for existing tag
     const searchRes = await asanaFetch(
-      `/workspaces/${workspaceGid}/tags?opt_fields=name&limit=100`,
-      asanaToken
+      `/workspaces/${workspaceGid}/tags?opt_fields=name&limit=100`, asanaToken
     );
     const existing = (searchRes as Array<{ gid: string; name: string }>)
       .find((t) => t.name.toLowerCase() === tagName.toLowerCase());
     if (existing) return existing.gid;
 
-    // Create new tag
     const newTag = await asanaFetch("/tags", asanaToken, {
       method: "POST",
       body: JSON.stringify({ data: { name: tagName, workspace: workspaceGid } }),
@@ -400,32 +211,6 @@ async function findOrCreateAsanaTag(
     console.error(`Tag creation failed for "${tagName}":`, e);
     return null;
   }
-}
-
-// ── Parse URLs from Asana card notes ──────────────────────────────────────────
-function parseUrlsFromNotes(notes: string): { websiteUrl: string | null; focusUrls: string[] } {
-  const lines = notes.split("\n").map((l) => l.trim());
-  let websiteUrl: string | null = null;
-  const focusUrls: string[] = [];
-
-  for (const line of lines) {
-    const lower = line.toLowerCase();
-    if (lower.startsWith("website url:") || lower.startsWith("website:")) {
-      const url = line.split(":").slice(1).join(":").trim();
-      if (url.startsWith("http")) websiteUrl = url;
-    } else if (lower.startsWith("focus url:") || lower.startsWith("focus page:") || lower.startsWith("focus:")) {
-      const url = line.split(":").slice(1).join(":").trim();
-      if (url.startsWith("http")) focusUrls.push(url);
-    }
-  }
-
-  if (!websiteUrl) {
-    for (const line of lines) {
-      if (line.startsWith("http")) { websiteUrl = line; break; }
-    }
-  }
-
-  return { websiteUrl, focusUrls };
 }
 
 // ── Main handler ─────────────────────────────────────────────────────────────
@@ -439,13 +224,8 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const {
-      client_name,
-      shop_url,
-      focus_url,
-      tier = "pro",
-      existing_task_gid,
-      pages,
-      extra_urls,
+      client_name, shop_url, focus_url, tier = "pro",
+      existing_task_gid, pages, extra_urls,
     } = body;
 
     if (!client_name || !shop_url) {
@@ -469,12 +249,10 @@ serve(async (req) => {
     const screenshotUrls: Record<string, string> = {};
     const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
 
-    // Determine page count for the custom field
     const pageCount: number | null = tier === "pro" && pages ? Number(pages) : (
       tier === "essential" && extra_urls ? (extra_urls as string[]).length + 1 : null
     );
 
-    // Build custom fields for every new card
     const customFields: Record<string, string> = {
       [CF_TYPE]: CF_TYPE_REPORT,
       [CF_BREAKPOINTS]: CF_BREAKPOINTS_BOTH,
@@ -514,7 +292,7 @@ serve(async (req) => {
           }),
         });
         taskGid = task.gid;
-        steps[steps.length - 1] = { step: 1, name: "Create Asana Card", status: "done", detail: `Created task ${taskGid} with custom fields` };
+        steps[steps.length - 1] = { step: 1, name: "Create Asana Card", status: "done", detail: `Created task ${taskGid}` };
       }
     } catch (e) {
       steps[steps.length - 1] = { step: 1, name: "Create Asana Card", status: "error", error: String(e) };
@@ -530,111 +308,74 @@ serve(async (req) => {
         method: "POST",
         body: JSON.stringify({ data: { task: taskGid } }),
       });
-      steps[steps.length - 1] = { step: 2, name: "Move to Ready for Setup", status: "done", detail: "Moved to Ready for Setup column" };
+      steps[steps.length - 1] = { step: 2, name: "Move to Ready for Setup", status: "done" };
     } catch (e) {
       steps[steps.length - 1] = { step: 2, name: "Move to Ready for Setup", status: "error", error: String(e) };
     }
 
-    // ── STEP 3: AI-driven targeted section screenshots ─────────────────────
-    steps.push({ step: 3, name: "CRO Section Screenshots", status: "running" });
-    const lovableApiKey = getLovableApiKey();
+    // ── STEP 3: Homepage screenshots (Desktop + Mobile) ──────────────────────
+    steps.push({ step: 3, name: "Homepage Screenshots", status: "running" });
     if (!firecrawlKey) {
-      steps[steps.length - 1] = { step: 3, name: "CRO Section Screenshots", status: "skipped", detail: "No Firecrawl API key — connect Firecrawl in Settings" };
-    } else if (!lovableApiKey) {
-      steps[steps.length - 1] = { step: 3, name: "CRO Section Screenshots", status: "skipped", detail: "No LOVABLE_API_KEY configured" };
+      steps[steps.length - 1] = { step: 3, name: "Homepage Screenshots", status: "skipped", detail: "No Firecrawl API key" };
     } else {
       try {
-        const mainUrl = shop_url;
         const slug = client_name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
         const ts = Date.now();
+        const mainUrl = shop_url;
 
-        // 3A: Scrape the page to get markdown for AI analysis
-        console.log("Scraping page for CRO section identification:", mainUrl);
-        const scrapeResp = await fetch(`${FIRECRAWL_API}/scrape`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${firecrawlKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ url: mainUrl, formats: ["markdown"], onlyMainContent: true, waitFor: 2000 }),
-        });
+        // Capture desktop + mobile in parallel
+        const [desktopBytes, mobileBytes] = await Promise.all([
+          captureHomepageScreenshot(mainUrl, firecrawlKey, { width: 1440, height: 900 }, "Desktop"),
+          captureHomepageScreenshot(mainUrl, firecrawlKey, { width: 390, height: 844 }, "Mobile"),
+        ]);
 
-        let markdown = "";
-        if (scrapeResp.ok) {
-          const scrapeData = await scrapeResp.json();
-          markdown = scrapeData.data?.markdown || scrapeData.markdown || "";
-        }
+        const results: string[] = [];
 
-        // 3B: AI identifies key CRO sections
-        console.log(`[Step 3B] Identifying CRO sections with AI (markdown length: ${markdown.length})...`);
-        const sections = await identifyCROSections(mainUrl, markdown, lovableApiKey);
-        console.log(`[Step 3B] AI identified ${sections.length} sections:`);
-        for (const s of sections) {
-          console.log(`  → "${s.section_name}" at ${s.scroll_percent}% — selector: "${s.css_selector}"`);
-        }
-
-        if (sections.length === 0) {
-          steps[steps.length - 1] = { step: 3, name: "CRO Section Screenshots", status: "error", detail: "AI could not identify sections" };
+        // Upload & attach desktop
+        if (desktopBytes) {
+          const filename = `${slug}-desktop-${ts}.png`;
+          const url = await uploadToStorage(sb, desktopBytes, filename);
+          if (url) screenshotUrls["Desktop"] = url;
+          if (taskGid) await attachImageToAsana(taskGid, asanaToken, desktopBytes, `${client_name} - Desktop.png`);
+          results.push(`✓ Desktop (${desktopBytes.length} bytes)`);
         } else {
-          // 3C: Capture targeted screenshot for each section (3 at a time)
-          const sectionResults: string[] = [];
-          for (let i = 0; i < sections.length; i += 3) {
-            const batch = sections.slice(i, i + 3);
-            const batchResults = await Promise.all(
-              batch.map(async (section) => {
-                const bytes = await captureSectionScreenshot(mainUrl, section, firecrawlKey);
-                if (!bytes) return { section, url: null, bytes: null };
-
-                const sectionSlug = section.section_name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-                const filename = `${slug}-${sectionSlug}-${ts}.png`;
-                const url = await uploadToStorage(sb, bytes, filename);
-                return { section, url, bytes };
-              })
-            );
-
-            for (const result of batchResults) {
-              if (result.url) {
-                screenshotUrls[result.section.section_name] = result.url;
-                sectionResults.push(`✓ ${result.section.section_name}`);
-
-                // 3D: Attach to Asana task as attachment
-                if (taskGid && result.bytes) {
-                  await attachImageToAsana(
-                    taskGid,
-                    asanaToken,
-                    result.bytes,
-                    `${result.section.section_name}.png`
-                  );
-                }
-              } else {
-                sectionResults.push(`✗ ${result.section.section_name}`);
-              }
-            }
-          }
-
-          const successCount = Object.keys(screenshotUrls).length;
-          steps[steps.length - 1] = {
-            step: 3, name: "CRO Section Screenshots", status: successCount > 0 ? "done" : "error",
-            detail: `${successCount}/${sections.length} sections captured — ${sectionResults.join(" | ")}`,
-          };
+          results.push("✗ Desktop");
         }
+
+        // Upload & attach mobile
+        if (mobileBytes) {
+          const filename = `${slug}-mobile-${ts}.png`;
+          const url = await uploadToStorage(sb, mobileBytes, filename);
+          if (url) screenshotUrls["Mobile"] = url;
+          if (taskGid) await attachImageToAsana(taskGid, asanaToken, mobileBytes, `${client_name} - Mobile.png`);
+          results.push(`✓ Mobile (${mobileBytes.length} bytes)`);
+        } else {
+          results.push("✗ Mobile");
+        }
+
+        const successCount = Object.keys(screenshotUrls).length;
+        steps[steps.length - 1] = {
+          step: 3, name: "Homepage Screenshots",
+          status: successCount > 0 ? "done" : "error",
+          detail: results.join(" | "),
+        };
       } catch (e) {
         console.error("Step 3 error:", e);
-        steps[steps.length - 1] = { step: 3, name: "CRO Section Screenshots", status: "error", error: String(e) };
+        steps[steps.length - 1] = { step: 3, name: "Homepage Screenshots", status: "error", error: String(e) };
       }
     }
 
-    // ── STEP 4: Update Asana card notes with section screenshots ─────────────
-    steps.push({ step: 4, name: "Update Asana Card Notes", status: "running" });
+    // ── STEP 4: Update Asana card notes with screenshot URLs ─────────────────
+    steps.push({ step: 4, name: "Update Asana Notes", status: "running" });
     try {
       const existing = await asanaFetch(`/tasks/${taskGid}?opt_fields=notes`, asanaToken);
       const parts = [existing.notes ?? ""];
 
       if (Object.keys(screenshotUrls).length > 0) {
-        const screenshotSummary = Object.entries(screenshotUrls)
-          .map(([section, url]) => `  📌 ${section}: ${url}`)
+        const lines = Object.entries(screenshotUrls)
+          .map(([label, url]) => `  📸 ${label}: ${url}`)
           .join("\n");
-        parts.push(`\n\n📸 Section Screenshots:\n${screenshotSummary}`);
+        parts.push(`\n\n📸 Homepage Screenshots:\n${lines}`);
       }
 
       const newNotes = parts.join("").trim();
@@ -644,29 +385,21 @@ serve(async (req) => {
           body: JSON.stringify({ data: { notes: newNotes } }),
         });
       }
-      steps[steps.length - 1] = {
-        step: 4, name: "Update Asana Card Notes", status: "done",
-        detail: `${Object.keys(screenshotUrls).length} section screenshot URLs in notes`,
-      };
+      steps[steps.length - 1] = { step: 4, name: "Update Asana Notes", status: "done" };
     } catch (e) {
-      steps[steps.length - 1] = { step: 4, name: "Update Asana Card Notes", status: "error", error: String(e) };
+      steps[steps.length - 1] = { step: 4, name: "Update Asana Notes", status: "error", error: String(e) };
     }
 
-    // ── STEP 5: Add tags to Asana card ────────────────────────────────────────
+    // ── STEP 5: Add tags ─────────────────────────────────────────────────────
     steps.push({ step: 5, name: "Add Asana Tags", status: "running" });
     try {
-      // Get workspace GID from the task
       const taskDetail = await asanaFetch(`/tasks/${taskGid}?opt_fields=workspace.gid`, asanaToken);
       const workspaceGid = taskDetail?.workspace?.gid;
 
       if (!workspaceGid) {
-        steps[steps.length - 1] = { step: 5, name: "Add Asana Tags", status: "skipped", detail: "Could not determine workspace" };
+        steps[steps.length - 1] = { step: 5, name: "Add Asana Tags", status: "skipped", detail: "No workspace" };
       } else {
-        const tagNames = [
-          `Tier: ${tierLabel}`,
-          "Auto-Setup",
-        ];
-
+        const tagNames = [`Tier: ${tierLabel}`, "Auto-Setup"];
         const tagResults: string[] = [];
         for (const tagName of tagNames) {
           const tagGid = await findOrCreateAsanaTag(tagName, workspaceGid, asanaToken);
@@ -680,21 +413,20 @@ serve(async (req) => {
             tagResults.push(`✗ ${tagName}`);
           }
         }
-
         steps[steps.length - 1] = { step: 5, name: "Add Asana Tags", status: "done", detail: tagResults.join(" | ") };
       }
     } catch (e) {
       steps[steps.length - 1] = { step: 5, name: "Add Asana Tags", status: "error", error: String(e) };
     }
 
-    // ── STEP 6: Attempt Figma template duplication (best-effort) ──────────────
+    // ── STEP 6: Duplicate Figma templates ────────────────────────────────────
     steps.push({ step: 6, name: "Duplicate Figma Templates", status: "running" });
     if (!figmaToken) {
-      steps[steps.length - 1] = { step: 6, name: "Duplicate Figma Templates", status: "skipped", detail: "No Figma token — add one in Settings" };
+      steps[steps.length - 1] = { step: 6, name: "Duplicate Figma Templates", status: "skipped", detail: "No Figma token" };
     } else {
       const figmaResults: string[] = [];
 
-      // Try audit template
+      // Audit template
       try {
         const dupRes = await fetch(`${FIGMA_API}/files/${DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY}/duplicate`, {
           method: "POST",
@@ -706,18 +438,16 @@ serve(async (req) => {
           const newKey = dupData.key ?? dupData.file?.key ?? null;
           if (newKey) {
             figmaFileLink = `https://www.figma.com/file/${newKey}`;
-            figmaResults.push(`Audit: ✓ ${figmaFileLink}`);
+            figmaResults.push(`Audit: ✓`);
           }
         } else {
-          const errText = await dupRes.text();
-          console.warn(`Figma audit duplication failed [${dupRes.status}]:`, errText);
-          figmaResults.push(`Audit: skipped (API ${dupRes.status} — Figma may not support REST duplication on this plan)`);
+          figmaResults.push(`Audit: skipped (${dupRes.status})`);
         }
       } catch (e) {
         figmaResults.push(`Audit: error — ${e}`);
       }
 
-      // Try slides template
+      // Slides template
       try {
         const dupRes = await fetch(`${FIGMA_API}/files/${DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY}/duplicate`, {
           method: "POST",
@@ -729,22 +459,31 @@ serve(async (req) => {
           const newKey = dupData.key ?? dupData.file?.key ?? null;
           if (newKey) {
             figmaSlidesLink = `https://www.figma.com/file/${newKey}`;
-            figmaResults.push(`Slides: ✓ ${figmaSlidesLink}`);
+            figmaResults.push(`Slides: ✓`);
           }
         } else {
-          figmaResults.push(`Slides: skipped (API ${dupRes.status})`);
+          figmaResults.push(`Slides: skipped (${dupRes.status})`);
         }
       } catch (e) {
         figmaResults.push(`Slides: error — ${e}`);
       }
 
-      // If any Figma links were created, append them to Asana notes
+      // Append Figma links to Asana notes
       if (figmaFileLink || figmaSlidesLink) {
         try {
           const existing = await asanaFetch(`/tasks/${taskGid}?opt_fields=notes`, asanaToken);
           const additions: string[] = [];
           if (figmaFileLink) additions.push(`📎 Figma File: ${figmaFileLink}`);
           if (figmaSlidesLink) additions.push(`📊 Figma Slides: ${figmaSlidesLink}`);
+
+          // Also add screenshot URLs for easy Figma paste
+          if (Object.keys(screenshotUrls).length > 0) {
+            additions.push(`\n🖼️ Paste these into Figma template frames:`);
+            for (const [label, url] of Object.entries(screenshotUrls)) {
+              additions.push(`  → ${label} Screenshot: ${url}`);
+            }
+          }
+
           const newNotes = `${existing.notes ?? ""}\n\n${additions.join("\n")}`.trim();
           await asanaFetch(`/tasks/${taskGid}`, asanaToken, {
             method: "PUT",
@@ -762,11 +501,8 @@ serve(async (req) => {
       };
     }
 
-    // ── STEP 7: Keep card in Ready for Setup (human moves to Setup Complete) ──
-    // IMPORTANT: Do NOT move to Setup Complete automatically.
-    // An Asana automation rule moves cards from Setup Complete → Oddit Design.
-    // Only a human should trigger that transition.
-    steps.push({ step: 7, name: "Card Placement", status: "done", detail: "Card stays in Ready for Setup — human moves to Setup Complete when ready" });
+    // ── STEP 7: Card stays in Ready for Setup ────────────────────────────────
+    steps.push({ step: 7, name: "Card Placement", status: "done", detail: "Card stays in Ready for Setup — human moves to Setup Complete" });
 
     // ── Activity log ──────────────────────────────────────────────────────────
     const allOk = steps.every((s) => s.status === "done" || s.status === "skipped");
