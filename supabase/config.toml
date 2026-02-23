@@ -63,4 +63,7 @@ verify_jwt = false
 [functions.create-checkout-session]
 verify_jwt = false
 
+[functions.slack-events]
+verify_jwt = false
+
 
