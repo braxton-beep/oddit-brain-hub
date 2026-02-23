@@ -19,10 +19,15 @@ import {
   Camera,
   MoveRight,
   Play,
+  RotateCcw,
+  Bell,
+  BellOff,
+  ScrollText,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-
+import { formatDistanceToNow } from "date-fns";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type StepStatus = "done" | "error" | "skipped";
@@ -52,6 +57,15 @@ interface SetupRun {
   started_at: string;
   completed_at: string | null;
   created_at: string;
+}
+
+// ── Audit trail entry ────────────────────────────────────────────────────────
+interface AuditTrailEntry {
+  id: string;
+  timestamp: string;
+  action: string;
+  detail: string;
+  runId?: string;
 }
 
 // ── Status badge ──────────────────────────────────────────────────────────────
@@ -103,7 +117,7 @@ function RunStatusBadge({ status }: { status: RunStatus }) {
 }
 
 // ── Individual run card ───────────────────────────────────────────────────────
-function RunCard({ run }: { run: SetupRun }) {
+function RunCard({ run, onRetryStep, onAddAuditEntry }: { run: SetupRun; onRetryStep: (runId: string, stepName: string) => void; onAddAuditEntry: (entry: Omit<AuditTrailEntry, "id">) => void }) {
   const [expanded, setExpanded] = useState(run.status === "running" || run.status === "error");
   const steps = run.steps ?? [];
 
@@ -127,7 +141,6 @@ function RunCard({ run }: { run: SetupRun }) {
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/20 transition-colors text-left"
       >
         <div className="flex items-center gap-3 min-w-0">
-          {/* Running pulse dot */}
           {run.status === "running" && (
             <span className="relative flex h-2.5 w-2.5 shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
@@ -220,6 +233,25 @@ function RunCard({ run }: { run: SetupRun }) {
                     >
                       {step.name}
                     </span>
+                    {/* Retry button for failed steps */}
+                    {step.status === "error" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRetryStep(run.id, step.name);
+                          onAddAuditEntry({
+                            timestamp: new Date().toISOString(),
+                            action: "Retry Step",
+                            detail: `Retried "${step.name}" for ${run.client_name}`,
+                            runId: run.id,
+                          });
+                        }}
+                        className="flex items-center gap-1 rounded-md bg-destructive/10 border border-destructive/20 px-2 py-0.5 text-[10px] font-bold text-destructive hover:bg-destructive/20 transition-colors"
+                      >
+                        <RotateCcw className="h-2.5 w-2.5" />
+                        Retry
+                      </button>
+                    )}
                   </div>
                   {step.detail && (
                     <p className="text-xs text-muted-foreground pl-5 mt-0.5 break-all leading-relaxed">
@@ -281,41 +313,11 @@ const WORKFLOW_STEPS: Array<{
   mode: "manual" | "automated";
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  {
-    number: 1,
-    label: "Card moved to Ready For Setup",
-    description: "Someone moves the Asana card into the Ready For Setup column — this is the trigger.",
-    mode: "manual",
-    icon: ArrowRight,
-  },
-  {
-    number: 2,
-    label: "Screenshots captured",
-    description: "Desktop (1440px) and mobile (390px) screenshots taken of the website URL and focus URL on the card.",
-    mode: "automated",
-    icon: Camera,
-  },
-  {
-    number: 3,
-    label: "Figma template duplicated & injected",
-    description: "The template file is duplicated for the client, screenshots injected into the correct frames.",
-    mode: "automated",
-    icon: Figma,
-  },
-  {
-    number: 4,
-    label: "Figma links posted to Asana card",
-    description: "The new Figma file URL and (if applicable) Figma Slides URL are written back into the card description.",
-    mode: "automated",
-    icon: Link2,
-  },
-  {
-    number: 5,
-    label: "Card moved to Setup Complete",
-    description: "The card is automatically moved to the Setup Complete column — ready for the next person.",
-    mode: "automated",
-    icon: MoveRight,
-  },
+  { number: 1, label: "Card moved to Ready For Setup", description: "Someone moves the Asana card into the Ready For Setup column — this is the trigger.", mode: "manual", icon: ArrowRight },
+  { number: 2, label: "Screenshots captured", description: "Desktop (1440px) and mobile (390px) screenshots taken of the website URL and focus URL on the card.", mode: "automated", icon: Camera },
+  { number: 3, label: "Figma template duplicated & injected", description: "The template file is duplicated for the client, screenshots injected into the correct frames.", mode: "automated", icon: Figma },
+  { number: 4, label: "Figma links posted to Asana card", description: "The new Figma file URL and (if applicable) Figma Slides URL are written back into the card description.", mode: "automated", icon: Link2 },
+  { number: 5, label: "Card moved to Setup Complete", description: "The card is automatically moved to the Setup Complete column — ready for the next person.", mode: "automated", icon: MoveRight },
 ];
 
 function WorkflowPipeline() {
@@ -343,7 +345,6 @@ function WorkflowPipeline() {
 
           return (
             <div key={step.number} className="flex gap-4">
-              {/* Timeline */}
               <div className="flex flex-col items-center shrink-0">
                 <div
                   className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold border-2 transition-colors ${
@@ -356,32 +357,24 @@ function WorkflowPipeline() {
                 </div>
                 {!isLast && (
                   <div
-                    className={`w-px flex-1 mt-1 ${
-                      isManual ? "bg-muted-foreground/15" : "bg-primary/20"
-                    }`}
+                    className={`w-px flex-1 mt-1 ${isManual ? "bg-muted-foreground/15" : "bg-primary/20"}`}
                     style={{ minHeight: 24 }}
                   />
                 )}
               </div>
-
-              {/* Content */}
               <div className={`pb-5 flex-1 min-w-0 ${isLast ? "pb-1" : ""}`}>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <span className="text-sm font-medium text-foreground">{step.label}</span>
                   <span
                     className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${
-                      isManual
-                        ? "bg-muted text-muted-foreground"
-                        : "bg-primary/10 text-primary"
+                      isManual ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"
                     }`}
                   >
                     {isManual ? "Manual" : "Automated"}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5 pl-5 leading-relaxed">
-                  {step.description}
-                </p>
+                <p className="text-xs text-muted-foreground mt-0.5 pl-5 leading-relaxed">{step.description}</p>
               </div>
             </div>
           );
@@ -564,12 +557,51 @@ function ManualRunForm() {
   );
 }
 
+// ── Audit Trail ───────────────────────────────────────────────────────────────
+function AuditTrail({ entries }: { entries: AuditTrailEntry[] }) {
+  if (entries.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="px-5 py-3 border-b border-border flex items-center gap-2">
+        <ScrollText className="h-4 w-4 text-muted-foreground" />
+        <p className="text-xs font-semibold text-foreground uppercase tracking-wider">Audit Trail</p>
+        <span className="text-[10px] text-muted-foreground ml-auto">{entries.length} events</span>
+      </div>
+      <div className="max-h-64 overflow-y-auto divide-y divide-border">
+        {entries.map((entry) => (
+          <div key={entry.id} className="px-5 py-3 flex items-start gap-3">
+            <User className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-semibold text-foreground">{entry.action}</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{entry.detail}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ReportSetup() {
   const [runs, setRuns] = useState<SetupRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [polling, setPolling] = useState(false);
   const [filter, setFilter] = useState<"all" | RunStatus>("all");
+  const [slackOnFailure, setSlackOnFailure] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("reportSetup_slackOnFailure") ?? "false"); } catch { return false; }
+  });
+  const [slackChannel, setSlackChannel] = useState(() => localStorage.getItem("reportSetup_slackChannel") ?? "#alerts");
+  const [auditTrail, setAuditTrail] = useState<AuditTrailEntry[]>([]);
+
+  const addAuditEntry = (entry: Omit<AuditTrailEntry, "id">) => {
+    setAuditTrail((prev) => [{ ...entry, id: crypto.randomUUID() }, ...prev]);
+  };
 
   // Load existing runs
   async function loadRuns() {
@@ -589,11 +621,10 @@ export default function ReportSetup() {
 
   useEffect(() => {
     loadRuns();
+    addAuditEntry({ timestamp: new Date().toISOString(), action: "Page Loaded", detail: "Setup Monitor opened" });
 
-    // Auto-poll every 5 seconds to keep stats and list fresh
     const interval = setInterval(loadRuns, 5000);
 
-    // Subscribe to realtime updates for instant feedback
     const channel = supabase
       .channel("setup_runs_feed")
       .on(
@@ -602,10 +633,30 @@ export default function ReportSetup() {
         (payload) => {
           if (payload.eventType === "INSERT") {
             setRuns((prev) => [payload.new as unknown as SetupRun, ...prev]);
+            addAuditEntry({
+              timestamp: new Date().toISOString(),
+              action: "Run Created",
+              detail: `New run for ${(payload.new as any).client_name ?? "unknown"}`,
+              runId: (payload.new as any).id,
+            });
           } else if (payload.eventType === "UPDATE") {
-            setRuns((prev) =>
-              prev.map((r) => (r.id === payload.new.id ? (payload.new as unknown as SetupRun) : r))
-            );
+            const updated = payload.new as unknown as SetupRun;
+            setRuns((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+            if (updated.status === "error") {
+              addAuditEntry({
+                timestamp: new Date().toISOString(),
+                action: "Run Failed",
+                detail: `${updated.client_name} — ${updated.error || "Unknown error"}`,
+                runId: updated.id,
+              });
+            } else if (updated.status === "done") {
+              addAuditEntry({
+                timestamp: new Date().toISOString(),
+                action: "Run Completed",
+                detail: `${updated.client_name} finished successfully`,
+                runId: updated.id,
+              });
+            }
           }
         }
       )
@@ -617,12 +668,20 @@ export default function ReportSetup() {
     };
   }, []);
 
+  // Persist slack settings
+  useEffect(() => {
+    localStorage.setItem("reportSetup_slackOnFailure", JSON.stringify(slackOnFailure));
+  }, [slackOnFailure]);
+  useEffect(() => {
+    localStorage.setItem("reportSetup_slackChannel", slackChannel);
+  }, [slackChannel]);
+
   async function handlePollNow() {
     setPolling(true);
+    addAuditEntry({ timestamp: new Date().toISOString(), action: "Poll Triggered", detail: "Manual poll for new Asana cards" });
     try {
       const { data, error } = await supabase.functions.invoke("poll-asana-setups", {});
       if (error) throw error;
-
       if (data?.processed === 0) {
         toast.info(data?.message ?? "No new cards in Ready For Setup");
       } else {
@@ -633,6 +692,19 @@ export default function ReportSetup() {
       toast.error(`Poll failed: ${msg}`);
     } finally {
       setPolling(false);
+    }
+  }
+
+  async function handleRetryStep(runId: string, stepName: string) {
+    toast.info(`Retrying "${stepName}"…`);
+    try {
+      const { error } = await supabase.functions.invoke("run-report-setup", {
+        body: { retry_run_id: runId, retry_step: stepName },
+      });
+      if (error) throw error;
+      toast.success(`Retry triggered for "${stepName}"`);
+    } catch (e: unknown) {
+      toast.error(`Retry failed: ${e instanceof Error ? e.message : "Unknown error"}`);
     }
   }
 
@@ -673,16 +745,8 @@ export default function ReportSetup() {
             </p>
           </div>
 
-          <Button
-            onClick={handlePollNow}
-            disabled={polling}
-            className="shrink-0 gap-2"
-          >
-            {polling ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
+          <Button onClick={handlePollNow} disabled={polling} className="shrink-0 gap-2">
+            {polling ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             {polling ? "Polling…" : "Poll Now"}
           </Button>
         </div>
@@ -699,6 +763,46 @@ export default function ReportSetup() {
               <p className={`text-2xl font-bold mt-0.5 ${stat.color}`}>{stat.value}</p>
             </div>
           ))}
+        </div>
+
+        {/* Slack Notification on Failure Toggle */}
+        <div className="rounded-xl border border-border bg-card p-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              {slackOnFailure ? (
+                <Bell className="h-4 w-4 text-primary" />
+              ) : (
+                <BellOff className="h-4 w-4 text-muted-foreground" />
+              )}
+              <div>
+                <p className="text-sm font-semibold text-foreground">Slack Notification on Failure</p>
+                <p className="text-xs text-muted-foreground">Get alerted in Slack when a pipeline step fails</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {slackOnFailure && (
+                <input
+                  type="text"
+                  value={slackChannel}
+                  onChange={(e) => setSlackChannel(e.target.value)}
+                  placeholder="#channel"
+                  className="w-32 px-2.5 py-1.5 rounded-lg border border-border bg-secondary text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
+                />
+              )}
+              <button
+                onClick={() => setSlackOnFailure((v: boolean) => !v)}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border-2 border-transparent transition-colors ${
+                  slackOnFailure ? "bg-primary" : "bg-muted"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg transition-transform ${
+                    slackOnFailure ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Manual test run */}
@@ -735,9 +839,19 @@ export default function ReportSetup() {
           ) : filteredRuns.length === 0 ? (
             <EmptyState />
           ) : (
-            filteredRuns.map((run) => <RunCard key={run.id} run={run} />)
+            filteredRuns.map((run) => (
+              <RunCard
+                key={run.id}
+                run={run}
+                onRetryStep={handleRetryStep}
+                onAddAuditEntry={addAuditEntry}
+              />
+            ))
           )}
         </div>
+
+        {/* Audit Trail */}
+        <AuditTrail entries={auditTrail} />
       </div>
     </DashboardLayout>
   );

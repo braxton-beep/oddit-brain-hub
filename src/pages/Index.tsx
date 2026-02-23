@@ -32,6 +32,7 @@ import {
   Heart,
   Repeat2,
   Eye,
+  Rocket,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow, format } from "date-fns";
@@ -99,6 +100,104 @@ function SectionHeader({
   );
 }
 
+// ── Onboarding Card ──────────────────────────────────────
+function OnboardingCard() {
+  const { data: credentials } = useIntegrationCredentials();
+  const { data: clients } = useClients();
+  const [dismissed, setDismissed] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("onboarding_dismissed") ?? "false"); } catch { return false; }
+  });
+
+  const { data: tweetCount } = useQuery({
+    queryKey: ["onboard-tweet-count"],
+    queryFn: async () => {
+      const { count } = await supabase.from("twitter_tweets").select("*", { count: "exact", head: true });
+      return count ?? 0;
+    },
+  });
+
+  const { data: transcriptCount } = useQuery({
+    queryKey: ["onboard-transcript-count"],
+    queryFn: async () => {
+      const { count } = await supabase.from("fireflies_transcripts").select("*", { count: "exact", head: true });
+      return count ?? 0;
+    },
+  });
+
+  const { data: auditCount } = useQuery({
+    queryKey: ["onboard-audit-count"],
+    queryFn: async () => {
+      const { count } = await supabase.from("cro_audits").select("*", { count: "exact", head: true });
+      return count ?? 0;
+    },
+  });
+
+  if (dismissed) return null;
+
+  const connectedIds = new Set((credentials ?? []).map((c) => c.integration_id));
+
+  const steps = [
+    { label: "Connect OpenAI API key", done: connectedIds.has("openai") },
+    { label: "Connect Twitter/X", done: connectedIds.has("twitter-consumer-key") || (tweetCount ?? 0) > 0 },
+    { label: "Sync Meeting Transcripts", done: (transcriptCount ?? 0) > 0 },
+    { label: "Add First Client", done: (clients?.length ?? 0) > 0 },
+    { label: "Run First CRO Audit", done: (auditCount ?? 0) > 0 },
+  ];
+
+  const completedCount = steps.filter((s) => s.done).length;
+  const allDone = completedCount === steps.length;
+
+  return (
+    <div className="glow-card glow-card-violet rounded-xl bg-card p-5 mb-8 animate-fade-in relative">
+      {allDone && (
+        <button
+          onClick={() => { setDismissed(true); localStorage.setItem("onboarding_dismissed", "true"); }}
+          className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15">
+          <Rocket className="h-5 w-5 text-primary" />
+        </div>
+        <div>
+          <h2 className="text-base font-bold text-foreground">Get Started with Oddit Brain</h2>
+          <p className="text-xs text-muted-foreground">{completedCount} of {steps.length} complete</p>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-2 rounded-full bg-secondary overflow-hidden mb-4">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
+          style={{ width: `${(completedCount / steps.length) * 100}%` }}
+        />
+      </div>
+
+      {/* Steps */}
+      <div className="space-y-2">
+        {steps.map((step, i) => (
+          <div key={i} className="flex items-center gap-3">
+            {step.done ? (
+              <CheckCircle2 className="h-4 w-4 text-accent shrink-0" />
+            ) : (
+              <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 shrink-0" />
+            )}
+            <span className={`text-sm ${step.done ? "text-muted-foreground line-through" : "text-foreground font-medium"}`}>
+              {step.label}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {allDone && (
+        <p className="text-xs text-accent font-semibold mt-4">🎉 All set! Your Brain is ready to go.</p>
+      )}
+    </div>
+  );
+}
+
 // ── AI News Feed ─────────────────────────────────────────
 const AI_NEWS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-news`;
 
@@ -116,7 +215,7 @@ function AINewsFeed() {
       if (!res.ok) throw new Error("Failed to fetch news");
       return res.json() as Promise<{ news: NewsItem[]; fetched_at: string }>;
     },
-    staleTime: 1000 * 60 * 30, // 30 min cache
+    staleTime: 1000 * 60 * 30,
   });
 
   return (
@@ -379,7 +478,6 @@ function TweetIntelFeed() {
         .order("like_count", { ascending: false })
         .limit(300);
       if (error) throw error;
-      // Filter client-side to tweets mentioning relevant topics
       return (data ?? []).filter((t) => {
         const lower = t.text.toLowerCase();
         return INTEL_TOPICS.some((kw) => lower.includes(kw));
@@ -515,35 +613,13 @@ const Index = () => {
     toast.success("Draft dismissed");
   };
 
-  // Quick nav items
   const quickActions = [
-    {
-      label: "Run CRO Audit",
-      icon: Brain,
-      color: "text-primary bg-primary/10 border-primary/20 hover:bg-primary/20",
-      href: "/oddit-brain",
-    },
-    {
-      label: "New Report",
-      icon: FileText,
-      color: "text-accent bg-accent/10 border-accent/20 hover:bg-accent/20",
-      href: "/reports",
-    },
-    {
-      label: "Competitive Intel",
-      icon: TrendingUp,
-      color: "text-coral bg-coral/10 border-coral/20 hover:bg-coral/20",
-      href: "/competitive-intel",
-    },
-    {
-      label: "Craft a Tweet",
-      icon: Sparkles,
-      color: "text-violet bg-violet/10 border-violet/20 hover:bg-violet/20",
-      href: "/twitter",
-    },
+    { label: "Run CRO Audit", icon: Brain, color: "text-primary bg-primary/10 border-primary/20 hover:bg-primary/20", href: "/oddit-brain" },
+    { label: "New Report", icon: FileText, color: "text-accent bg-accent/10 border-accent/20 hover:bg-accent/20", href: "/reports" },
+    { label: "Competitive Intel", icon: TrendingUp, color: "text-coral bg-coral/10 border-coral/20 hover:bg-coral/20", href: "/competitive-intel" },
+    { label: "Craft a Tweet", icon: Sparkles, color: "text-violet bg-violet/10 border-violet/20 hover:bg-violet/20", href: "/twitter" },
   ];
 
-  // Recent clients (last 3)
   const recentClients = (clients ?? []).slice(0, 3);
 
   return (
@@ -551,7 +627,6 @@ const Index = () => {
       {/* ── Header ────────────────────────────────────────── */}
       <div className="mb-8 flex items-center justify-between animate-fade-in">
         <div className="flex items-center gap-3">
-          {/* Oddit eyes logo mark */}
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[hsl(var(--primary)/0.15)] border border-[hsl(var(--primary)/0.25)]">
             <svg viewBox="0 0 44 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-6 w-auto">
               <circle cx="10" cy="12" r="9" stroke="hsl(var(--primary))" strokeWidth="3.5"/>
@@ -572,7 +647,6 @@ const Index = () => {
           </div>
         </div>
 
-        {/* Pending drafts alert */}
         {pendingCount > 0 && (
           <button
             onClick={() => pendingDrafts?.[0] && setSelectedDraft(pendingDrafts[0])}
@@ -585,30 +659,15 @@ const Index = () => {
         )}
       </div>
 
+      {/* ── Onboarding Card ───────────────────────────────── */}
+      <OnboardingCard />
+
       {/* ── Stat Row ──────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8 stagger-children">
         {[
-          {
-            label: "Clients",
-            value: auditStats?.totalClients ?? clients?.length ?? "—",
-            icon: Users,
-            color: "text-electric",
-            bg: "bg-electric/10",
-          },
-          {
-            label: "CRO Audits",
-            value: auditStats?.totalAudits ?? "—",
-            icon: Brain,
-            color: "text-primary",
-            bg: "bg-primary/10",
-          },
-          {
-            label: "Tweets Indexed",
-            value: tweetStats?.total ?? "—",
-            icon: BarChart3,
-            color: "text-violet",
-            bg: "bg-violet/10",
-          },
+          { label: "Clients", value: auditStats?.totalClients ?? clients?.length ?? "—", icon: Users, color: "text-electric", bg: "bg-electric/10" },
+          { label: "CRO Audits", value: auditStats?.totalAudits ?? "—", icon: Brain, color: "text-primary", bg: "bg-primary/10" },
+          { label: "Tweets Indexed", value: tweetStats?.total ?? "—", icon: BarChart3, color: "text-violet", bg: "bg-violet/10" },
           { label: "Integrations", value: `${connectedIds.size}`, icon: Zap, color: "text-gold", bg: "bg-gold/10" },
         ].map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className="glow-card rounded-xl bg-card p-4">
@@ -640,16 +699,13 @@ const Index = () => {
 
       {/* ── Main Grid ─────────────────────────────────────── */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left col — AI News + Tweet Intel + Greatest Hits */}
         <div className="lg:col-span-2 space-y-6">
           <AINewsFeed />
           <TweetIntelFeed />
           <GreatestHits />
         </div>
 
-        {/* Right col — Pending Drafts, Recent Clients, Activity */}
         <div className="space-y-6">
-          {/* Pending Drafts */}
           {pendingDrafts && pendingDrafts.length > 0 && (
             <div className="glow-card glow-card-gold rounded-xl bg-card p-5">
               <SectionHeader icon={Mail} title="Pending Drafts" color="text-gold" />
@@ -675,7 +731,6 @@ const Index = () => {
             </div>
           )}
 
-          {/* Recent Clients */}
           <div className="glow-card rounded-xl bg-card p-5">
             <SectionHeader
               icon={Users}
@@ -729,7 +784,6 @@ const Index = () => {
             )}
           </div>
 
-          {/* Recent Activity */}
           <div className="glow-card rounded-xl bg-card p-5">
             <SectionHeader icon={Clock} title="Recent Activity" color="text-coral" />
             {actLoading ? (
@@ -772,7 +826,6 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Draft Modal */}
       {selectedDraft && (
         <DraftModal
           draft={selectedDraft}
