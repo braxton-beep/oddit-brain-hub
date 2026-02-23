@@ -16,8 +16,11 @@ import {
   Users,
   FileText,
   Trash2,
+  RefreshCw,
+  GitCompare,
+  Calendar,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -83,7 +86,6 @@ function CompetitorCard({
 
   return (
     <div className="glow-card glow-card-violet rounded-xl bg-card overflow-hidden animate-scale-in">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4 p-5 border-b border-border">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -113,7 +115,6 @@ function CompetitorCard({
         </button>
       </div>
 
-      {/* Gaps highlight */}
       {competitor.gaps_for_client && competitor.gaps_for_client.length > 0 && (
         <div className="px-5 py-4 bg-coral/5 border-b border-coral/15">
           <p className="text-[11px] font-bold text-coral uppercase tracking-wider mb-2">
@@ -130,7 +131,6 @@ function CompetitorCard({
         </div>
       )}
 
-      {/* Category breakdown */}
       {expanded && (
         <div className="divide-y divide-border">
           {CATEGORY_CONFIG.map(({ key, label, icon: Icon, color }) => {
@@ -158,7 +158,6 @@ function CompetitorCard({
         </div>
       )}
 
-      {/* Toggle */}
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-center gap-1.5 py-3 text-xs text-muted-foreground hover:text-foreground transition-colors border-t border-border"
@@ -179,6 +178,96 @@ function CompetitorCard({
   );
 }
 
+// ── Diff View ────────────────────────────────────────────────────────────────
+function RunDiffView({
+  runA,
+  runB,
+  onClose,
+}: {
+  runA: SavedAnalysis;
+  runB: SavedAnalysis;
+  onClose: () => void;
+}) {
+  const fA = runA.findings;
+  const fB = runB.findings;
+
+  const diffCategories = CATEGORY_CONFIG.map(({ key, label, icon: Icon, color }) => {
+    const itemsA = new Set((fA as any)?.[key] as string[] ?? []);
+    const itemsB = new Set((fB as any)?.[key] as string[] ?? []);
+    const added = [...itemsB].filter((x) => !itemsA.has(x));
+    const removed = [...itemsA].filter((x) => !itemsB.has(x));
+    const unchanged = [...itemsA].filter((x) => itemsB.has(x));
+    return { key, label, Icon, color, added, removed, unchanged, hasChanges: added.length > 0 || removed.length > 0 };
+  });
+
+  const scoreDiff = (fB?.overall_score ?? 0) - (fA?.overall_score ?? 0);
+
+  return (
+    <div className="glow-card rounded-xl bg-card p-5 space-y-4 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <GitCompare className="h-4 w-4 text-violet" />
+          <h3 className="text-sm font-bold text-cream">Run Comparison</h3>
+        </div>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="bg-secondary border border-border rounded-lg px-2 py-1">
+          {new Date(runA.created_at).toLocaleDateString()}
+        </span>
+        <span>→</span>
+        <span className="bg-secondary border border-border rounded-lg px-2 py-1">
+          {new Date(runB.created_at).toLocaleDateString()}
+        </span>
+        {scoreDiff !== 0 && (
+          <span className={`font-bold ${scoreDiff > 0 ? "text-coral" : "text-accent"}`}>
+            Score {scoreDiff > 0 ? "+" : ""}{scoreDiff}
+          </span>
+        )}
+      </div>
+
+      {diffCategories.filter((d) => d.hasChanges).length === 0 ? (
+        <p className="text-xs text-muted-foreground py-4 text-center">No significant changes detected between these runs.</p>
+      ) : (
+        <div className="space-y-3">
+          {diffCategories.filter((d) => d.hasChanges).map(({ key, label, Icon, color, added, removed }) => (
+            <div key={key} className="rounded-lg border border-border bg-secondary p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Icon className={`h-3.5 w-3.5 ${color}`} />
+                <span className={`text-[11px] font-bold ${color} uppercase tracking-wider`}>{label}</span>
+              </div>
+              {added.length > 0 && (
+                <div className="space-y-1 mb-2">
+                  {added.map((item, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span className="text-accent font-bold text-[11px] shrink-0">+ Added</span>
+                      <span className="text-xs text-foreground">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {removed.length > 0 && (
+                <div className="space-y-1">
+                  {removed.map((item, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span className="text-coral font-bold text-[11px] shrink-0">− Removed</span>
+                      <span className="text-xs text-foreground line-through opacity-60">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
 const CompetitiveIntel = () => {
   const [clientName, setClientName] = useState("");
   const [clientUrl, setClientUrl] = useState("");
@@ -186,6 +275,9 @@ const CompetitiveIntel = () => {
   const [competitorUrls, setCompetitorUrls] = useState<string[]>(["", ""]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [rerunningId, setRerunningId] = useState<string | null>(null);
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [showDiff, setShowDiff] = useState(false);
   const qc = useQueryClient();
 
   // Load past analyses
@@ -197,7 +289,7 @@ const CompetitiveIntel = () => {
         .select("*")
         .eq("status", "complete")
         .order("created_at", { ascending: false })
-        .limit(20);
+        .limit(50);
       if (error) throw error;
       return (data ?? []).map((row) => ({
         ...row,
@@ -205,6 +297,18 @@ const CompetitiveIntel = () => {
       })) as SavedAnalysis[];
     },
   });
+
+  // Group analyses by client
+  const groupedByClient = useMemo(() => {
+    if (!savedAnalyses) return {};
+    const groups: Record<string, SavedAnalysis[]> = {};
+    for (const a of savedAnalyses) {
+      const key = a.client_name || "Unknown";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(a);
+    }
+    return groups;
+  }, [savedAnalyses]);
 
   const addUrlField = () => {
     if (competitorUrls.length < 5) setCompetitorUrls([...competitorUrls, ""]);
@@ -277,6 +381,43 @@ const CompetitiveIntel = () => {
     }
   };
 
+  const handleRerun = async (analysis: SavedAnalysis) => {
+    setRerunningId(analysis.id);
+    try {
+      const resp = await fetch(ANALYZE_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          client_name: analysis.client_name,
+          client_url: analysis.competitor_url,
+          competitor_urls: [analysis.competitor_url],
+        }),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Re-run failed");
+
+      qc.invalidateQueries({ queryKey: ["competitive-intel"] });
+      toast.success(`Re-run complete for ${analysis.client_name}`);
+    } catch (e: any) {
+      toast.error("Re-run failed", { description: e.message });
+    } finally {
+      setRerunningId(null);
+    }
+  };
+
+  const toggleCompare = (id: string) => {
+    setCompareIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= 2) return [prev[1], id];
+      return [...prev, id];
+    });
+    setShowDiff(false);
+  };
+
   const handleAddToReport = (competitor: CompetitorFindings) => {
     const summary = [
       `## Competitive Intel: ${competitor.brand_name || competitor.url}`,
@@ -294,6 +435,9 @@ const CompetitiveIntel = () => {
       });
     });
   };
+
+  const compareRunA = savedAnalyses?.find((a) => a.id === compareIds[0]);
+  const compareRunB = savedAnalyses?.find((a) => a.id === compareIds[1]);
 
   return (
     <DashboardLayout>
@@ -445,7 +589,6 @@ const CompetitiveIntel = () => {
                 </h2>
               </div>
 
-              {/* Recommendations */}
               {(result.findings.client_recommendations?.length || result.findings.priority_wins?.length) && (
                 <div className="glow-card glow-card-gold rounded-xl bg-card p-5 mb-4">
                   {result.findings.priority_wins?.length ? (
@@ -494,63 +637,124 @@ const CompetitiveIntel = () => {
             </div>
           )}
 
-          {/* Past analyses */}
-          {savedAnalyses && savedAnalyses.length > 0 && (
+          {/* Compare diff view */}
+          {showDiff && compareRunA && compareRunB && (
+            <RunDiffView
+              runA={compareRunA}
+              runB={compareRunB}
+              onClose={() => { setShowDiff(false); setCompareIds([]); }}
+            />
+          )}
+
+          {/* Past analyses grouped by client */}
+          {Object.keys(groupedByClient).length > 0 && (
             <div>
-              <h2 className="text-sm font-bold text-cream uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Telescope className="h-4 w-4 text-muted-foreground" />
-                Past Analyses
-              </h2>
-              <div className="space-y-3">
-                {savedAnalyses.map((analysis) => {
-                  const f = analysis.findings as CompetitorFindings;
-                  return (
-                    <div
-                      key={analysis.id}
-                      className="glow-card rounded-xl bg-card p-4 flex items-start gap-4"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                          <span className="text-sm font-bold text-cream">
-                            {analysis.client_name}
-                          </span>
-                          <span className="text-muted-foreground text-xs">—</span>
-                          <span className="text-xs text-muted-foreground truncate">
-                            {f?.brand_name || analysis.competitor_url}
-                          </span>
-                        </div>
-                        {f?.standout_feature && (
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                            {f.standout_feature}
-                          </p>
-                        )}
-                        <p className="text-[10px] text-muted-foreground/60 mt-1">
-                          {new Date(analysis.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {f?.overall_score && (
-                          <span className="text-xs font-bold text-gold border border-gold/30 rounded-full px-2 py-0.5">
-                            {f.overall_score}/100
-                          </span>
-                        )}
-                        <button
-                          onClick={() => handleAddToReport(f)}
-                          className="flex items-center gap-1.5 rounded-lg bg-primary/10 border border-primary/20 px-2.5 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
-                        >
-                          <FileText className="h-3 w-3" />
-                          Add
-                        </button>
-                        <button
-                          onClick={() => handleDelete(analysis.id)}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-bold text-cream uppercase tracking-wider flex items-center gap-2">
+                  <Telescope className="h-4 w-4 text-muted-foreground" />
+                  Past Analyses
+                </h2>
+                {compareIds.length === 2 && (
+                  <button
+                    onClick={() => setShowDiff(true)}
+                    className="flex items-center gap-1.5 rounded-lg bg-violet/15 border border-violet/30 px-3 py-1.5 text-xs font-bold text-violet hover:bg-violet/25 transition-colors"
+                  >
+                    <GitCompare className="h-3.5 w-3.5" />
+                    Compare Selected ({compareIds.length}/2)
+                  </button>
+                )}
+                {compareIds.length === 1 && (
+                  <span className="text-[11px] text-muted-foreground">Select 1 more run to compare</span>
+                )}
+              </div>
+
+              <div className="space-y-6">
+                {Object.entries(groupedByClient).map(([client, analyses]) => (
+                  <div key={client}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-xs font-bold text-cream uppercase tracking-wider">{client}</span>
+                      <span className="text-[10px] text-muted-foreground">({analyses.length} run{analyses.length > 1 ? "s" : ""})</span>
                     </div>
-                  );
-                })}
+
+                    <div className="space-y-2 pl-2 border-l-2 border-border ml-1.5">
+                      {analyses.map((analysis) => {
+                        const f = analysis.findings as CompetitorFindings;
+                        const isSelected = compareIds.includes(analysis.id);
+                        return (
+                          <div
+                            key={analysis.id}
+                            className={`glow-card rounded-xl bg-card p-4 flex items-start gap-4 transition-colors ${
+                              isSelected ? "border-violet/50 bg-violet/5" : ""
+                            }`}
+                          >
+                            {/* Compare checkbox */}
+                            <button
+                              onClick={() => toggleCompare(analysis.id)}
+                              className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+                                isSelected
+                                  ? "bg-violet border-violet text-white"
+                                  : "border-border hover:border-violet/50"
+                              }`}
+                            >
+                              {isSelected && <CheckCircle2 className="h-3 w-3" />}
+                            </button>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                                <Calendar className="h-3 w-3 text-muted-foreground" />
+                                <span className="text-xs font-semibold text-cream">
+                                  {new Date(analysis.created_at).toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })}
+                                </span>
+                                <span className="text-muted-foreground text-xs">—</span>
+                                <span className="text-xs text-muted-foreground truncate">
+                                  {f?.brand_name || analysis.competitor_url}
+                                </span>
+                              </div>
+                              {f?.standout_feature && (
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                                  {f.standout_feature}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {f?.overall_score && (
+                                <span className="text-xs font-bold text-gold border border-gold/30 rounded-full px-2 py-0.5">
+                                  {f.overall_score}/100
+                                </span>
+                              )}
+                              <button
+                                onClick={() => handleRerun(analysis)}
+                                disabled={rerunningId === analysis.id}
+                                className="flex items-center gap-1 rounded-lg bg-secondary border border-border px-2 py-1.5 text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                                title="Re-run analysis"
+                              >
+                                <RefreshCw className={`h-3 w-3 ${rerunningId === analysis.id ? "animate-spin" : ""}`} />
+                                Re-run
+                              </button>
+                              <button
+                                onClick={() => handleAddToReport(f)}
+                                className="flex items-center gap-1 rounded-lg bg-primary/10 border border-primary/20 px-2 py-1.5 text-[11px] font-semibold text-primary hover:bg-primary/20 transition-colors"
+                              >
+                                <FileText className="h-3 w-3" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(analysis.id)}
+                                className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

@@ -47,7 +47,7 @@ const navItems = [
   { title: "Report Setup", url: "/report-setup", icon: Zap },
   { title: "Dev Pipeline", url: "/dev-pipeline", icon: Code2 },
   { title: "Slack Agent", url: "/slack-agent", icon: MessageSquare },
-  { title: "Twitter / X", url: "/twitter", icon: Twitter },
+  { title: "Social Content", url: "/twitter", icon: Twitter },
   { title: "Competitive Intel", url: "/competitive-intel", icon: Telescope },
   { title: "Benchmarks", url: "/benchmarks", icon: BarChart3 },
   { title: "Integrations", url: "/integrations", icon: Link2 },

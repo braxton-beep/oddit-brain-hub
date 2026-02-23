@@ -13,6 +13,9 @@ import {
   Sparkles,
   AlertCircle,
   FileImage,
+  Linkedin,
+  Loader2,
+  Share2,
 } from "lucide-react";
 import {
   useTweets,
@@ -105,10 +108,190 @@ function TweetCard({ tweet, onUpdateType }: { tweet: Tweet; onUpdateType: (id: s
   );
 }
 
+// ── LinkedIn styles ──────────────────────────────────────────────────────────
+
+const LINKEDIN_STYLES = [
+  { id: "insight", label: "Insight", emoji: "💡" },
+  { id: "case-study", label: "Case Study", emoji: "📊" },
+  { id: "thought-leadership", label: "Thought Leadership", emoji: "🧠" },
+  { id: "client-win", label: "Client Win", emoji: "🏆" },
+  { id: "industry-take", label: "Industry Take", emoji: "🔥" },
+];
+
+// ── LinkedIn Tab ─────────────────────────────────────────────────────────────
+
+function LinkedInTab() {
+  const [topic, setTopic] = useState("");
+  const [style, setStyle] = useState("insight");
+  const [customPrompt, setCustomPrompt] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedPosts, setGeneratedPosts] = useState<string[]>([]);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+
+  const handleGenerate = async () => {
+    if (!topic.trim()) {
+      toast.error("Enter a topic or idea first");
+      return;
+    }
+
+    setIsGenerating(true);
+    setGeneratedPosts([]);
+
+    try {
+      const styleName = LINKEDIN_STYLES.find((s) => s.id === style)?.label ?? style;
+
+      const systemPrompt = customPrompt.trim() || `You are a professional LinkedIn content writer for a CRO/UX design agency called Oddit (@itsOddit). Write in a professional but approachable tone. Use short paragraphs, line breaks for readability, and include relevant emojis sparingly. Each post should be 200-300 words. Style: ${styleName}.`;
+
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/craft-tweet`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          topic: topic,
+          tweet_type: style,
+          custom_prompt: `${systemPrompt}\n\nTopic: ${topic}\n\nGenerate 3 LinkedIn post variations. Each should be 200-300 words with a professional tone. Number them 1) 2) 3). Do NOT add hashtags at the end.`,
+        }),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Generation failed");
+
+      const content = data.content || "";
+      const posts = content
+        .split(/\n(?=\d\))/)
+        .map((v: string) => v.replace(/^\d\)\s*/, "").trim())
+        .filter(Boolean);
+
+      setGeneratedPosts(posts.length > 0 ? posts : [content]);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to generate LinkedIn posts");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const copyPost = (text: string, idx: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx(null), 2000);
+  };
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      {/* Left: inputs */}
+      <div className="space-y-4">
+        <div className="glow-card rounded-xl bg-card p-5 space-y-4">
+          <h2 className="text-sm font-bold text-cream flex items-center gap-2">
+            <Linkedin className="h-4 w-4 text-[#0A66C2]" />
+            LinkedIn Post Generator
+          </h2>
+
+          <div>
+            <label className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1.5 block">Topic / Idea</label>
+            <input
+              type="text"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="e.g. Why most Shopify stores leave money on the table with their PDP"
+              className="w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+            />
+          </div>
+
+          <div>
+            <label className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1.5 block">Post Style</label>
+            <div className="flex flex-wrap gap-1.5">
+              {LINKEDIN_STYLES.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setStyle(s.id)}
+                  className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                    style === s.id
+                      ? "bg-[#0A66C2]/15 text-[#0A66C2] border border-[#0A66C2]/30"
+                      : "text-muted-foreground bg-secondary border border-border hover:text-foreground"
+                  }`}
+                >
+                  {s.emoji} {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1.5 block">Custom Prompt (optional override)</label>
+            <textarea
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              placeholder="Override the default prompt entirely…"
+              rows={2}
+              className="w-full rounded-lg border border-border bg-secondary px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none"
+            />
+          </div>
+
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#0A66C2] px-4 py-2.5 text-xs font-bold text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Generating…
+              </>
+            ) : (
+              <>
+                <Wand2 className="h-3.5 w-3.5" />
+                Generate 3 Variations
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Right: generated output */}
+      <div>
+        {generatedPosts.length > 0 ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-4 w-4 text-[#0A66C2]" />
+              <h2 className="text-sm font-bold text-cream">Generated LinkedIn Posts</h2>
+            </div>
+            {generatedPosts.map((post, idx) => (
+              <div key={idx} className="glow-card rounded-xl bg-card p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Variation {idx + 1}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground">{post.split(/\s+/).length} words</span>
+                    <button
+                      onClick={() => copyPost(post, idx)}
+                      className="flex items-center gap-1 rounded-lg bg-secondary border border-border px-2 py-1 text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {copiedIdx === idx ? <Check className="h-3 w-3 text-accent" /> : <Copy className="h-3 w-3" />}
+                      {copiedIdx === idx ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{post}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="glow-card rounded-xl bg-card p-8 flex flex-col items-center justify-center text-center h-full min-h-[300px]">
+            <Linkedin className="h-8 w-8 text-muted-foreground mb-3" />
+            <p className="text-sm font-bold text-muted-foreground">Your generated posts will appear here</p>
+            <p className="text-xs text-muted-foreground mt-1">Professional-tone, 200-300 word LinkedIn posts</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ────────────────────────────────────────────────────────────────
 
 const TwitterPage = () => {
-  const [activeTab, setActiveTab] = useState<"library" | "crafter">("crafter");
+  const [activeTab, setActiveTab] = useState<"library" | "crafter" | "linkedin">("crafter");
   const [filterType, setFilterType] = useState("all");
   const [filterFigmaId, setFilterFigmaId] = useState("");
   const [topic, setTopic] = useState("");
@@ -189,12 +372,12 @@ const TwitterPage = () => {
       <div className="mb-8 flex items-start justify-between animate-fade-in">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary animate-glow-pulse">
-            <Twitter className="h-5 w-5 text-primary-foreground" />
+            <Share2 className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-cream">Twitter / X</h1>
+            <h1 className="text-2xl font-bold text-cream">Social Content</h1>
             <p className="text-[13px] text-muted-foreground">
-              @itsOddit voice analysis & AI tweet crafter
+              AI-powered content generation for Twitter/X & LinkedIn
             </p>
           </div>
         </div>
@@ -246,6 +429,7 @@ const TwitterPage = () => {
       <div className="flex gap-1.5 mb-6">
         {[
           { id: "crafter", label: "✍️ Tweet Crafter" },
+          { id: "linkedin", label: "💼 LinkedIn" },
           { id: "library", label: "📚 Tweet Library" },
         ].map((tab) => (
           <button
@@ -261,6 +445,9 @@ const TwitterPage = () => {
           </button>
         ))}
       </div>
+
+      {/* ── LinkedIn Tab ─────────────────────────────────────────── */}
+      {activeTab === "linkedin" && <LinkedInTab />}
 
       {/* ── Tweet Crafter ─────────────────────────────────────────── */}
       {activeTab === "crafter" && (
