@@ -27,6 +27,7 @@ import {
   type Client,
   type ClientInsert,
 } from "@/hooks/useClients";
+import { useClientHealthScores } from "@/hooks/useClientHealthScores";
 
 const EMPTY_FORM: ClientInsert = {
   name: "",
@@ -270,8 +271,15 @@ const INDUSTRY_COLORS: Record<string, string> = {
   "Other": "text-muted-foreground bg-muted/20 border-border",
 };
 
+const HEALTH_BADGE: Record<string, { label: string; class: string; tooltip: string }> = {
+  green: { label: "Healthy", class: "text-green-400 bg-green-400/10 border-green-400/30", tooltip: "Good implementation rate, recent audit, low pipeline items" },
+  yellow: { label: "At Risk", class: "text-yellow-400 bg-yellow-400/10 border-yellow-400/30", tooltip: "Some concerns: aging audit, low implementation, or pipeline backlog" },
+  red: { label: "Needs Attention", class: "text-red-400 bg-red-400/10 border-red-400/30", tooltip: "Stale audit, low implementation rate, or heavy pipeline backlog" },
+};
+
 export default function Clients() {
   const { data: clients = [], isLoading } = useClients();
+  const { data: healthScores } = useClientHealthScores();
   const addClient = useAddClient();
   const updateClient = useUpdateClient();
   const deleteClient = useDeleteClient();
@@ -461,7 +469,22 @@ export default function Clients() {
                         {/* Top row */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-cream leading-snug">{client.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-bold text-cream leading-snug">{client.name}</p>
+                              {healthScores?.[client.name.toLowerCase().trim()] && (() => {
+                                const h = healthScores[client.name.toLowerCase().trim()];
+                                const badge = HEALTH_BADGE[h.score];
+                                return (
+                                  <span
+                                    title={badge.tooltip}
+                                    className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${badge.class}`}
+                                  >
+                                    <span className={`h-1.5 w-1.5 rounded-full mr-1 ${h.score === "green" ? "bg-green-400" : h.score === "yellow" ? "bg-yellow-400" : "bg-red-400"}`} />
+                                    {badge.label}
+                                  </span>
+                                );
+                              })()}
+                            </div>
                             {client.vertical && (
                               <p className="text-[11px] text-muted-foreground mt-0.5">{client.vertical}</p>
                             )}

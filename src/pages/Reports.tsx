@@ -23,6 +23,7 @@ import {
   Check,
   Zap,
   RefreshCw,
+  TrendingUp,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -623,6 +624,61 @@ const Reports = () => {
               })}
             </div>
 
+            {/* 2x2 Priority Matrix */}
+            {(() => {
+              const recs = viewingAudit.recommendations;
+              const getEffort = (r: Recommendation) => {
+                const text = (r.recommended_change + " " + r.mockup_prompt).toLowerCase();
+                if (text.includes("restructur") || text.includes("redesign") || text.includes("overhaul") || text.includes("rebuild")) return "Hard";
+                if (text.includes("add") || text.includes("update") || text.includes("change") || text.includes("replace") || text.includes("move")) return "Medium";
+                return "Easy";
+              };
+              const getImpact = (r: Recommendation) => r.severity === "high" ? "High" : r.severity === "medium" ? "Medium" : "Low";
+              
+              const quadrants = [
+                { label: "Quick Wins", impact: "High", effort: "Easy", color: "border-accent/40 bg-accent/5", textColor: "text-accent" },
+                { label: "Major Projects", impact: "High", effort: "Hard", color: "border-primary/40 bg-primary/5", textColor: "text-primary" },
+                { label: "Fill-Ins", impact: "Low", effort: "Easy", color: "border-muted-foreground/30 bg-muted/10", textColor: "text-muted-foreground" },
+                { label: "Avoid", impact: "Low", effort: "Hard", color: "border-destructive/30 bg-destructive/5", textColor: "text-destructive" },
+              ];
+
+              return (
+                <div className="mb-6 rounded-xl border border-border bg-secondary p-4">
+                  <h3 className="text-xs font-bold text-cream uppercase tracking-wider mb-3">Priority Matrix — Impact vs Effort</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {quadrants.map((q) => {
+                      const items = recs.filter((r) => {
+                        const impact = getImpact(r);
+                        const effort = getEffort(r);
+                        const matchImpact = q.impact === "High" ? impact === "High" : (impact === "Medium" || impact === "Low");
+                        const matchEffort = q.effort === "Easy" ? (effort === "Easy" || effort === "Medium") : effort === "Hard";
+                        return matchImpact && matchEffort;
+                      });
+                      return (
+                        <div key={q.label} className={`rounded-lg border p-3 ${q.color}`}>
+                          <p className={`text-[10px] font-bold uppercase tracking-wider mb-2 ${q.textColor}`}>{q.label}</p>
+                          {items.length === 0 ? (
+                            <p className="text-[10px] text-muted-foreground">—</p>
+                          ) : (
+                            <div className="space-y-1">
+                              {items.slice(0, 4).map((r) => (
+                                <p key={r.id} className="text-[11px] text-cream truncate">#{r.id} {r.section}</p>
+                              ))}
+                              {items.length > 4 && <p className="text-[10px] text-muted-foreground">+{items.length - 4} more</p>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-between mt-2 text-[9px] text-muted-foreground uppercase tracking-wider">
+                    <span>← Easy Effort</span>
+                    <span>Hard Effort →</span>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Recommendations */}
             <div className="space-y-3">
               {viewingAudit.recommendations.map((rec) => {
@@ -640,9 +696,21 @@ const Reports = () => {
                       <span className="text-sm font-bold text-muted-foreground w-6 shrink-0">#{rec.id}</span>
                       <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${sev.dot}`} />
                       <span className="text-sm font-bold text-cream flex-1 truncate">{rec.section}</span>
+                      {/* Impact badge */}
                       <span className={`hidden sm:inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${sev.bg}`}>
-                        {rec.severity}
+                        {rec.severity === "high" ? "High Impact" : rec.severity === "medium" ? "Med Impact" : "Low Impact"}
                       </span>
+                      {/* Effort badge */}
+                      {(() => {
+                        const text = (rec.recommended_change + " " + rec.mockup_prompt).toLowerCase();
+                        const effort = text.includes("restructur") || text.includes("redesign") || text.includes("overhaul") ? "Hard" : text.includes("add") || text.includes("update") || text.includes("change") ? "Medium" : "Easy";
+                        const effortStyle = effort === "Easy" ? "text-accent bg-accent/10 border-accent/30" : effort === "Medium" ? "text-blue-400 bg-blue-400/10 border-blue-400/30" : "text-orange-400 bg-orange-400/10 border-orange-400/30";
+                        return (
+                          <span className={`hidden sm:inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${effortStyle}`}>
+                            {effort}
+                          </span>
+                        );
+                      })()}
                       {rec.section_screenshot_url && <ImageIcon className="h-4 w-4 text-muted-foreground shrink-0" />}
                       {rec.mockup_url && <Sparkles className="h-4 w-4 text-accent shrink-0" />}
                       {expanded ? (
@@ -732,13 +800,21 @@ const Reports = () => {
                           </div>
                         </div>
 
-                        {/* Impact */}
+                        {/* Impact & Est. Revenue */}
                         <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 rounded-lg bg-primary/5 border border-primary/20 px-3 sm:px-4 py-2.5">
                           <div className="flex items-center gap-2">
                             <BarChart3 className="h-3.5 w-3.5 text-primary shrink-0" />
                             <span className="text-xs text-primary font-semibold">Expected Impact:</span>
                           </div>
                           <span className="text-xs text-muted-foreground">{rec.expected_impact}</span>
+                        </div>
+                        <div className="flex items-center gap-2 rounded-lg bg-gold/5 border border-gold/20 px-3 sm:px-4 py-2.5">
+                          <TrendingUp className="h-3.5 w-3.5 text-gold shrink-0" />
+                          <span className="text-xs text-gold font-semibold">Est. Revenue Impact:</span>
+                          <span className="text-xs text-muted-foreground">
+                            {rec.severity === "high" ? "+5-15% conversion lift" : rec.severity === "medium" ? "+2-5% conversion lift" : "+0.5-2% conversion lift"}
+                            {" "}— {rec.severity === "high" ? "$10K-$50K+/yr" : rec.severity === "medium" ? "$5K-$15K/yr" : "$1K-$5K/yr"} est.
+                          </span>
                         </div>
 
                         {/* If no screenshots at all, show standalone mockup section */}
