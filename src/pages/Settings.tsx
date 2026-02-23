@@ -15,14 +15,86 @@ import {
   Trash2,
   Eye,
   EyeOff,
-  
   ExternalLink,
   Sparkles,
   ArrowRight,
+  Cpu,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+// ── AI Model Config ──────────────────────────────────────────────────────────
+const AI_MODELS = [
+  { value: "gemini-3", label: "Gemini 3" },
+  { value: "gpt-4o", label: "GPT-4o" },
+  { value: "claude", label: "Claude" },
+];
+
+const AI_TASKS = [
+  { id: "cro_audits", label: "CRO Audits" },
+  { id: "report_drafts", label: "Report Drafts" },
+  { id: "transcript_qa", label: "Transcript Q&A" },
+  { id: "tweet_linkedin", label: "Tweet / LinkedIn Generation" },
+];
+
+function AIModelConfig() {
+  const [models, setModels] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("ai_model_config") ?? "{}");
+    } catch {
+      return {};
+    }
+  });
+
+  const update = (taskId: string, model: string) => {
+    const next = { ...models, [taskId]: model };
+    setModels(next);
+    localStorage.setItem("ai_model_config", JSON.stringify(next));
+    toast.success(`Model updated for ${AI_TASKS.find((t) => t.id === taskId)?.label}`);
+  };
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5 mb-8">
+      <div className="flex items-center gap-3 mb-5">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15">
+          <Cpu className="h-4 w-4 text-primary" />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-foreground">AI Model Configuration</p>
+          <p className="text-xs text-muted-foreground">Choose which model powers each task</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {AI_TASKS.map((task) => {
+          const selected = models[task.id] || "gemini-3";
+          return (
+            <div key={task.id} className="rounded-lg border border-border bg-secondary p-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-foreground">{task.label}</label>
+                <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 border border-accent/30 px-2 py-0.5 text-[10px] font-bold text-accent">
+                  <CheckCircle2 className="h-2.5 w-2.5" />
+                  {AI_MODELS.find((m) => m.value === selected)?.label}
+                </span>
+              </div>
+              <select
+                value={selected}
+                onChange={(e) => update(task.id, e.target.value)}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+              >
+                {AI_MODELS.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Integrations ─────────────────────────────────────────────────────────────
 interface IntegrationItem {
   id: string;
   label: string;
@@ -34,23 +106,16 @@ interface IntegrationItem {
 }
 
 const INTEGRATIONS: IntegrationItem[] = [
-  // AI & Core
   { id: "openai", label: "OpenAI", placeholder: "sk-...", description: "Powers the Brain's AI audits, reports, and insights.", setupUrl: "https://platform.openai.com/api-keys", setupLabel: "Get key from OpenAI", category: "ai" },
-  // Social
-  { id: "twitter-consumer-key", label: "Twitter/X — Consumer Key", placeholder: "...", description: "OAuth Consumer Key for the Twitter/X API. Required alongside Consumer Secret + Access Tokens to sync and craft tweets.", setupUrl: "https://developer.x.com/en/portal/dashboard", setupLabel: "X Developer Portal", category: "social" },
-  { id: "twitter-consumer-secret", label: "Twitter/X — Consumer Secret", placeholder: "...", description: "OAuth Consumer Secret. Keep this confidential — it pairs with your Consumer Key.", setupUrl: "https://developer.x.com/en/portal/dashboard", setupLabel: "X Developer Portal", category: "social" },
-  { id: "twitter-access-token", label: "Twitter/X — Access Token", placeholder: "...", description: "Access Token for the authenticated Twitter/X account you want to sync.", setupUrl: "https://developer.x.com/en/portal/dashboard", setupLabel: "X Developer Portal", category: "social" },
-  { id: "twitter-access-secret", label: "Twitter/X — Access Token Secret", placeholder: "...", description: "Access Token Secret. Pairs with your Access Token for OAuth signing.", setupUrl: "https://developer.x.com/en/portal/dashboard", setupLabel: "X Developer Portal", category: "social" },
-  // Communication
+  { id: "twitter-consumer-key", label: "Twitter/X — Consumer Key", placeholder: "...", description: "OAuth Consumer Key for the Twitter/X API.", setupUrl: "https://developer.x.com/en/portal/dashboard", setupLabel: "X Developer Portal", category: "social" },
+  { id: "twitter-consumer-secret", label: "Twitter/X — Consumer Secret", placeholder: "...", description: "OAuth Consumer Secret. Keep this confidential.", setupUrl: "https://developer.x.com/en/portal/dashboard", setupLabel: "X Developer Portal", category: "social" },
+  { id: "twitter-access-token", label: "Twitter/X — Access Token", placeholder: "...", description: "Access Token for the authenticated Twitter/X account.", setupUrl: "https://developer.x.com/en/portal/dashboard", setupLabel: "X Developer Portal", category: "social" },
+  { id: "twitter-access-secret", label: "Twitter/X — Access Token Secret", placeholder: "...", description: "Access Token Secret. Pairs with your Access Token.", setupUrl: "https://developer.x.com/en/portal/dashboard", setupLabel: "X Developer Portal", category: "social" },
   { id: "slack", label: "Slack Bot Token", placeholder: "xoxb-...", description: "Enables the Slack Agent to read channels and post updates.", setupUrl: "https://api.slack.com/apps", setupLabel: "Create a Slack App", category: "communication" },
-  // Storage & Docs
-  { id: "google-drive", label: "Google Drive", placeholder: "AIza...", description: "Connect docs, sheets, and slides. Brain indexes content automatically.", setupUrl: "https://console.cloud.google.com/apis/credentials", setupLabel: "Google Cloud Console", category: "storage" },
-  // Meetings
-  { id: "fireflies", label: "Fireflies.ai", placeholder: "ff-...", description: "Auto-import meeting transcripts so the Brain learns from every call.", setupUrl: "https://app.fireflies.ai/integrations", setupLabel: "Fireflies Settings", category: "meetings" },
-  // Design
-  { id: "figma", label: "Figma", placeholder: "figd_...", description: "Connect design files for the dev pipeline and audit references.", setupUrl: "https://www.figma.com/developers/api#access-tokens", setupLabel: "Figma Tokens", category: "design" },
-  // Development
-  { id: "asana", label: "Asana", placeholder: "1/...", description: "Automate report fulfillment: create cards, link Figma files, and move tasks through columns automatically.", setupUrl: "https://app.asana.com/0/my-apps", setupLabel: "Asana My Apps", category: "development" },
+  { id: "google-drive", label: "Google Drive", placeholder: "AIza...", description: "Connect docs, sheets, and slides.", setupUrl: "https://console.cloud.google.com/apis/credentials", setupLabel: "Google Cloud Console", category: "storage" },
+  { id: "fireflies", label: "Fireflies.ai", placeholder: "ff-...", description: "Auto-import meeting transcripts.", setupUrl: "https://app.fireflies.ai/integrations", setupLabel: "Fireflies Settings", category: "meetings" },
+  { id: "figma", label: "Figma", placeholder: "figd_...", description: "Connect design files for the dev pipeline.", setupUrl: "https://www.figma.com/developers/api#access-tokens", setupLabel: "Figma Tokens", category: "design" },
+  { id: "asana", label: "Asana", placeholder: "1/...", description: "Automate report fulfillment.", setupUrl: "https://app.asana.com/0/my-apps", setupLabel: "Asana My Apps", category: "development" },
 ];
 
 const CATEGORIES = [
@@ -123,6 +188,9 @@ const SettingsPage = () => {
           </div>
         </div>
       </div>
+
+      {/* AI Model Configuration */}
+      <AIModelConfig />
 
       {/* Welcome / Progress Banner */}
       <div className="glow-card-violet rounded-xl bg-card p-6 mb-8">
@@ -208,7 +276,6 @@ const SettingsPage = () => {
                   isSet ? "border-accent/20" : "border-border"
                 }`}
               >
-                {/* Top row: name + status + setup link */}
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-3">
                   <div className="flex items-center gap-2.5 flex-1 min-w-0">
                     {isSet ? (
@@ -238,12 +305,8 @@ const SettingsPage = () => {
                   </a>
                 </div>
 
-                {/* Description */}
-                <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                  {integration.description}
-                </p>
+                <p className="text-xs text-muted-foreground leading-relaxed mb-3">{integration.description}</p>
 
-                {/* Existing keys list */}
                 {existingKeys.length > 0 && (
                   <div className="space-y-1.5 mb-3">
                     {existingKeys.map((cred) => (
@@ -267,7 +330,6 @@ const SettingsPage = () => {
                   </div>
                 )}
 
-                {/* Add new key input */}
                 <div className="flex items-center gap-2">
                   <input
                     type={isVisible ? "text" : "password"}
