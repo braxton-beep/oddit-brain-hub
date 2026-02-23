@@ -289,12 +289,16 @@ export default function Clients() {
   const [search, setSearch] = useState("");
   const [filterIndustry, setFilterIndustry] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterHealth, setFilterHealth] = useState("all");
+
+  const getClientHealth = (name: string) => healthScores?.[name.toLowerCase().trim()]?.score ?? "yellow";
 
   const filtered = clients.filter((c) => {
     const matchSearch = !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.shopify_url.toLowerCase().includes(search.toLowerCase());
     const matchIndustry = filterIndustry === "all" || c.industry === filterIndustry;
     const matchStatus = filterStatus === "all" || c.project_status === filterStatus;
-    return matchSearch && matchIndustry && matchStatus;
+    const matchHealth = filterHealth === "all" || getClientHealth(c.name) === filterHealth;
+    return matchSearch && matchIndustry && matchStatus && matchHealth;
   });
 
   // Group by industry
@@ -404,6 +408,19 @@ export default function Clients() {
           </select>
           <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
         </div>
+        <div className="relative">
+          <select
+            value={filterHealth}
+            onChange={(e) => setFilterHealth(e.target.value)}
+            className="rounded-lg border border-border bg-card pl-3 pr-8 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 appearance-none"
+          >
+            <option value="all">All Health</option>
+            <option value="green">🟢 Healthy</option>
+            <option value="yellow">🟡 At Risk</option>
+            <option value="red">🔴 Needs Attention</option>
+          </select>
+          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+        </div>
         {filtered.length !== clients.length && (
           <span className="text-[11px] text-muted-foreground">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</span>
         )}
@@ -471,15 +488,15 @@ export default function Clients() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <p className="text-sm font-bold text-cream leading-snug">{client.name}</p>
-                              {healthScores?.[client.name.toLowerCase().trim()] && (() => {
-                                const h = healthScores[client.name.toLowerCase().trim()];
-                                const badge = HEALTH_BADGE[h.score];
+                              {(() => {
+                                const health = getClientHealth(client.name);
+                                const badge = HEALTH_BADGE[health];
                                 return (
                                   <span
                                     title={badge.tooltip}
                                     className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${badge.class}`}
                                   >
-                                    <span className={`h-1.5 w-1.5 rounded-full mr-1 ${h.score === "green" ? "bg-green-400" : h.score === "yellow" ? "bg-yellow-400" : "bg-red-400"}`} />
+                                    <span className={`h-1.5 w-1.5 rounded-full mr-1 ${health === "green" ? "bg-green-400" : health === "yellow" ? "bg-yellow-400" : "bg-red-400"}`} />
                                     {badge.label}
                                   </span>
                                 );
