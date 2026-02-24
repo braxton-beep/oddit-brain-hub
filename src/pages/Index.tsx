@@ -353,10 +353,10 @@ const Index = () => {
   const handleDismissDraft = (id: string) => { updateDraft.mutate({ id, status: "dismissed" }); setSelectedDraft(null); toast.success("Draft dismissed"); };
 
   const quickActions = [
-    { label: "Run CRO Audit", icon: Brain, gradient: "from-primary/10 to-violet/5", border: "border-primary/15 hover:border-primary/30", text: "text-primary", href: "/oddit-brain" },
-    { label: "New Report", icon: FileText, gradient: "from-accent/10 to-electric/5", border: "border-accent/15 hover:border-accent/30", text: "text-accent", href: "/reports" },
-    { label: "Competitive Intel", icon: TrendingUp, gradient: "from-coral/10 to-gold/5", border: "border-coral/15 hover:border-coral/30", text: "text-coral", href: "/competitive-intel" },
-    { label: "Craft a Tweet", icon: Sparkles, gradient: "from-violet/10 to-primary/5", border: "border-violet/15 hover:border-violet/30", text: "text-violet", href: "/twitter" },
+    { label: "Run CRO Audit", icon: Brain, gradient: "from-primary/20 via-violet/10 to-transparent", border: "border-primary/20 hover:border-primary/40", text: "text-primary", href: "/oddit-brain", glow: "hover:shadow-[0_0_30px_-8px_hsl(240_80%_68%_/_0.25)]" },
+    { label: "New Report", icon: FileText, gradient: "from-accent/20 via-electric/10 to-transparent", border: "border-accent/20 hover:border-accent/40", text: "text-accent", href: "/reports", glow: "hover:shadow-[0_0_30px_-8px_hsl(165_55%_55%_/_0.25)]" },
+    { label: "Competitive Intel", icon: TrendingUp, gradient: "from-coral/20 via-gold/10 to-transparent", border: "border-coral/20 hover:border-coral/40", text: "text-coral", href: "/competitive-intel", glow: "hover:shadow-[0_0_30px_-8px_hsl(4_80%_62%_/_0.25)]" },
+    { label: "Craft a Tweet", icon: Sparkles, gradient: "from-violet/20 via-primary/10 to-transparent", border: "border-violet/20 hover:border-violet/40", text: "text-violet", href: "/twitter", glow: "hover:shadow-[0_0_30px_-8px_hsl(270_70%_65%_/_0.25)]" },
   ];
 
   const recentClients = (clients ?? []).slice(0, 3);
@@ -366,26 +366,29 @@ const Index = () => {
       {/* ── Header ────────────────────────────────────── */}
       <div className="mb-10 flex items-center justify-between animate-fade-in">
         <div className="flex items-center gap-3">
-          <svg viewBox="0 0 44 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-7 w-auto">
-            <circle cx="10" cy="12" r="9" stroke="hsl(var(--primary))" strokeWidth="3.5"/>
-            <circle cx="10" cy="12" r="4" fill="hsl(var(--primary))"/>
-            <circle cx="34" cy="12" r="9" stroke="hsl(var(--primary))" strokeWidth="3.5"/>
-            <circle cx="34" cy="12" r="4" fill="hsl(var(--primary))"/>
-          </svg>
+          <div className="relative">
+            <div className="absolute inset-0 rounded-xl bg-primary/20 blur-xl" />
+            <svg viewBox="0 0 44 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="relative h-7 w-auto">
+              <circle cx="10" cy="12" r="9" stroke="hsl(var(--primary))" strokeWidth="3.5"/>
+              <circle cx="10" cy="12" r="4" fill="hsl(var(--primary))"/>
+              <circle cx="34" cy="12" r="9" stroke="hsl(var(--primary))" strokeWidth="3.5"/>
+              <circle cx="34" cy="12" r="4" fill="hsl(var(--primary))"/>
+            </svg>
+          </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-xl font-extrabold tracking-tight text-foreground">oddit</span>
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">Dashboard</span>
+              <span className="text-xl font-extrabold tracking-tight text-gradient">oddit</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Dashboard</span>
             </div>
             <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-glow-pulse" />
               {connectedIds.size} tools connected
             </p>
           </div>
         </div>
 
         {pendingCount > 0 && (
-          <button onClick={() => pendingDrafts?.[0] && setSelectedDraft(pendingDrafts[0])} className="flex items-center gap-2 rounded-xl border border-gold/20 bg-gold/5 px-4 py-2 text-sm font-semibold text-gold hover:bg-gold/10 transition-all">
+          <button onClick={() => pendingDrafts?.[0] && setSelectedDraft(pendingDrafts[0])} className="flex items-center gap-2 rounded-xl border border-gold/25 bg-gradient-to-r from-gold/10 to-gold/5 px-4 py-2 text-sm font-semibold text-gold hover:from-gold/15 hover:to-gold/10 hover:shadow-[0_0_24px_-6px_hsl(40_95%_58%_/_0.2)] transition-all">
             <Mail className="h-4 w-4" /> {pendingCount} draft{pendingCount > 1 ? "s" : ""} pending <ChevronRight className="h-3.5 w-3.5" />
           </button>
         )}
@@ -396,15 +399,18 @@ const Index = () => {
       {/* ── Stat Row ──────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8 stagger-children">
         {[
-          { label: "Clients", value: auditStats?.totalClients ?? clients?.length ?? "—", icon: Users, color: "text-electric", gradient: "from-electric/10 to-transparent" },
-          { label: "CRO Audits", value: auditStats?.totalAudits ?? "—", icon: Brain, color: "text-primary", gradient: "from-primary/10 to-transparent" },
-          { label: "Tweets Indexed", value: tweetStats?.total ?? "—", icon: BarChart3, color: "text-violet", gradient: "from-violet/10 to-transparent" },
-          { label: "Integrations", value: `${connectedIds.size}`, icon: Zap, color: "text-gold", gradient: "from-gold/10 to-transparent" },
-        ].map(({ label, value, icon: Icon, color, gradient }) => (
-          <div key={label} className="glass-card rounded-2xl p-4 relative overflow-hidden group">
-            <div className={`absolute inset-0 bg-gradient-to-br ${gradient} pointer-events-none opacity-60 group-hover:opacity-100 transition-opacity`} />
+          { label: "Clients", value: auditStats?.totalClients ?? clients?.length ?? "—", icon: Users, color: "text-electric", gradient: "from-electric/15 via-electric/5 to-transparent", glowClass: "stat-glow-electric" },
+          { label: "CRO Audits", value: auditStats?.totalAudits ?? "—", icon: Brain, color: "text-primary", gradient: "from-primary/15 via-primary/5 to-transparent", glowClass: "stat-glow-primary" },
+          { label: "Tweets Indexed", value: tweetStats?.total ?? "—", icon: BarChart3, color: "text-violet", gradient: "from-violet/15 via-violet/5 to-transparent", glowClass: "stat-glow-violet" },
+          { label: "Integrations", value: `${connectedIds.size}`, icon: Zap, color: "text-gold", gradient: "from-gold/15 via-gold/5 to-transparent", glowClass: "stat-glow-gold" },
+        ].map(({ label, value, icon: Icon, color, gradient, glowClass }) => (
+          <div key={label} className="glass-card gradient-border rounded-2xl p-4 relative overflow-hidden group hover:translate-y-[-2px] transition-all duration-300">
+            <div className={`absolute inset-0 ${glowClass} opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`} />
+            <div className={`absolute inset-0 bg-gradient-to-br ${gradient} pointer-events-none opacity-70 group-hover:opacity-100 transition-opacity`} />
             <div className="relative">
-              <Icon className={`h-5 w-5 ${color} mb-3`} />
+              <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br ${gradient} mb-3`}>
+                <Icon className={`h-5 w-5 ${color}`} />
+              </div>
               <p className="text-2xl font-extrabold text-foreground tabular-nums">{value}</p>
               <p className="text-[10px] text-muted-foreground uppercase tracking-[0.1em] mt-1 font-medium">{label}</p>
             </div>
@@ -416,8 +422,8 @@ const Index = () => {
       <div className="mb-8">
         <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-[0.12em] mb-3">Quick Actions</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          {quickActions.map(({ label, icon: Icon, gradient, border, text, href }) => (
-            <button key={label} onClick={() => navigate(href)} className={`flex items-center gap-2.5 rounded-xl border bg-gradient-to-br ${gradient} ${border} px-4 py-3 text-[13px] font-semibold ${text} transition-all hover:translate-y-[-1px] active:translate-y-0`}>
+          {quickActions.map(({ label, icon: Icon, gradient, border, text, href, glow }) => (
+            <button key={label} onClick={() => navigate(href)} className={`flex items-center gap-2.5 rounded-xl border bg-gradient-to-br ${gradient} ${border} ${glow} px-4 py-3 text-[13px] font-semibold ${text} transition-all duration-300 hover:translate-y-[-2px] active:translate-y-0`}>
               <Icon className="h-4 w-4 shrink-0" /> {label}
             </button>
           ))}
