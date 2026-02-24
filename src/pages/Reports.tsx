@@ -24,6 +24,8 @@ import {
   Zap,
   RefreshCw,
   TrendingUp,
+  Lightbulb,
+  Code2,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -129,6 +131,7 @@ const Reports = () => {
   const [viewingAudit, setViewingAudit] = useState<CroAudit | null>(null);
   const [generatingMockups, setGeneratingMockups] = useState<Set<number>>(new Set());
   const [expandedRecs, setExpandedRecs] = useState<Set<number>>(new Set());
+  const [expandedMockupPrompts, setExpandedMockupPrompts] = useState<Set<number>>(new Set());
   const [generatingScore, setGeneratingScore] = useState<string | null>(null);
   const [sharingPortal, setSharingPortal] = useState<string | null>(null);
   const [copiedPortal, setCopiedPortal] = useState<string | null>(null);
@@ -706,6 +709,16 @@ const Reports = () => {
                       <span className={`hidden sm:inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${sev.bg}`}>
                         {rec.severity === "high" ? "High Impact" : rec.severity === "medium" ? "Med Impact" : "Low Impact"}
                       </span>
+                      {/* Priority Score badge */}
+                      {typeof rec.priority_score === "number" && (
+                        <span className={`hidden sm:inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold tabular-nums tracking-wider ${
+                          rec.priority_score >= 80 ? "text-accent bg-accent/10 border-accent/30" :
+                          rec.priority_score >= 50 ? "text-yellow-400 bg-yellow-400/10 border-yellow-400/30" :
+                          "text-destructive bg-destructive/10 border-destructive/30"
+                        }`}>
+                          P{rec.priority_score}
+                        </span>
+                      )}
                       {/* Effort badge */}
                       {(() => {
                         const text = (rec.recommended_change + " " + rec.mockup_prompt).toLowerCase();
@@ -823,21 +836,92 @@ const Reports = () => {
                           </span>
                         </div>
 
-                        {/* If no screenshots at all, show standalone mockup section */}
-                        {!rec.section_screenshot_url && !rec.mockup_url && (
-                          <button
-                            onClick={() => handleGenerateMockup(viewingAudit, rec)}
-                            disabled={isMockupLoading}
-                            className="flex items-center gap-2 rounded-lg bg-primary/10 border border-primary/20 px-4 py-2.5 text-xs font-bold text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
-                          >
-                            {isMockupLoading ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <ImageIcon className="h-3.5 w-3.5" />
-                            )}
-                            {isMockupLoading ? "Generating mockup..." : "Generate Concept Mockup"}
-                          </button>
+                        {/* CRO Rationale */}
+                        {rec.cro_rationale && (
+                          <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3 sm:p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Lightbulb className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                              <span className="text-[11px] font-bold text-purple-400 uppercase tracking-wider">CRO Rationale</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{rec.cro_rationale}</p>
+                          </div>
                         )}
+
+                        {/* Reference Examples */}
+                        {rec.reference_examples && (
+                          <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 sm:p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Globe className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                              <span className="text-[11px] font-bold text-blue-400 uppercase tracking-wider">Reference Examples</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{rec.reference_examples}</p>
+                          </div>
+                        )}
+
+                        {/* Implementation Spec */}
+                        {rec.implementation_spec && (
+                          <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3 sm:p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Code2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                              <span className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider">Implementation Spec</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap font-mono text-[11px]">{rec.implementation_spec}</p>
+                          </div>
+                        )}
+
+                        {/* Collapsible Mockup Prompt */}
+                        {rec.mockup_prompt && (
+                          <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
+                            <button
+                              onClick={() => setExpandedMockupPrompts(prev => {
+                                const next = new Set(prev);
+                                if (next.has(rec.id)) next.delete(rec.id); else next.add(rec.id);
+                                return next;
+                              })}
+                              className="w-full flex items-center gap-2 px-3 sm:px-4 py-2.5 text-left hover:bg-muted/50 transition-colors"
+                            >
+                              <Sparkles className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex-1">Design Brief / Mockup Prompt</span>
+                              {expandedMockupPrompts.has(rec.id) ? (
+                                <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                              )}
+                            </button>
+                            {expandedMockupPrompts.has(rec.id) && (
+                              <div className="px-3 sm:px-4 pb-3">
+                                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{rec.mockup_prompt}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Action buttons row */}
+                        <div className="flex flex-wrap gap-2">
+                          {/* If no screenshots at all, show standalone mockup section */}
+                          {!rec.section_screenshot_url && !rec.mockup_url && (
+                            <button
+                              onClick={() => handleGenerateMockup(viewingAudit, rec)}
+                              disabled={isMockupLoading}
+                              className="flex items-center gap-2 rounded-lg bg-primary/10 border border-primary/20 px-4 py-2.5 text-xs font-bold text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                            >
+                              {isMockupLoading ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <ImageIcon className="h-3.5 w-3.5" />
+                              )}
+                              {isMockupLoading ? "Generating mockup..." : "Generate Concept Mockup"}
+                            </button>
+                          )}
+                          {/* Send to Dev Pipeline */}
+                          <button
+                            onClick={() => toast.info(`Recommendation #${rec.id} queued for dev pipeline`, { description: rec.section })}
+                            className="flex items-center gap-2 rounded-lg bg-accent/10 border border-accent/20 px-4 py-2.5 text-xs font-bold text-accent hover:bg-accent/20 transition-colors"
+                          >
+                            <ArrowRight className="h-3.5 w-3.5" />
+                            Send to Dev Pipeline
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
