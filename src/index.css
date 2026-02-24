@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,57 +6,57 @@
 
 @layer base {
   :root {
-    /* Oddit-inspired palette — dark mode internal tool */
-    --background: 230 35% 7%;
-    --foreground: 48 60% 92%;
+    /* Refined deep-space palette */
+    --background: 228 28% 6%;
+    --foreground: 220 20% 95%;
 
-    --card: 230 30% 10%;
-    --card-foreground: 48 60% 92%;
+    --card: 228 24% 9%;
+    --card-foreground: 220 20% 95%;
 
-    --popover: 230 30% 10%;
-    --popover-foreground: 48 60% 92%;
+    --popover: 228 24% 9%;
+    --popover-foreground: 220 20% 95%;
 
-    /* Oddit signature blue — brightened for visibility */
-    --primary: 245 80% 80%;
-    --primary-foreground: 48 100% 95%;
+    /* Oddit signature blue — electric indigo */
+    --primary: 240 80% 68%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 230 25% 14%;
-    --secondary-foreground: 48 40% 80%;
+    --secondary: 228 22% 12%;
+    --secondary-foreground: 220 15% 80%;
 
-    --muted: 230 20% 16%;
-    --muted-foreground: 230 15% 75%;
+    --muted: 228 18% 14%;
+    --muted-foreground: 220 12% 60%;
 
-    /* Oddit mint green */
-    --accent: 160 60% 65%;
-    --accent-foreground: 230 35% 7%;
+    /* Mint-teal accent */
+    --accent: 165 55% 55%;
+    --accent-foreground: 228 28% 6%;
 
-    --destructive: 0 72% 55%;
-    --destructive-foreground: 48 100% 95%;
+    --destructive: 0 65% 52%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 230 20% 16%;
-    --input: 230 20% 16%;
-    --ring: 245 85% 68%;
+    --border: 228 18% 13%;
+    --input: 228 18% 13%;
+    --ring: 240 80% 68%;
 
-    --radius: 0.625rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 230 35% 5%;
-    --sidebar-foreground: 230 15% 75%;
-    --sidebar-primary: 245 85% 68%;
-    --sidebar-primary-foreground: 48 100% 95%;
-    --sidebar-accent: 230 25% 12%;
-    --sidebar-accent-foreground: 48 60% 92%;
-    --sidebar-border: 230 20% 12%;
-    --sidebar-ring: 245 85% 68%;
+    --sidebar-background: 228 30% 5%;
+    --sidebar-foreground: 220 12% 60%;
+    --sidebar-primary: 240 80% 68%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 228 22% 10%;
+    --sidebar-accent-foreground: 220 20% 95%;
+    --sidebar-border: 228 18% 10%;
+    --sidebar-ring: 240 80% 68%;
 
-    --success: 160 60% 50%;
-    --warning: 40 90% 60%;
-    --cream: 48 100% 95%;
+    --success: 160 55% 48%;
+    --warning: 38 92% 55%;
+    --cream: 0 0% 98%;
 
-    /* Pop colors */
-    --coral: 350 85% 65%;
-    --electric: 195 100% 60%;
-    --gold: 42 100% 65%;
-    --violet: 280 80% 70%;
+    /* Accent palette */
+    --coral: 4 80% 62%;
+    --electric: 200 95% 55%;
+    --gold: 40 95% 58%;
+    --violet: 270 70% 65%;
   }
 }
 
@@ -66,138 +66,127 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
   }
 }
 
 @layer utilities {
+  /* ── Card system ─────────────────────────────────────── */
+  .glass-card {
+    background: hsl(228 24% 9% / 0.7);
+    backdrop-filter: blur(16px) saturate(1.2);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    border: 1px solid hsl(228 18% 15% / 0.6);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .glass-card:hover {
+    border-color: hsl(240 80% 68% / 0.2);
+    box-shadow: 0 8px 32px -8px hsl(240 80% 68% / 0.08);
+  }
+
   .glow-card {
-    box-shadow: 0 0 0 1px hsl(230 20% 16%), 0 4px 24px -4px hsl(0 0% 0% / 0.5);
-    transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
+    box-shadow: 0 0 0 1px hsl(228 18% 13%), 0 2px 12px -4px hsl(0 0% 0% / 0.4);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .glow-card:hover {
-    box-shadow: 
-      0 0 0 1px hsl(245 80% 80% / 0.35), 
-      0 8px 32px -4px hsl(245 80% 80% / 0.15), 
-      0 0 60px -12px hsl(245 80% 80% / 0.12),
-      0 0 80px -20px hsl(280 80% 70% / 0.08);
-    transform: translateY(-2px);
+    box-shadow:
+      0 0 0 1px hsl(240 80% 68% / 0.25),
+      0 8px 24px -6px hsl(240 80% 68% / 0.1),
+      0 0 48px -12px hsl(240 80% 68% / 0.08);
+    transform: translateY(-1px);
   }
 
-  /* Colorful glow variants */
+  /* Color variants */
   .glow-card-coral:hover {
-    box-shadow: 
-      0 0 0 1px hsl(350 85% 65% / 0.3),
-      0 8px 32px -4px hsl(350 85% 65% / 0.12),
-      0 0 60px -12px hsl(350 85% 65% / 0.1);
-    transform: translateY(-2px);
+    box-shadow:
+      0 0 0 1px hsl(4 80% 62% / 0.25),
+      0 8px 24px -6px hsl(4 80% 62% / 0.1);
+    transform: translateY(-1px);
   }
   .glow-card-electric:hover {
-    box-shadow: 
-      0 0 0 1px hsl(195 100% 60% / 0.3),
-      0 8px 32px -4px hsl(195 100% 60% / 0.12),
-      0 0 60px -12px hsl(195 100% 60% / 0.1);
-    transform: translateY(-2px);
+    box-shadow:
+      0 0 0 1px hsl(200 95% 55% / 0.25),
+      0 8px 24px -6px hsl(200 95% 55% / 0.1);
+    transform: translateY(-1px);
   }
   .glow-card-gold:hover {
-    box-shadow: 
-      0 0 0 1px hsl(42 100% 65% / 0.3),
-      0 8px 32px -4px hsl(42 100% 65% / 0.12),
-      0 0 60px -12px hsl(42 100% 65% / 0.1);
-    transform: translateY(-2px);
+    box-shadow:
+      0 0 0 1px hsl(40 95% 58% / 0.25),
+      0 8px 24px -6px hsl(40 95% 58% / 0.1);
+    transform: translateY(-1px);
+  }
+  .glow-card-violet:hover {
+    box-shadow:
+      0 0 0 1px hsl(270 70% 65% / 0.25),
+      0 8px 24px -6px hsl(270 70% 65% / 0.1);
+    transform: translateY(-1px);
   }
 
+  /* ── Text utilities ──────────────────────────────────── */
   .text-gradient {
-    background: linear-gradient(135deg, hsl(245 85% 68%), hsl(160 60% 65%));
+    background: linear-gradient(135deg, hsl(240 80% 68%), hsl(165 55% 55%));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
   .text-gradient-warm {
-    background: linear-gradient(135deg, hsl(350 85% 65%), hsl(42 100% 65%));
+    background: linear-gradient(135deg, hsl(4 80% 62%), hsl(40 95% 58%));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
   .text-gradient-cool {
-    background: linear-gradient(135deg, hsl(195 100% 60%), hsl(280 80% 70%));
+    background: linear-gradient(135deg, hsl(200 95% 55%), hsl(270 70% 65%));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
   .text-cream {
-    color: hsl(48 100% 95%);
-  }
-  .bg-oddit-blue {
-    background-color: hsl(245 85% 68%);
-  }
-  .bg-oddit-mint {
-    background-color: hsl(160 60% 65%);
-  }
-  .border-oddit-blue {
-    border-color: hsl(245 85% 68%);
+    color: hsl(0 0% 98%);
   }
 
-  /* Staggered entrance animations for children */
+  /* ── Stagger animations ──────────────────────────────── */
   .stagger-children > * {
     opacity: 0;
-    animation: fade-in 0.4s ease-out forwards;
+    animation: fade-up 0.45s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   }
   .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
-  .stagger-children > *:nth-child(2) { animation-delay: 60ms; }
-  .stagger-children > *:nth-child(3) { animation-delay: 120ms; }
-  .stagger-children > *:nth-child(4) { animation-delay: 180ms; }
-  .stagger-children > *:nth-child(5) { animation-delay: 240ms; }
-  .stagger-children > *:nth-child(6) { animation-delay: 300ms; }
-  .stagger-children > *:nth-child(7) { animation-delay: 360ms; }
-  .stagger-children > *:nth-child(8) { animation-delay: 420ms; }
+  .stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+  .stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+  .stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+  .stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+  .stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+  .stagger-children > *:nth-child(7) { animation-delay: 300ms; }
+  .stagger-children > *:nth-child(8) { animation-delay: 350ms; }
 
-  /* Shimmer gradient for loading states */
+  /* ── Shimmer ─────────────────────────────────────────── */
   .shimmer-bg {
-    background: linear-gradient(
-      90deg,
-      hsl(230 30% 10%) 0%,
-      hsl(245 80% 80% / 0.08) 50%,
-      hsl(230 30% 10%) 100%
-    );
+    background: linear-gradient(90deg, hsl(228 24% 9%) 0%, hsl(240 80% 68% / 0.06) 50%, hsl(228 24% 9%) 100%);
     background-size: 200% 100%;
     animation: shimmer 2s linear infinite;
   }
 
-  /* Floating orb decorations */
+  /* ── Ambient orbs ────────────────────────────────────── */
   .orb {
     position: absolute;
     border-radius: 50%;
-    filter: blur(60px);
+    filter: blur(80px);
     pointer-events: none;
-    opacity: 0.12;
+    opacity: 0.08;
   }
-  .orb-primary {
-    background: hsl(245 80% 70%);
-  }
-  .orb-accent {
-    background: hsl(160 60% 55%);
-  }
-  .orb-coral {
-    background: hsl(350 85% 60%);
-  }
-  .orb-violet {
-    background: hsl(280 80% 65%);
-  }
+  .orb-primary { background: hsl(240 80% 65%); }
+  .orb-accent { background: hsl(165 55% 50%); }
+  .orb-coral { background: hsl(4 80% 55%); }
+  .orb-violet { background: hsl(270 70% 60%); }
 
-  /* Glass morphism */
+  /* ── Glass ───────────────────────────────────────────── */
   .glass {
-    background: hsl(230 30% 10% / 0.6);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: hsl(228 24% 9% / 0.5);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
   }
 
-  /* Hover scale */
-  .hover-scale {
-    transition: transform 0.2s ease;
-  }
-  .hover-scale:hover {
-    transform: scale(1.03);
-  }
-
-  /* Active nav indicator glow */
+  /* ── Active nav indicator ────────────────────────────── */
   .nav-glow {
     position: relative;
   }
@@ -208,31 +197,25 @@
     top: 50%;
     transform: translateY(-50%);
     width: 3px;
-    height: 60%;
-    border-radius: 0 4px 4px 0;
-    background: hsl(245 80% 80%);
-    box-shadow: 0 0 12px 2px hsl(245 80% 80% / 0.4);
+    height: 55%;
+    border-radius: 0 3px 3px 0;
+    background: hsl(240 80% 68%);
+    box-shadow: 0 0 10px 1px hsl(240 80% 68% / 0.35);
   }
 
-  /* Colorful border glow */
-  .border-glow-multi {
-    position: relative;
+  /* ── Hover scale ─────────────────────────────────────── */
+  .hover-scale {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .border-glow-multi::after {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    background: linear-gradient(135deg, hsl(245 80% 70% / 0.4), hsl(350 85% 65% / 0.3), hsl(160 60% 55% / 0.3), hsl(280 80% 70% / 0.3));
-    z-index: -1;
-    filter: blur(8px);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-  .border-glow-multi:hover::after {
-    opacity: 1;
+  .hover-scale:hover {
+    transform: scale(1.02);
   }
 
+  /* ── Keyframes ───────────────────────────────────────── */
+  @keyframes fade-up {
+    0% { opacity: 0; transform: translateY(8px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
   @keyframes fade-in {
     0% { opacity: 0; transform: translateY(10px); }
     100% { opacity: 1; transform: translateY(0); }
