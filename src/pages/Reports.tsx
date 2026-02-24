@@ -41,13 +41,19 @@ interface Recommendation {
   id: number;
   section: string;
   severity: "high" | "medium" | "low";
+  aida_stage?: "attention" | "interest" | "desire" | "action";
   current_issue: string;
   recommended_change: string;
+  competitor_reference?: string;
   expected_impact: string;
   mockup_prompt: string;
   mockup_url?: string;
   section_screenshot_url?: string;
   scroll_percentage?: number;
+  cro_rationale: string;
+  reference_examples: string;
+  implementation_spec: string;
+  priority_score: number;
 }
 
 interface CroAudit {
