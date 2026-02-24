@@ -70,6 +70,7 @@ interface FirefliesTranscriptFull extends FirefliesTranscriptLight {
 }
 
 const PAGE_SIZE = 50;
+const MAX_PAGES_PER_RUN = 40; // ~2000 transcripts per run, stays within timeout
 
 async function fetchPage(apiKey: string, skip: number, full: boolean): Promise<any[]> {
   const resp = await fetch(FIREFLIES_API, {
@@ -165,25 +166,54 @@ serve(async (req) => {
 
     // Load all existing fireflies_ids from DB so we can skip re-fetching sentences
     console.log("Loading existing transcript IDs from DB...");
-    const { data: existingRows } = await sb
-      .from("fireflies_transcripts")
-      .select("fireflies_id");
-    const existingIds = new Set((existingRows ?? []).map((r: any) => r.fireflies_id));
+    // Fetch ALL existing IDs (default limit is 1000, so paginate)
+    const existingIds = new Set<string>();
+    let from = 0;
+    const BATCH = 1000;
+    while (true) {
+      const { data: batch } = await sb
+        .from("fireflies_transcripts")
+        .select("fireflies_id")
+        .range(from, from + BATCH - 1);
+      if (!batch || batch.length === 0) break;
+      batch.forEach((r: any) => existingIds.add(r.fireflies_id));
+      if (batch.length < BATCH) break;
+      from += BATCH;
+    }
     console.log(`Found ${existingIds.size} existing transcripts in DB.`);
 
     let totalSynced = 0;
     let totalSkipped = 0;
+    let hitLimit = false;
+    let lastSkip = 0;
     const errors: string[] = [];
 
     for (const cred of creds) {
       try {
         console.log(`Syncing with key ...${cred.api_key.slice(-4)}`);
-        let skip = 0;
+
+        // Parse optional resume_skip from request body
+        let resumeSkip = 0;
+        try {
+          const body = await req.clone().json();
+          if (body?.resume_skip) resumeSkip = Number(body.resume_skip) || 0;
+        } catch { /* no body is fine */ }
+
+        let skip = resumeSkip;
         let pageNum = 0;
+        let pagesThisRun = 0;
 
         while (true) {
           pageNum++;
+          pagesThisRun++;
           console.log(`Fetching light page ${pageNum} (skip=${skip})`);
+
+          if (pagesThisRun > MAX_PAGES_PER_RUN) {
+            console.log(`Reached max pages per run (${MAX_PAGES_PER_RUN}), will continue next invocation at skip=${skip}`);
+            hitLimit = true;
+            lastSkip = skip;
+            break;
+          }
 
           // Always fetch light page first to get IDs
           const lightPage: FirefliesTranscriptLight[] = await fetchPage(cred.api_key, skip, false);
@@ -227,8 +257,6 @@ serve(async (req) => {
 
           // For new transcripts, fetch full data with sentences
           if (newTranscripts.length > 0) {
-            // Fetch full page only if there are new transcripts on this page
-            // We re-fetch the full page and filter to just new IDs
             const newIds = new Set(newTranscripts.map(t => t.id));
             console.log(`Fetching full data for ${newIds.size} new transcripts on page ${pageNum}...`);
             const fullPage: FirefliesTranscriptFull[] = await fetchPage(cred.api_key, skip, true);
@@ -257,7 +285,6 @@ serve(async (req) => {
               totalSkipped += newRows.length;
             } else {
               totalSynced += newRows.length;
-              // Add new IDs to our set so future pages know about them
               newRows.forEach(r => existingIds.add(r.fireflies_id));
               console.log(`Upserted ${newRows.length} new transcripts with full text. Total synced: ${totalSynced}`);
             }
@@ -271,7 +298,7 @@ serve(async (req) => {
           skip += PAGE_SIZE;
         }
 
-        console.log(`Finished key ...${cred.api_key.slice(-4)}: ${totalSynced} synced, ${totalSkipped} skipped`);
+        console.log(`Finished key ...${cred.api_key.slice(-4)}: ${totalSynced} synced, ${totalSkipped} skipped, hitLimit=${hitLimit}, nextSkip=${skip}`);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Unknown error";
         console.error(`Error with key ...${cred.api_key.slice(-4)}: ${msg}`);
@@ -326,6 +353,8 @@ serve(async (req) => {
         synced: totalSynced,
         skipped: totalSkipped,
         total_transcripts: count ?? 0,
+        has_more: hitLimit,
+        resume_skip: hitLimit ? lastSkip : undefined,
         errors: errors.length > 0 ? errors : undefined,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
