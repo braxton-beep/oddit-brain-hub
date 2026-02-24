@@ -181,7 +181,7 @@ const SettingsPage = () => {
             <SettingsIcon className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-cream">Settings</h1>
+            <h1 className="text-2xl font-bold text-gradient">Settings</h1>
             <p className="text-[13px] text-muted-foreground">
               Manage your integration API keys
             </p>

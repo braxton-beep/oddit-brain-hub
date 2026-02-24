@@ -346,7 +346,7 @@ const Reports = () => {
             <FileText className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-cream">CRO Audit Reports</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-gradient">CRO Audit Reports</h1>
             <p className="text-[13px] text-muted-foreground">
               AI-powered conversion rate optimization audits
             </p>
@@ -412,14 +412,14 @@ const Reports = () => {
       )}
 
       {/* Stats */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-4 mb-6 sm:mb-8">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-4 mb-6 sm:mb-8 stagger-children">
         {[
-          { label: "Total Audits", value: audits.length.toString() },
-          { label: "Completed", value: completedAudits.length.toString() },
-          { label: "Recommendations", value: totalRecs.toString() },
-          { label: "AI Model", value: "Gemini 3" },
+          { label: "Total Audits", value: audits.length.toString(), glow: "stat-glow-primary" },
+          { label: "Completed", value: completedAudits.length.toString(), glow: "stat-glow-electric" },
+          { label: "Recommendations", value: totalRecs.toString(), glow: "stat-glow-violet" },
+          { label: "AI Model", value: "Gemini 3", glow: "stat-glow-gold" },
         ].map((s) => (
-          <div key={s.label} className="glow-card rounded-xl bg-card p-4 sm:p-5">
+          <div key={s.label} className={`glow-card gradient-border rounded-xl bg-card p-4 sm:p-5 hover-scale ${s.glow}`}>
             <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider">{s.label}</p>
             <p className="mt-1 sm:mt-2 text-xl sm:text-2xl font-bold text-cream">{s.value}</p>
           </div>

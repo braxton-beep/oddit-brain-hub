@@ -375,7 +375,7 @@ const TwitterPage = () => {
             <Share2 className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-cream">Social Content</h1>
+            <h1 className="text-2xl font-bold text-gradient-warm">Social Content</h1>
             <p className="text-[13px] text-muted-foreground">
               AI-powered content generation for Twitter/X & LinkedIn
             </p>
@@ -392,20 +392,20 @@ const TwitterPage = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-4 mb-8">
-        <div className="glow-card rounded-xl bg-card p-5">
+      <div className="grid gap-4 sm:grid-cols-4 mb-8 stagger-children">
+        <div className="glow-card gradient-border rounded-xl bg-card p-5 hover-scale stat-glow-primary">
           <p className="text-xs text-muted-foreground uppercase tracking-wider">Tweets Indexed</p>
           <p className="mt-2 text-2xl font-bold text-cream">{stats?.total?.toLocaleString() ?? "0"}</p>
         </div>
-        <div className="glow-card rounded-xl bg-card p-5">
+        <div className="glow-card gradient-border rounded-xl bg-card p-5 hover-scale stat-glow-electric">
           <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Likes</p>
           <p className="mt-2 text-2xl font-bold text-cream">{stats?.totalLikes?.toLocaleString() ?? "0"}</p>
         </div>
-        <div className="glow-card rounded-xl bg-card p-5">
+        <div className="glow-card gradient-border rounded-xl bg-card p-5 hover-scale stat-glow-violet">
           <p className="text-xs text-muted-foreground uppercase tracking-wider">Drafts Generated</p>
           <p className="mt-2 text-2xl font-bold text-cream">{drafts?.length ?? "0"}</p>
         </div>
-        <div className="glow-card rounded-xl bg-card p-5">
+        <div className="glow-card gradient-border rounded-xl bg-card p-5 hover-scale stat-glow-gold">
           <p className="text-xs text-muted-foreground uppercase tracking-wider">Account</p>
           <p className="mt-2 text-sm font-bold text-accent">@itsOddit</p>
           <p className="text-[11px] text-muted-foreground mt-0.5">x.com/itsOddit</p>

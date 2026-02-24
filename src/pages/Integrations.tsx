@@ -73,7 +73,7 @@ const Integrations = () => {
             <Link2 className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-cream">Integrations</h1>
+            <h1 className="text-2xl font-bold text-gradient-cool">Integrations</h1>
             <p className="text-[13px] text-muted-foreground">
               {isLoading ? "Checking connections…" : `${connectedCount} of ${INTEGRATIONS.length} connected`}
             </p>
@@ -82,7 +82,7 @@ const Integrations = () => {
       </div>
 
       {/* Integration Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 stagger-children">
         {INTEGRATIONS.map((integration) => {
           const isConnected = integration.credentialIds.some((cid) => connectedIds.has(cid));
 

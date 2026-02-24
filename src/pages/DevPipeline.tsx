@@ -290,7 +290,7 @@ const DevPipeline = () => {
               <Code2 className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-cream">Dev Pipeline</h1>
+              <h1 className="text-2xl font-bold text-gradient-cool">Dev Pipeline</h1>
               <p className="text-[13px] text-muted-foreground">
                 Figma → Shopify Liquid code automation
               </p>
@@ -307,12 +307,15 @@ const DevPipeline = () => {
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-4 mb-8 stagger-children">
-        {pipelineStats.map((s) => (
-          <div key={s.label} className="glow-card rounded-xl bg-card p-5 hover-scale">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">{s.label}</p>
-            <p className="mt-2 text-2xl font-bold text-cream">{s.value}</p>
-          </div>
-        ))}
+        {pipelineStats.map((s, i) => {
+          const glows = ["stat-glow-primary", "stat-glow-electric", "stat-glow-violet", "stat-glow-gold"];
+          return (
+            <div key={s.label} className={`glow-card gradient-border rounded-xl bg-card p-5 hover-scale ${glows[i % 4]}`}>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">{s.label}</p>
+              <p className="mt-2 text-2xl font-bold text-cream">{s.value}</p>
+            </div>
+          );
+        })}
       </div>
 
       {/* Pipeline stages legend */}
