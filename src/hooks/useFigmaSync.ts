@@ -81,6 +81,20 @@ export function useAddFigmaProject() {
   });
 }
 
+export function useAddFigmaTeam() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ team_id, label }: { team_id: string; label: string }) => {
+      // Insert a placeholder row with team_id so the sync function discovers all projects
+      const { error } = await supabase
+        .from("figma_projects")
+        .insert({ project_id: `team-${team_id}`, project_name: label || `Team ${team_id}`, team_id });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["figma-projects"] }),
+  });
+}
+
 export function useDeleteFigmaProject() {
   const qc = useQueryClient();
   return useMutation({
