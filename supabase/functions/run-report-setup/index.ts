@@ -77,14 +77,14 @@ function getFirecrawlKey(): string | null {
   return Deno.env.get("FIRECRAWL_API_KEY") ?? null;
 }
 
-// ── Simple homepage screenshot via Firecrawl ──────────────────────────────────
+// ── Full-page homepage screenshot via Firecrawl ───────────────────────────────
 async function captureHomepageScreenshot(
   url: string,
   firecrawlKey: string,
-  viewport: { width: number; height: number },
+  mobile: boolean,
   label: string
 ): Promise<Uint8Array | null> {
-  console.log(`[Screenshot] Capturing ${label} (${viewport.width}x${viewport.height}): ${url}`);
+  console.log(`[Screenshot] Capturing ${label} (${mobile ? "mobile" : "desktop"}, full page): ${url}`);
   try {
     const resp = await fetch(`${FIRECRAWL_API}/scrape`, {
       method: "POST",
@@ -95,11 +95,8 @@ async function captureHomepageScreenshot(
       body: JSON.stringify({
         url,
         formats: ["screenshot@fullPage"],
+        mobile,
         waitFor: 3000,
-        actions: [
-          { type: "wait", milliseconds: 2000 },
-          { type: "screenshot", fullPage: true },
-        ],
       }),
     });
 
@@ -110,15 +107,7 @@ async function captureHomepageScreenshot(
     }
 
     const data = await resp.json();
-
-    // Find screenshot in response (actions.screenshots or top-level)
-    let screenshotField = "";
-    if (data.data?.actions?.screenshots?.length > 0) {
-      screenshotField = data.data.actions.screenshots[data.data.actions.screenshots.length - 1];
-    }
-    if (!screenshotField) {
-      screenshotField = data.data?.screenshot || data.screenshot || "";
-    }
+    const screenshotField = data.data?.screenshot || data.screenshot || "";
 
     if (!screenshotField) {
       console.warn(`[Screenshot] No screenshot data for ${label}`);
@@ -325,8 +314,8 @@ serve(async (req) => {
 
         // Capture desktop + mobile in parallel
         const [desktopBytes, mobileBytes] = await Promise.all([
-          captureHomepageScreenshot(mainUrl, firecrawlKey, { width: 1440, height: 900 }, "Desktop"),
-          captureHomepageScreenshot(mainUrl, firecrawlKey, { width: 390, height: 844 }, "Mobile"),
+          captureHomepageScreenshot(mainUrl, firecrawlKey, false, "Desktop"),
+          captureHomepageScreenshot(mainUrl, firecrawlKey, true, "Mobile"),
         ]);
 
         const results: string[] = [];
