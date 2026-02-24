@@ -915,7 +915,26 @@ const Reports = () => {
                           )}
                           {/* Send to Dev Pipeline */}
                           <button
-                            onClick={() => toast.info(`Recommendation #${rec.id} queued for dev pipeline`, { description: rec.section })}
+                            onClick={async () => {
+                              try {
+                                const { error } = await supabase.from("pipeline_projects").insert({
+                                  client: viewingAudit.client_name || viewingAudit.shop_url,
+                                  page: `[Rec #${rec.id}] ${rec.section}`,
+                                  stages: [
+                                    { name: "Figma Pull", status: "pending" },
+                                    { name: "Section Split", status: "pending" },
+                                    { name: "Code Gen", status: "pending" },
+                                    { name: "QA", status: "pending" },
+                                    { name: "Refinement", status: "pending" },
+                                  ],
+                                  last_update: new Date().toISOString(),
+                                });
+                                if (error) throw error;
+                                toast.success(`Rec #${rec.id} sent to Dev Pipeline`, { description: rec.section });
+                              } catch (e: any) {
+                                toast.error("Failed to send to pipeline", { description: e.message });
+                              }
+                            }}
                             className="flex items-center gap-2 rounded-lg bg-accent/10 border border-accent/20 px-4 py-2.5 text-xs font-bold text-accent hover:bg-accent/20 transition-colors"
                           >
                             <ArrowRight className="h-3.5 w-3.5" />

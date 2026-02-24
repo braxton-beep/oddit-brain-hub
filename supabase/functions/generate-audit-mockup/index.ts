@@ -42,7 +42,7 @@ serve(async (req) => {
         messages: [
           {
             role: "user",
-            content: mockupPrompt,
+            content: "You are generating a high-fidelity web design concept mockup for a CRO recommendation. Create a clean, modern, professional e-commerce design that looks like a real Shopify store. Use realistic product photography placeholders, proper typography hierarchy, and modern UI patterns. The design should be immediately implementable. Here is the specific design brief: " + mockupPrompt,
           },
         ],
         modalities: ["image", "text"],
