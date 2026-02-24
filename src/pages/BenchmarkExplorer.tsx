@@ -271,7 +271,7 @@ const BenchmarkExplorer = () => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-cream">Benchmark Explorer</h1>
+              <h1 className="text-2xl font-bold text-gradient-warm">Benchmark Explorer</h1>
               <span className="rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-[10px] font-bold tracking-widest text-gold uppercase">
                 KPI DB
               </span>

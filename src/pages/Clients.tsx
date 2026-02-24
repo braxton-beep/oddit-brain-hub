@@ -349,7 +349,7 @@ export default function Clients() {
             <Users className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-cream">Client Database</h1>
+            <h1 className="text-2xl font-bold text-gradient">Client Database</h1>
             <p className="text-[13px] text-muted-foreground">
               {clients.length} brand{clients.length !== 1 ? "s" : ""} across {industryOptions.length} industries
             </p>

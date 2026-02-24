@@ -449,7 +449,7 @@ const CompetitiveIntel = () => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-cream">Competitive Intel</h1>
+              <h1 className="text-2xl font-bold text-gradient-cool">Competitive Intel</h1>
               <span className="rounded-full border border-violet/40 bg-violet/10 px-2 py-0.5 text-[10px] font-bold tracking-widest text-violet uppercase">
                 Agent
               </span>

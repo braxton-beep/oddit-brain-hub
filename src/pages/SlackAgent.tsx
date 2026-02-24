@@ -612,7 +612,7 @@ const SlackAgent = () => {
             <MessageSquare className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-cream">Slack Agent</h1>
+            <h1 className="text-2xl font-bold text-gradient-vivid">Slack Agent</h1>
             <p className="text-[13px] text-muted-foreground">AI assistant living in your Slack workspace</p>
           </div>
         </div>

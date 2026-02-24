@@ -212,7 +212,7 @@ const AuditBrain = () => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-cream">Oddit Brain</h1>
+              <h1 className="text-2xl font-bold text-gradient-vivid">Oddit Brain</h1>
               <span className="rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] font-bold tracking-widest text-accent uppercase">v1.3</span>
             </div>
             <p className="text-[13px] text-muted-foreground">Central AI knowledge base & operational assistant</p>
