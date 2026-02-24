@@ -26,8 +26,10 @@ import {
   TrendingUp,
   Lightbulb,
   Code2,
+  Layers,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { BeforeAfterSlider } from "@/components/BeforeAfterSlider";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -130,6 +132,7 @@ const Reports = () => {
   const [generating, setGenerating] = useState(false);
   const [viewingAudit, setViewingAudit] = useState<CroAudit | null>(null);
   const [generatingMockups, setGeneratingMockups] = useState<Set<number>>(new Set());
+  const [batchGenerating, setBatchGenerating] = useState(false);
   const [expandedRecs, setExpandedRecs] = useState<Set<number>>(new Set());
   const [expandedMockupPrompts, setExpandedMockupPrompts] = useState<Set<number>>(new Set());
   const [generatingScore, setGeneratingScore] = useState<string | null>(null);
@@ -322,6 +325,49 @@ const Reports = () => {
     } finally {
       setSharingPortal(null);
     }
+  };
+
+  const handleBatchGenerateMockups = async (audit: CroAudit) => {
+    const recsWithoutMockup = audit.recommendations.filter((r) => !r.mockup_url && r.mockup_prompt);
+    if (recsWithoutMockup.length === 0) {
+      toast.info("All recommendations already have mockups!");
+      return;
+    }
+    setBatchGenerating(true);
+    const toastId = "batch-mockups";
+    let completed = 0;
+    toast.loading(`Generating ${recsWithoutMockup.length} mockups...`, { id: toastId, description: `0/${recsWithoutMockup.length} complete` });
+
+    for (const rec of recsWithoutMockup) {
+      try {
+        setGeneratingMockups((prev) => new Set(prev).add(rec.id));
+        const resp = await fetch(GENERATE_MOCKUP_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ auditId: audit.id, recommendationId: rec.id, mockupPrompt: rec.mockup_prompt }),
+        });
+        if (resp.ok) {
+          const result = await resp.json();
+          const updatedRecs = (viewingAudit?.recommendations ?? audit.recommendations).map((r) =>
+            r.id === rec.id ? { ...r, mockup_url: result.mockupUrl } : r
+          );
+          const updatedAudit = { ...(viewingAudit ?? audit), recommendations: updatedRecs };
+          setViewingAudit(updatedAudit);
+          setAudits((prev) => prev.map((a) => (a.id === audit.id ? updatedAudit : a)));
+        }
+        completed++;
+        toast.loading(`Generating ${recsWithoutMockup.length} mockups...`, { id: toastId, description: `${completed}/${recsWithoutMockup.length} complete` });
+      } catch {
+        completed++;
+      } finally {
+        setGeneratingMockups((prev) => { const next = new Set(prev); next.delete(rec.id); return next; });
+      }
+    }
+    setBatchGenerating(false);
+    toast.success(`${completed} mockups generated!`, { id: toastId });
   };
 
   const toggleRec = (id: number) => {
@@ -615,6 +661,20 @@ const Reports = () => {
                     year: "numeric",
                   })}
                 </p>
+                {/* Batch Generate All Mockups */}
+                {(() => {
+                  const missing = viewingAudit.recommendations.filter((r) => !r.mockup_url && r.mockup_prompt).length;
+                  return missing > 0 ? (
+                    <button
+                      onClick={() => handleBatchGenerateMockups(viewingAudit)}
+                      disabled={batchGenerating}
+                      className="mt-2 flex items-center gap-2 rounded-lg bg-accent/10 border border-accent/30 px-3 py-1.5 text-[11px] font-bold text-accent hover:bg-accent/20 transition-colors disabled:opacity-50"
+                    >
+                      {batchGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Layers className="h-3 w-3" />}
+                      {batchGenerating ? "Generating..." : `Generate All Mockups (${missing})`}
+                    </button>
+                  ) : null;
+                })()}
               </div>
             </div>
 
@@ -743,37 +803,37 @@ const Reports = () => {
                     {expanded && (
                       <div className="px-3 sm:px-4 pb-4 pt-0 space-y-3 sm:space-y-4">
 
-                        {/* Before / After screenshots row */}
-                        {(rec.section_screenshot_url || rec.mockup_url) && (
+                        {/* Before / After comparison */}
+                        {rec.section_screenshot_url && rec.mockup_url ? (
+                          /* Interactive slider when both images exist */
+                          <BeforeAfterSlider
+                            beforeSrc={rec.section_screenshot_url}
+                            afterSrc={rec.mockup_url}
+                            beforeLabel="Current"
+                            afterLabel="AI Concept"
+                            className="max-h-[400px]"
+                          />
+                        ) : (rec.section_screenshot_url || rec.mockup_url) ? (
+                          /* Side-by-side when only one exists */
                           <div className="grid gap-3 sm:grid-cols-2">
-                            {/* Before: section screenshot */}
                             <div>
                               <p className="text-[10px] font-bold text-destructive uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                                 <AlertTriangle className="h-3 w-3" /> Before — Current State
                               </p>
                               {rec.section_screenshot_url ? (
-                                <img
-                                  src={rec.section_screenshot_url}
-                                  alt={`Current state of ${rec.section}`}
-                                  className="w-full rounded-lg border border-destructive/20 object-cover max-h-52"
-                                />
+                                <img src={rec.section_screenshot_url} alt={`Current state of ${rec.section}`} className="w-full rounded-lg border border-destructive/20 object-cover max-h-52" />
                               ) : (
                                 <div className="w-full h-32 rounded-lg border border-destructive/20 bg-destructive/5 flex items-center justify-center text-[11px] text-muted-foreground">
                                   Screenshot not available
                                 </div>
                               )}
                             </div>
-                            {/* After: AI mockup */}
                             <div>
                               <p className="text-[10px] font-bold text-accent uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                                 <Sparkles className="h-3 w-3" /> After — AI Concept
                               </p>
                               {rec.mockup_url ? (
-                                <img
-                                  src={rec.mockup_url}
-                                  alt={`Mockup for ${rec.section}`}
-                                  className="w-full rounded-lg border border-accent/20 object-cover max-h-52"
-                                />
+                                <img src={rec.mockup_url} alt={`Mockup for ${rec.section}`} className="w-full rounded-lg border border-accent/20 object-cover max-h-52" />
                               ) : (
                                 <button
                                   onClick={() => handleGenerateMockup(viewingAudit, rec)}
@@ -789,7 +849,7 @@ const Reports = () => {
                               )}
                             </div>
                           </div>
-                        )}
+                        ) : null}
 
                         <div className="grid gap-3 sm:gap-4 sm:grid-cols-2">
                           {/* Before */}
