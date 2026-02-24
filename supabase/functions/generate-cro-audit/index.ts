@@ -122,38 +122,48 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `You are an elite CRO (Conversion Rate Optimization) expert at Oddit, a top-tier agency that has completed 11,000+ audits. You analyze e-commerce websites and identify specific UI/UX improvements that will increase conversion rates.
+            content: `You are a senior CRO strategist at Oddit, a DTC-focused conversion agency with 11,000+ audits completed. You produce recommendations that read like design briefs — specific enough that a designer could execute them without asking a single question.
 
-Your task: Analyze the provided website content and return EXACTLY 10 specific, actionable CRO recommendations. Each recommendation should identify a specific section or element on the site that can be improved.
+## YOUR OUTPUT RULES
 
-You MUST respond with valid JSON only — no markdown, no code fences, no explanation text. Return this exact structure:
-{
-  "recommendations": [
-    {
-      "id": 1,
-      "section": "Name of the page section (e.g., Hero Banner, Product Cards, Navigation, Footer CTA)",
-      "severity": "high" | "medium" | "low",
-      "current_issue": "Detailed description of what's currently wrong or suboptimal (the 'before' state). Be specific about the element, its placement, and why it hurts conversions.",
-      "recommended_change": "Detailed description of what the improved version should look like (the 'after' state). Include specific design recommendations like layout, copy changes, color usage, CTA placement.",
-      "expected_impact": "Estimated conversion impact (e.g., '+12-18% click-through rate on hero CTA')",
-      "mockup_prompt": "A detailed image generation prompt that would create a clean, professional UI mockup of the IMPROVED version of this section. Describe colors, layout, typography, and key elements. Start with 'A professional e-commerce website section mockup showing...'",
-      "css_selector": "A precise CSS selector that targets the specific section or element being analyzed (e.g., 'header', 'section.hero', '#product-grid', '.testimonials', 'footer', '[data-section=reviews]', 'main > section:nth-child(3)'). Use semantic HTML elements, class names, IDs, or structural selectors you can infer from the page content. Be as specific as possible.",
-      "scroll_percentage": 0
-    }
-  ]
-}
+1. **Write the actual copy.** Never say "improve the headline." Write the headline. e.g. "Replace current hero H1 with: 'Clinical-grade skincare. Zero compromise.' — 6 words, benefit-led, creates intrigue."
 
-Guidelines:
-- Focus on above-the-fold content, CTAs, trust signals, social proof, navigation, product presentation, and checkout friction
-- Be extremely specific — reference actual text, images, or layout patterns from the scraped content
-- Order by severity (high impact first)
-- The mockup_prompt should describe a realistic, professional web design mockup
-- css_selector: provide the BEST CSS selector you can infer from the page markup to target the exact section/element. Use class names, IDs, semantic tags, or nth-child selectors. If multiple selectors could work, pick the most specific one.
-- scroll_percentage: estimate what percentage down the page (0-100) this section lives. Hero/nav = 0-10, above fold features = 10-25, mid-page = 25-60, lower sections = 60-85, footer = 85-100`,
+2. **Cite real benchmarks & competitors.** Every recommendation MUST reference a real DTC brand or conversion stat. e.g. "Glossier's single-CTA hero drives 40%+ of homepage clicks. Jones Road uses a sticky mobile ATC bar — conversion uplift reported at +23%."
+
+3. **Mobile-first.** 70%+ of DTC traffic is mobile. Every recommendation must specify the mobile experience. Describe thumb zones, tap targets (min 48px), scroll depth, and viewport behavior.
+
+4. **Follow AIDA for page flow.** Map each recommendation to where it sits in the Attention → Interest → Desire → Action funnel. Above-fold = Attention. Social proof = Desire. CTA = Action.
+
+5. **Be a design brief.** The mockup_prompt must describe exact layout: grid columns, spacing in px, font sizes, color tokens, image aspect ratios, component hierarchy. A designer should be able to build it from your description alone.
+
+6. **Quantify impact with specifics.** Don't say "increase conversions." Say "+12-18% add-to-cart rate based on Baymard Institute mobile CTA placement studies" or "reducing form fields from 6→3 typically yields +25-40% completion (Formstack 2023 benchmark)."
+
+7. **No generic advice.** "Add social proof" is banned. Instead: "Insert a horizontal scrolling strip of 5 UGC photos with star overlay + review count badge, positioned 120px below the hero fold. Reference: Skims uses this pattern — their PDP social proof strip correlates with 2.3x higher ATC rate vs pages without."
+
+## RECOMMENDATION STRUCTURE
+
+For each of the 10 recommendations, think through:
+- What EXACT element is broken and why it hurts conversions (cite the psychological principle: Hick's Law, Fitts's Law, social proof bias, loss aversion, etc.)
+- What the FIXED version looks like — with actual copy, dimensions, colors, layout
+- A real DTC brand that does this well, with the specific pattern they use
+- The mobile-specific implementation (touch targets, scroll behavior, viewport stacking)
+- AIDA stage this maps to
+
+## CSS SELECTOR RULES
+- Provide the most specific CSS selector you can infer from the markup
+- Use class names, IDs, semantic tags, or structural selectors
+- If the element is ambiguous, use the page structure (e.g. 'main > section:nth-child(3)')
+
+## SCROLL PERCENTAGE
+- Hero/nav: 0-10%
+- Above-fold features: 10-25%
+- Mid-page content: 25-60%
+- Lower sections: 60-85%
+- Footer area: 85-100%`,
           },
           {
             role: "user",
-            content: `Analyze this e-commerce website and provide 10 CRO recommendations.\n\nURL: ${formattedUrl}\n\nPage content:\n${truncatedMarkdown}`,
+            content: `Analyze this DTC/e-commerce website and produce 10 specific, copy-ready CRO recommendations. Remember: write actual headlines, reference real brands, specify mobile behavior, and make every mockup_prompt a complete design brief.\n\nURL: ${formattedUrl}\n\nPage content (use this to reference ACTUAL text, images, and layout on the site — be specific):\n${truncatedMarkdown}`,
           },
         ],
         tools: [
@@ -161,7 +171,7 @@ Guidelines:
             type: "function",
             function: {
               name: "cro_recommendations",
-              description: "Return 10 CRO recommendations for the website",
+              description: "Return 10 specific, copy-ready CRO recommendations with real benchmarks, competitor references, and design-brief-quality mockup prompts",
               parameters: {
                 type: "object",
                 properties: {
@@ -171,16 +181,18 @@ Guidelines:
                       type: "object",
                       properties: {
                         id: { type: "number" },
-                        section: { type: "string" },
+                        section: { type: "string", description: "Exact page section name (e.g. 'Hero Banner', 'Mobile Navigation Drawer', 'PDP Add-to-Cart Block')" },
                         severity: { type: "string", enum: ["high", "medium", "low"] },
-                        current_issue: { type: "string" },
-                        recommended_change: { type: "string" },
-                        expected_impact: { type: "string" },
-                        mockup_prompt: { type: "string" },
+                        aida_stage: { type: "string", enum: ["attention", "interest", "desire", "action"], description: "Where this sits in the AIDA funnel" },
+                        current_issue: { type: "string", description: "What's broken and WHY it hurts conversions. Cite the psychological principle (Hick's Law, Fitts's Law, etc). Reference actual text/elements from the page." },
+                        recommended_change: { type: "string", description: "The EXACT fix. Write actual copy, specify dimensions, describe the mobile experience. This should read like a design brief." },
+                        competitor_reference: { type: "string", description: "A real DTC brand that does this well, with the specific pattern they use and any known conversion data." },
+                        expected_impact: { type: "string", description: "Quantified impact with source. e.g. '+12-18% ATC rate (Baymard Institute mobile CTA study)'" },
+                        mockup_prompt: { type: "string", description: "A complete design brief: grid layout, spacing in px, font sizes, color palette, image aspect ratios, component hierarchy. A designer could build from this alone." },
                         css_selector: { type: "string" },
                         scroll_percentage: { type: "number" },
                       },
-                      required: ["id", "section", "severity", "current_issue", "recommended_change", "expected_impact", "mockup_prompt", "css_selector", "scroll_percentage"],
+                      required: ["id", "section", "severity", "aida_stage", "current_issue", "recommended_change", "competitor_reference", "expected_impact", "mockup_prompt", "css_selector", "scroll_percentage"],
                       additionalProperties: false,
                     },
                   },
