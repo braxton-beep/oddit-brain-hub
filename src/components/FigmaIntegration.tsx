@@ -2,12 +2,13 @@ import { useState } from "react";
 import { toast } from "sonner";
 import {
   Plus, Trash2, RefreshCw, ExternalLink, FolderOpen,
-  ChevronDown, Eye, EyeOff, Pencil, Check, X
+  ChevronDown, Eye, EyeOff, Pencil, Check, X, Users
 } from "lucide-react";
 import {
   useFigmaProjects,
   useFigmaFiles,
   useAddFigmaProject,
+  useAddFigmaTeam,
   useDeleteFigmaProject,
   useToggleFigmaProject,
   useToggleFigmaFile,
@@ -129,13 +130,17 @@ function ProjectNameEditor({
 export function FigmaIntegration() {
   const [newProjectId, setNewProjectId] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
+  const [newTeamId, setNewTeamId] = useState("");
+  const [newTeamLabel, setNewTeamLabel] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [activeProject, setActiveProject] = useState("all");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showTeamForm, setShowTeamForm] = useState(false);
 
   const { data: projects, isLoading: projectsLoading } = useFigmaProjects();
   const { data: files, isLoading: filesLoading } = useFigmaFiles();
   const addProject = useAddFigmaProject();
+  const addTeam = useAddFigmaTeam();
   const deleteProject = useDeleteFigmaProject();
   const toggleProject = useToggleFigmaProject();
   const toggleFile = useToggleFigmaFile();
@@ -186,13 +191,30 @@ export function FigmaIntegration() {
     try {
       const result = await triggerSync.mutateAsync();
       if (result?.synced !== undefined) {
-        toast.success(`Synced ${result.synced} files from Figma`);
+        const teamMsg = result.teams_discovered ? ` (discovered ${result.teams_discovered} projects from teams)` : "";
+        toast.success(`Synced ${result.synced} files from Figma${teamMsg}`);
         if (result.errors?.length) {
           toast.warning(`${result.errors.length} error(s) during sync — check console for details`);
         }
       }
     } catch (e: any) {
       toast.error(e.message ?? "Sync failed");
+    }
+  };
+
+  const handleAddTeam = async () => {
+    if (!newTeamId.trim()) {
+      toast.error("Please enter a Figma Team ID");
+      return;
+    }
+    try {
+      await addTeam.mutateAsync({ team_id: newTeamId.trim(), label: newTeamLabel.trim() });
+      toast.success("Team added — click Sync to discover all projects & files");
+      setNewTeamId("");
+      setNewTeamLabel("");
+      setShowTeamForm(false);
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to add team");
     }
   };
 
@@ -230,7 +252,14 @@ export function FigmaIntegration() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => setShowAddForm((v) => !v)}
+            onClick={() => { setShowTeamForm((v) => !v); setShowAddForm(false); }}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold bg-card border border-border text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Users className="h-3.5 w-3.5" />
+            Add Team
+          </button>
+          <button
+            onClick={() => { setShowAddForm((v) => !v); setShowTeamForm(false); }}
             className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold bg-card border border-border text-muted-foreground hover:text-foreground transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -285,7 +314,41 @@ export function FigmaIntegration() {
         </div>
       )}
 
-      {/* Connected Projects */}
+      {/* Add Team Form */}
+      {showTeamForm && (
+        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <p className="text-xs font-bold text-foreground">Add a Figma Team (bulk import)</p>
+          <p className="text-[11px] text-muted-foreground">
+            Enter your Team ID and every project under that team will be auto-discovered on sync.
+            Find it in Figma: go to your team page → copy the ID from the URL{" "}
+            <code className="bg-muted/40 px-1 rounded text-[10px]">figma.com/files/team/<strong>TEAM_ID</strong></code>
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Team ID (e.g. 123456789)"
+              value={newTeamId}
+              onChange={(e) => setNewTeamId(e.target.value)}
+              className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+            <input
+              type="text"
+              placeholder="Label (optional)"
+              value={newTeamLabel}
+              onChange={(e) => setNewTeamLabel(e.target.value)}
+              className="w-40 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+            <button
+              onClick={handleAddTeam}
+              disabled={addTeam.isPending}
+              className="rounded-lg px-4 py-2 text-xs font-bold bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-all"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      )}
+
       {!projectsLoading && projects && projects.length > 0 && (
         <div className="space-y-2">
           <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">
