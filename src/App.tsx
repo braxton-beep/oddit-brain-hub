@@ -19,6 +19,7 @@ import TwitterPage from "./pages/TwitterPage";
 import ReportSetup from "./pages/ReportSetup";
 import OrderIntake from "./pages/OrderIntake";
 import OrderSuccess from "./pages/OrderSuccess";
+import CroAgent from "./pages/CroAgent";
 import NotFound from "./pages/NotFound";
 import { WelcomeTour } from "./components/WelcomeTour";
 
@@ -47,6 +48,7 @@ const App = () => (
           <Route path="/report-setup" element={<ReportSetup />} />
           <Route path="/order" element={<OrderIntake />} />
           <Route path="/order-success" element={<OrderSuccess />} />
+          <Route path="/cro-agent" element={<CroAgent />} />
           <Route path="/portal/:token" element={<ClientPortal />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
