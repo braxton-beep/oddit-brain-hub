@@ -6,46 +6,46 @@
 
 @layer base {
   :root {
-    /* Refined deep-space palette */
-    --background: 228 28% 6%;
-    --foreground: 220 20% 95%;
+    /* Lifted dark palette — higher contrast */
+    --background: 228 22% 10%;
+    --foreground: 0 0% 96%;
 
-    --card: 228 24% 9%;
-    --card-foreground: 220 20% 95%;
+    --card: 228 20% 13%;
+    --card-foreground: 0 0% 96%;
 
-    --popover: 228 24% 9%;
-    --popover-foreground: 220 20% 95%;
+    --popover: 228 20% 13%;
+    --popover-foreground: 0 0% 96%;
 
     /* Oddit signature blue — electric indigo */
     --primary: 240 80% 68%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 228 22% 12%;
-    --secondary-foreground: 220 15% 80%;
+    --secondary: 228 18% 17%;
+    --secondary-foreground: 220 15% 88%;
 
-    --muted: 228 18% 14%;
-    --muted-foreground: 220 12% 60%;
+    --muted: 228 16% 19%;
+    --muted-foreground: 220 10% 72%;
 
     /* Mint-teal accent */
     --accent: 165 55% 55%;
-    --accent-foreground: 228 28% 6%;
+    --accent-foreground: 228 22% 10%;
 
     --destructive: 0 65% 52%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 228 18% 13%;
-    --input: 228 18% 13%;
+    --border: 228 16% 18%;
+    --input: 228 16% 18%;
     --ring: 240 80% 68%;
 
     --radius: 0.75rem;
 
-    --sidebar-background: 228 30% 5%;
-    --sidebar-foreground: 220 12% 60%;
+    --sidebar-background: 228 24% 8%;
+    --sidebar-foreground: 220 10% 72%;
     --sidebar-primary: 240 80% 68%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 228 22% 10%;
-    --sidebar-accent-foreground: 220 20% 95%;
-    --sidebar-border: 228 18% 10%;
+    --sidebar-accent: 228 18% 14%;
+    --sidebar-accent-foreground: 0 0% 96%;
+    --sidebar-border: 228 16% 14%;
     --sidebar-ring: 240 80% 68%;
 
     --success: 160 55% 48%;
