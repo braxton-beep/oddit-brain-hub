@@ -1,6 +1,8 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { CheckCircle2, Link2, Brain, AlertCircle } from "lucide-react";
 import { useIntegrationCredentials } from "@/hooks/useIntegrationCredentials";
+import { FigmaIntegration } from "@/components/FigmaIntegration";
+import { GoogleDriveIntegration } from "@/components/GoogleDriveIntegration";
 
 const INTEGRATIONS = [
   {
@@ -136,6 +138,12 @@ const Integrations = () => {
           );
         })}
       </div>
+
+      {/* Figma Sync Config */}
+      <FigmaIntegration />
+
+      {/* Google Drive Sync Config */}
+      <GoogleDriveIntegration />
 
       {/* Footer note */}
       <div className="mt-8 rounded-xl border border-border bg-card p-5 flex items-start gap-4">
