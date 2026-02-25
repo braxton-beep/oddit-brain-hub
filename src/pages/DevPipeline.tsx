@@ -16,6 +16,11 @@ import {
   Plus,
   Trash2,
   X,
+  Wand2,
+  ChevronDown,
+  ChevronUp,
+  FileCode,
+  Loader2,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -35,6 +40,17 @@ interface PipelineProject {
   page: string;
   stages: PipelineStage[];
   last_update: string;
+  created_at: string;
+}
+
+interface GeneratedSection {
+  id: string;
+  pipeline_project_id: string;
+  section_name: string;
+  liquid_code: string;
+  css_code: string;
+  js_code: string;
+  status: string;
   created_at: string;
 }
 
@@ -97,6 +113,81 @@ async function deleteProject(id: string) {
   if (error) throw error;
 }
 
+async function fetchGeneratedSections(projectId: string): Promise<GeneratedSection[]> {
+  const { data, error } = await supabase
+    .from("generated_sections" as any)
+    .select("*")
+    .eq("pipeline_project_id", projectId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as unknown as GeneratedSection[];
+}
+
+// ─── Code viewer ─────────────────────────────────────────────────────────────
+
+function CodeViewer({ section }: { section: GeneratedSection }) {
+  const [activeTab, setActiveTab] = useState<"liquid" | "css" | "js">("liquid");
+  const [expanded, setExpanded] = useState(false);
+
+  const tabs = [
+    { key: "liquid" as const, label: "Liquid/HTML", code: section.liquid_code },
+    { key: "css" as const, label: "CSS", code: section.css_code },
+    { key: "js" as const, label: "JS", code: section.js_code },
+  ].filter((t) => t.code.trim());
+
+  const currentCode = tabs.find((t) => t.key === activeTab)?.code || tabs[0]?.code || "";
+
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-background overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-secondary/50">
+        <div className="flex items-center gap-1">
+          <FileCode className="h-3.5 w-3.5 text-primary" />
+          <span className="text-xs font-semibold text-foreground">{section.section_name}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${
+                activeTab === t.key
+                  ? "bg-primary/15 text-primary"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="p-1 rounded text-muted-foreground hover:text-foreground transition"
+          >
+            {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+        </div>
+      </div>
+      <pre
+        className={`px-4 py-3 text-xs font-mono text-foreground/90 overflow-x-auto whitespace-pre-wrap transition-all ${
+          expanded ? "max-h-[600px]" : "max-h-48"
+        }`}
+      >
+        {currentCode}
+      </pre>
+      <div className="flex items-center justify-end px-3 py-1.5 border-t border-border bg-secondary/30">
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(currentCode);
+            toast.success("Copied to clipboard");
+          }}
+          className="text-[10px] font-medium text-muted-foreground hover:text-primary transition"
+        >
+          Copy code
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Add-project modal ───────────────────────────────────────────────────────
 
 function AddProjectModal({
@@ -115,8 +206,8 @@ function AddProjectModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-2xl bg-card border border-border p-6 shadow-2xl animate-fade-in">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-bold text-cream">New Pipeline Project</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-cream transition-colors">
+          <h2 className="text-base font-bold text-foreground">New Pipeline Project</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -126,7 +217,7 @@ function AddProjectModal({
               Client Name
             </label>
             <input
-              className="w-full rounded-lg bg-secondary border border-border px-3 py-2 text-sm text-cream placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+              className="w-full rounded-lg bg-secondary border border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
               placeholder="e.g. Braxley Bands"
               value={client}
               onChange={(e) => setClient(e.target.value)}
@@ -137,7 +228,7 @@ function AddProjectModal({
               Page / Scope
             </label>
             <input
-              className="w-full rounded-lg bg-secondary border border-border px-3 py-2 text-sm text-cream placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+              className="w-full rounded-lg bg-secondary border border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
               placeholder="e.g. Homepage Redesign"
               value={page}
               onChange={(e) => setPage(e.target.value)}
@@ -147,7 +238,7 @@ function AddProjectModal({
         <div className="flex justify-end gap-2 mt-6">
           <button
             onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-cream transition-colors"
+            className="rounded-lg border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             Cancel
           </button>
@@ -169,6 +260,8 @@ function AddProjectModal({
 const DevPipeline = () => {
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
+  const [expandedCode, setExpandedCode] = useState<string | null>(null);
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
 
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ["pipeline_projects"],
@@ -200,6 +293,26 @@ const DevPipeline = () => {
     },
     onError: () => toast.error("Failed to remove project"),
   });
+
+  const handleGenerateCode = async (projectId: string) => {
+    setGeneratingId(projectId);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-shopify-code", {
+        body: { pipeline_project_id: projectId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(`Code generated: ${data?.section_name || "section"}`);
+      qc.invalidateQueries({ queryKey: ["pipeline_projects"] });
+      qc.invalidateQueries({ queryKey: ["generated_sections", projectId] });
+      setExpandedCode(projectId);
+    } catch (err: any) {
+      toast.error(err.message || "Code generation failed");
+    } finally {
+      setGeneratingId(null);
+    }
+  };
 
   // Derived stats
   const completed = projects.filter((p) => p.stages.every((s) => s.status === "done")).length;
@@ -234,10 +347,7 @@ const DevPipeline = () => {
       return s;
     });
     stageMutation.mutate({ id: project.id, stages: newStages });
-    const activeStage = project.stages[activeIdx];
-    toast.success(`${project.client}: "${activeStage.name}" completed`, {
-      description: "Moving to next stage",
-    });
+    toast.success(`${project.client}: "${project.stages[activeIdx].name}" completed`);
   };
 
   const startProject = (project: PipelineProject) => {
@@ -265,12 +375,6 @@ const DevPipeline = () => {
       stageMutation.mutate({ id: project.id, stages: retried });
       toast.success(`${project.client} retry successful!`, { id: `retry-${project.id}` });
     }, 2000);
-  };
-
-  const handlePreview = (client: string, device: string) => {
-    toast.info(`Opening ${device} preview for ${client}`, {
-      description: "Preview would open in a new tab",
-    });
   };
 
   return (
@@ -312,7 +416,7 @@ const DevPipeline = () => {
           return (
             <div key={s.label} className={`glow-card gradient-border rounded-xl bg-card p-5 hover-scale ${glows[i % 4]}`}>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">{s.label}</p>
-              <p className="mt-2 text-2xl font-bold text-cream">{s.value}</p>
+              <p className="mt-2 text-2xl font-bold text-foreground">{s.value}</p>
             </div>
           );
         })}
@@ -320,26 +424,16 @@ const DevPipeline = () => {
 
       {/* Pipeline stages legend */}
       <div className="mb-6 flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
-        <span className="font-bold text-cream uppercase tracking-wider">Stages:</span>
-        <span className="flex items-center gap-1">
-          <Figma className="h-3 w-3" /> Figma Pull
-        </span>
+        <span className="font-bold text-foreground uppercase tracking-wider">Stages:</span>
+        <span className="flex items-center gap-1"><Figma className="h-3 w-3" /> Figma Pull</span>
         <ArrowRight className="h-3 w-3" />
-        <span className="flex items-center gap-1">
-          <Layers className="h-3 w-3" /> Section Split
-        </span>
+        <span className="flex items-center gap-1"><Layers className="h-3 w-3" /> Section Split</span>
         <ArrowRight className="h-3 w-3" />
-        <span className="flex items-center gap-1">
-          <Code2 className="h-3 w-3" /> Code Gen
-        </span>
+        <span className="flex items-center gap-1"><Code2 className="h-3 w-3" /> Code Gen</span>
         <ArrowRight className="h-3 w-3" />
-        <span className="flex items-center gap-1">
-          <Eye className="h-3 w-3" /> QA
-        </span>
+        <span className="flex items-center gap-1"><Eye className="h-3 w-3" /> QA</span>
         <ArrowRight className="h-3 w-3" />
-        <span className="flex items-center gap-1">
-          <CheckCircle2 className="h-3 w-3" /> Refinement
-        </span>
+        <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Refinement</span>
       </div>
 
       {/* Projects */}
@@ -352,7 +446,7 @@ const DevPipeline = () => {
           <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-secondary mb-4">
             <Code2 className="h-7 w-7 text-muted-foreground" />
           </div>
-          <p className="text-sm font-semibold text-cream mb-1">No projects in the pipeline yet</p>
+          <p className="text-sm font-semibold text-foreground mb-1">No projects in the pipeline yet</p>
           <p className="text-xs text-muted-foreground mb-5">
             Add your first project to start tracking Figma → code builds
           </p>
@@ -365,131 +459,199 @@ const DevPipeline = () => {
         </div>
       ) : (
         <div className="space-y-4">
-          {projects.map((p) => {
-            const hasError = p.stages.some((s) => s.status === "error");
-            const hasActive = p.stages.some((s) => s.status === "active");
-            const allPending = p.stages.every((s) => s.status === "pending");
-            const allDone = p.stages.every((s) => s.status === "done");
-
-            return (
-              <div key={p.id} className="glow-card rounded-xl bg-card p-6">
-                <div className="flex items-start justify-between mb-5">
-                  <div>
-                    <h3 className="text-sm font-bold text-cream">{p.client}</h3>
-                    <p className="text-xs text-muted-foreground">{p.page}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[11px] text-muted-foreground">{p.last_update}</span>
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => handlePreview(p.client, "Desktop")}
-                        className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary border border-border hover:border-primary/30 transition-colors"
-                        title="Desktop preview"
-                      >
-                        <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                      <button
-                        onClick={() => handlePreview(p.client, "Mobile")}
-                        className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary border border-border hover:border-primary/30 transition-colors"
-                        title="Mobile preview"
-                      >
-                        <Smartphone className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                      <button
-                        onClick={() => deleteMutation.mutate(p.id)}
-                        className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary border border-border hover:border-destructive/30 transition-colors"
-                        title="Remove project"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Pipeline visualization */}
-                <div className="flex items-center gap-2">
-                  {p.stages.map((stage, i) => {
-                    const si = stageIcon[stage.status];
-                    const Icon = si.icon;
-                    return (
-                      <div key={stage.name} className="flex items-center gap-2 flex-1">
-                        <div
-                          className={`flex items-center gap-2 flex-1 rounded-lg border p-3 ${
-                            stage.status === "active"
-                              ? "border-primary/30 bg-primary/5"
-                              : stage.status === "done"
-                              ? "border-accent/20 bg-accent/5"
-                              : stage.status === "error"
-                              ? "border-destructive/30 bg-destructive/5"
-                              : "border-border bg-secondary"
-                          }`}
-                        >
-                          <Icon
-                            className={`h-3.5 w-3.5 shrink-0 ${si.color} ${
-                              stage.status === "active" ? "animate-spin" : ""
-                            }`}
-                          />
-                          <span
-                            className={`text-[11px] font-semibold ${
-                              stage.status === "done"
-                                ? "text-accent"
-                                : stage.status === "active"
-                                ? "text-primary"
-                                : stage.status === "error"
-                                ? "text-destructive"
-                                : "text-muted-foreground"
-                            }`}
-                          >
-                            {stage.name}
-                          </span>
-                        </div>
-                        {i < p.stages.length - 1 && (
-                          <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Action buttons */}
-                <div className="flex gap-2 mt-4">
-                  {allPending && (
-                    <button
-                      onClick={() => startProject(p)}
-                      className="flex items-center gap-1.5 rounded-lg bg-primary/10 border border-primary/20 px-3 py-1.5 text-[11px] font-bold text-primary hover:opacity-90 transition-opacity"
-                    >
-                      <Play className="h-3 w-3" /> Start Pipeline
-                    </button>
-                  )}
-                  {hasError && (
-                    <button
-                      onClick={() => retryStage(p)}
-                      className="flex items-center gap-1.5 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-1.5 text-[11px] font-bold text-destructive hover:opacity-90 transition-opacity"
-                    >
-                      <RotateCcw className="h-3 w-3" /> Retry Failed Stage
-                    </button>
-                  )}
-                  {hasActive && !allDone && (
-                    <button
-                      onClick={() => advanceStage(p)}
-                      className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[11px] font-bold text-accent-foreground hover:opacity-90 transition-opacity"
-                    >
-                      <Play className="h-3 w-3" /> Advance Stage
-                    </button>
-                  )}
-                  {allDone && (
-                    <span className="flex items-center gap-1.5 rounded-lg bg-accent/10 border border-accent/20 px-3 py-1.5 text-[11px] font-bold text-accent">
-                      <CheckCircle2 className="h-3 w-3" /> Pipeline Complete
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          {projects.map((p) => (
+            <ProjectCard
+              key={p.id}
+              project={p}
+              isGenerating={generatingId === p.id}
+              codeExpanded={expandedCode === p.id}
+              onToggleCode={() => setExpandedCode(expandedCode === p.id ? null : p.id)}
+              onGenerateCode={() => handleGenerateCode(p.id)}
+              onStart={() => startProject(p)}
+              onAdvance={() => advanceStage(p)}
+              onRetry={() => retryStage(p)}
+              onDelete={() => deleteMutation.mutate(p.id)}
+            />
+          ))}
         </div>
       )}
     </DashboardLayout>
   );
 };
+
+// ─── Project card ────────────────────────────────────────────────────────────
+
+function ProjectCard({
+  project: p,
+  isGenerating,
+  codeExpanded,
+  onToggleCode,
+  onGenerateCode,
+  onStart,
+  onAdvance,
+  onRetry,
+  onDelete,
+}: {
+  project: PipelineProject;
+  isGenerating: boolean;
+  codeExpanded: boolean;
+  onToggleCode: () => void;
+  onGenerateCode: () => void;
+  onStart: () => void;
+  onAdvance: () => void;
+  onRetry: () => void;
+  onDelete: () => void;
+}) {
+  const hasError = p.stages.some((s) => s.status === "error");
+  const hasActive = p.stages.some((s) => s.status === "active");
+  const allPending = p.stages.every((s) => s.status === "pending");
+  const allDone = p.stages.every((s) => s.status === "done");
+
+  const { data: sections = [] } = useQuery({
+    queryKey: ["generated_sections", p.id],
+    queryFn: () => fetchGeneratedSections(p.id),
+    enabled: codeExpanded,
+  });
+
+  return (
+    <div className="glow-card rounded-xl bg-card p-6">
+      <div className="flex items-start justify-between mb-5">
+        <div>
+          <h3 className="text-sm font-bold text-foreground">{p.client}</h3>
+          <p className="text-xs text-muted-foreground">{p.page}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] text-muted-foreground">{p.last_update}</span>
+          <div className="flex gap-1.5">
+            <button
+              onClick={onDelete}
+              className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary border border-border hover:border-destructive/30 transition-colors"
+              title="Remove project"
+            >
+              <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Pipeline visualization */}
+      <div className="flex items-center gap-2">
+        {p.stages.map((stage, i) => {
+          const si = stageIcon[stage.status];
+          const Icon = si.icon;
+          return (
+            <div key={stage.name} className="flex items-center gap-2 flex-1">
+              <div
+                className={`flex items-center gap-2 flex-1 rounded-lg border p-3 ${
+                  stage.status === "active"
+                    ? "border-primary/30 bg-primary/5"
+                    : stage.status === "done"
+                    ? "border-accent/20 bg-accent/5"
+                    : stage.status === "error"
+                    ? "border-destructive/30 bg-destructive/5"
+                    : "border-border bg-secondary"
+                }`}
+              >
+                <Icon
+                  className={`h-3.5 w-3.5 shrink-0 ${si.color} ${
+                    stage.status === "active" ? "animate-spin" : ""
+                  }`}
+                />
+                <span
+                  className={`text-[11px] font-semibold ${
+                    stage.status === "done"
+                      ? "text-accent"
+                      : stage.status === "active"
+                      ? "text-primary"
+                      : stage.status === "error"
+                      ? "text-destructive"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {stage.name}
+                </span>
+              </div>
+              {i < p.stages.length - 1 && (
+                <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex flex-wrap gap-2 mt-4">
+        {allPending && (
+          <button
+            onClick={onStart}
+            className="flex items-center gap-1.5 rounded-lg bg-primary/10 border border-primary/20 px-3 py-1.5 text-[11px] font-bold text-primary hover:opacity-90 transition-opacity"
+          >
+            <Play className="h-3 w-3" /> Start Pipeline
+          </button>
+        )}
+        {hasError && (
+          <button
+            onClick={onRetry}
+            className="flex items-center gap-1.5 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-1.5 text-[11px] font-bold text-destructive hover:opacity-90 transition-opacity"
+          >
+            <RotateCcw className="h-3 w-3" /> Retry Failed Stage
+          </button>
+        )}
+        {hasActive && !allDone && (
+          <button
+            onClick={onAdvance}
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[11px] font-bold text-accent-foreground hover:opacity-90 transition-opacity"
+          >
+            <Play className="h-3 w-3" /> Advance Stage
+          </button>
+        )}
+        {allDone && (
+          <span className="flex items-center gap-1.5 rounded-lg bg-accent/10 border border-accent/20 px-3 py-1.5 text-[11px] font-bold text-accent">
+            <CheckCircle2 className="h-3 w-3" /> Pipeline Complete
+          </span>
+        )}
+
+        {/* Generate Code button */}
+        <button
+          onClick={onGenerateCode}
+          disabled={isGenerating}
+          className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[11px] font-bold text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 className="h-3 w-3 animate-spin" /> Generating…
+            </>
+          ) : (
+            <>
+              <Wand2 className="h-3 w-3" /> Generate Code
+            </>
+          )}
+        </button>
+
+        {/* Toggle code viewer */}
+        <button
+          onClick={onToggleCode}
+          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground transition"
+        >
+          <FileCode className="h-3 w-3" />
+          {codeExpanded ? "Hide Code" : "View Code"}
+        </button>
+      </div>
+
+      {/* Generated code sections */}
+      {codeExpanded && (
+        <div className="mt-4">
+          {sections.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-4 text-center">
+              No generated code yet. Click "Generate Code" to start.
+            </p>
+          ) : (
+            sections.map((s) => <CodeViewer key={s.id} section={s} />)
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default DevPipeline;
