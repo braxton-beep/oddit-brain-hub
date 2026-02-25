@@ -25,7 +25,6 @@ async function verifyStripeSignature(
 
   if (!timestamp || signatures.length === 0) return false;
 
-  // Reject timestamps older than 5 minutes to prevent replay attacks
   const now = Math.floor(Date.now() / 1000);
   if (Math.abs(now - parseInt(timestamp)) > 300) {
     console.warn("Stripe webhook timestamp too old:", timestamp);
@@ -53,15 +52,48 @@ async function verifyStripeSignature(
 
 // ── Detect tier from Stripe product/price name ───────────────────────────────
 function detectTier(session: Record<string, unknown>): "pro" | "essential" {
-  // First check metadata
   const meta = (session.metadata ?? {}) as Record<string, string>;
   if (meta.tier) {
     return meta.tier.toLowerCase().includes("essential") ? "essential" : "pro";
   }
-
-  // Fall back to product name in line items (if expanded) or session name
   const name = ((session.display_items as Array<{ custom?: { name?: string } }>)?.[0]?.custom?.name ?? "").toLowerCase();
   return name.includes("essential") ? "essential" : "pro";
+}
+
+// ── Helper to call a sibling edge function ───────────────────────────────────
+async function callFunction(name: string, body: Record<string, unknown>) {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceRoleKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  console.log(`${name} result (${res.status}):`, JSON.stringify(data).slice(0, 500));
+  return { ok: res.ok, data };
+}
+
+// ── Insert activity log via Supabase REST ────────────────────────────────────
+async function logActivity(workflowName: string, status = "completed") {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  await fetch(`${supabaseUrl}/rest/v1/activity_log`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceRoleKey}`,
+      apikey: serviceRoleKey,
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({ workflow_name: workflowName, status }),
+  });
 }
 
 serve(async (req) => {
@@ -109,13 +141,10 @@ serve(async (req) => {
 
     const session = event.data.object;
     const metadata = (session.metadata ?? {}) as Record<string, string>;
-
-    // ── Extract client data from metadata ────────────────────────────────────
-    // Your Stripe Checkout session must include metadata fields:
-    //   client_name, shop_url, focus_url (optional), tier (optional)
     const customerDetails = session.customer_details as { name?: string; email?: string } | null;
 
     const clientName = metadata.client_name || customerDetails?.name || "Unknown Client";
+    const clientEmail = metadata.client_email || customerDetails?.email || "";
     const shopUrl = metadata.shop_url || metadata.website_url || "";
     const focusUrl = metadata.focus_url || "";
     const tier = detectTier(session);
@@ -123,38 +152,75 @@ serve(async (req) => {
     console.log("Stripe checkout.session.completed →", {
       sessionId: session.id,
       clientName,
+      clientEmail,
       shopUrl,
       focusUrl,
       tier,
     });
 
     if (!shopUrl) {
-      console.warn("⚠️ No shop_url in metadata. Card will be created but pipeline may skip screenshots.");
+      console.warn("⚠️ No shop_url in metadata. Pipeline may skip screenshots.");
     }
 
-    // ── Trigger the full Oddit setup pipeline ────────────────────────────────
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    const setupRes = await fetch(`${supabaseUrl}/functions/v1/run-report-setup`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${serviceRoleKey}`,
-      },
-      body: JSON.stringify({
-        client_name: clientName,
-        shop_url: shopUrl,
-        focus_url: focusUrl,
-        tier,
-      }),
+    // ── Step 1: Trigger setup pipeline (Asana card, screenshots, etc.) ──────
+    const setupResult = await callFunction("run-report-setup", {
+      client_name: clientName,
+      shop_url: shopUrl,
+      focus_url: focusUrl,
+      tier,
     });
 
-    const setupData = await setupRes.json().catch(() => ({}));
-    console.log("run-report-setup result:", setupData);
+    // ── Step 2: Generate CRO audit ──────────────────────────────────────────
+    let auditId: string | null = null;
+    if (shopUrl) {
+      const auditResult = await callFunction("generate-cro-audit", {
+        client_name: clientName,
+        shop_url: shopUrl,
+        focus_url: focusUrl || undefined,
+        tier,
+      });
+
+      auditId = auditResult.data?.audit_id || auditResult.data?.id || null;
+      console.log("Audit ID:", auditId);
+
+      // ── Step 3: Generate mockups for each recommendation ────────────────
+      if (auditId && auditResult.data?.recommendations) {
+        const recs = auditResult.data.recommendations as Array<{ id?: number; title?: string }>;
+        console.log(`Generating mockups for ${recs.length} recommendations…`);
+
+        for (let i = 0; i < recs.length; i++) {
+          try {
+            await callFunction("generate-audit-mockup", {
+              audit_id: auditId,
+              recommendation_index: i,
+              shop_url: shopUrl,
+            });
+          } catch (e) {
+            console.error(`Mockup ${i} failed:`, e);
+          }
+        }
+      }
+
+      // ── Step 4: Generate Oddit Score ────────────────────────────────────
+      await callFunction("generate-oddit-score", {
+        client_name: clientName,
+        shop_url: shopUrl,
+        cro_audit_id: auditId || undefined,
+      });
+    }
+
+    // ── Step 5: Log activity ────────────────────────────────────────────────
+    await logActivity("auto_audit_complete");
 
     return new Response(
-      JSON.stringify({ received: true, client: clientName, tier, pipeline: setupData }),
+      JSON.stringify({
+        received: true,
+        client: clientName,
+        client_email: clientEmail,
+        tier,
+        audit_id: auditId,
+        pipeline: setupResult.data,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
