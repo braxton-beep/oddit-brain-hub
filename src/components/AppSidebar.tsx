@@ -19,6 +19,7 @@ import {
   Twitter,
   Zap,
   Activity,
+  Store,
 } from "lucide-react";
 import { useState } from "react";
 import { useEmailDrafts } from "@/hooks/useDashboardData";
@@ -57,6 +58,7 @@ const toolsNav = [
 ];
 
 const systemNav = [
+  { title: "Shopify Connect", url: "/shopify-connect", icon: Store },
   { title: "Integrations", url: "/integrations", icon: Link2 },
   { title: "Vision", url: "/vision", icon: Rocket },
   { title: "Settings", url: "/settings", icon: Settings },
