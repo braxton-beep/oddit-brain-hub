@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 16px;
+      font-size: 13px;
+    }
+    h2 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: #FF6B4A;
+    }
+    .subtitle { color: #888; font-size: 11px; margin-bottom: 16px; }
+    label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 12px; }
+    input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #333;
+      border-radius: 6px;
+      background: #0d0d1a;
+      color: #e0e0e0;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+    input:focus { outline: none; border-color: #FF6B4A; }
+    button {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    button:hover { opacity: 0.9; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: #FF6B4A; color: white; margin-bottom: 8px; }
+    .btn-secondary { background: #333; color: #aaa; }
+    .status {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .status.success { background: #0d2818; color: #4ade80; }
+    .status.error { background: #2d0a0a; color: #f87171; }
+    .status.loading { background: #1a1a2e; color: #fbbf24; border: 1px solid #333; }
+    .preview { margin: 12px 0; padding: 10px; background: #0d0d1a; border-radius: 6px; font-size: 11px; }
+    .preview-item { margin-bottom: 4px; }
+    .preview-label { color: #888; }
+    .preview-value { color: #4ade80; word-break: break-all; }
+    .frames-note { font-size: 11px; color: #666; margin-top: 8px; line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <h2>🔭 Oddit Injector</h2>
+  <p class="subtitle">Auto-fill Figma template frames with client screenshots</p>
+
+  <label>Client Name</label>
+  <input type="text" id="clientName" placeholder="e.g. Acme Co" />
+
+  <label>API Base URL</label>
+  <input type="text" id="apiBase" value="" placeholder="https://ihvylnngpenyazafnsps.supabase.co/functions/v1" />
+
+  <button class="btn-primary" id="fetchBtn" onclick="fetchScreenshots()">
+    🔍 Fetch Screenshots
+  </button>
+
+  <div id="preview" style="display:none" class="preview"></div>
+
+  <button class="btn-primary" id="injectBtn" style="display:none" onclick="injectScreenshots()">
+    🚀 Inject into Frames
+  </button>
+
+  <button class="btn-secondary" onclick="parent.postMessage({pluginMessage:{type:'close'}}, '*')">
+    Close
+  </button>
+
+  <div id="status" style="display:none" class="status"></div>
+
+  <p class="frames-note">
+    💡 Make sure your template has frames named:<br>
+    <strong>Desktop Screenshot</strong>, <strong>Mobile Screenshot</strong>,
+    <strong>Desktop Focus</strong>, <strong>Mobile Focus</strong>
+  </p>
+
+  <script>
+    let cachedScreenshots = null;
+
+    async function fetchScreenshots() {
+      const clientName = document.getElementById("clientName").value.trim();
+      const apiBase = document.getElementById("apiBase").value.trim();
+      if (!clientName || !apiBase) {
+        showStatus("Please fill in both fields.", "error");
+        return;
+      }
+
+      showStatus("Fetching screenshots...", "loading");
+      document.getElementById("fetchBtn").disabled = true;
+
+      try {
+        const url = `${apiBase}/get-setup-screenshots?client_name=${encodeURIComponent(clientName)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!res.ok) {
+          showStatus(`Error: ${data.error || res.statusText}`, "error");
+          return;
+        }
+
+        cachedScreenshots = data.screenshots || {};
+        const hasDesktop = !!cachedScreenshots.desktop;
+        const hasMobile = !!cachedScreenshots.mobile;
+
+        if (!hasDesktop && !hasMobile) {
+          showStatus("No screenshots found for this client.", "error");
+          return;
+        }
+
+        // Show preview
+        const previewEl = document.getElementById("preview");
+        previewEl.style.display = "block";
+        previewEl.innerHTML = `
+          <div class="preview-item"><span class="preview-label">Client: </span><span class="preview-value">${data.client_name}</span></div>
+          <div class="preview-item"><span class="preview-label">Desktop: </span><span class="preview-value">${hasDesktop ? "✓ Found" : "✗ Missing"}</span></div>
+          <div class="preview-item"><span class="preview-label">Mobile: </span><span class="preview-value">${hasMobile ? "✓ Found" : "✗ Missing"}</span></div>
+        `;
+
+        document.getElementById("injectBtn").style.display = "block";
+        showStatus("Screenshots found! Click Inject to fill frames.", "success");
+      } catch (e) {
+        showStatus(`Fetch error: ${e.message}`, "error");
+      } finally {
+        document.getElementById("fetchBtn").disabled = false;
+      }
+    }
+
+    function injectScreenshots() {
+      if (!cachedScreenshots) return;
+      showStatus("Injecting into frames...", "loading");
+      parent.postMessage({
+        pluginMessage: {
+          type: "inject-screenshots",
+          screenshots: cachedScreenshots,
+        },
+      }, "*");
+    }
+
+    window.onmessage = (event) => {
+      const msg = event.data.pluginMessage;
+      if (!msg) return;
+      if (msg.type === "inject-result") {
+        const lines = [`✓ Filled ${msg.filled} frame(s)`];
+        if (msg.errors?.length) {
+          lines.push(...msg.errors.map((e) => `✗ ${e}`));
+        }
+        showStatus(lines.join("\n"), msg.errors?.length ? "error" : "success");
+      }
+    };
+
+    function showStatus(text, type) {
+      const el = document.getElementById("status");
+      el.style.display = "block";
+      el.className = `status ${type}`;
+      el.innerText = text;
+    }
+  </script>
+</body>
+</html>
