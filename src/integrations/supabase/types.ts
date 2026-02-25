@@ -407,6 +407,50 @@ export type Database = {
           },
         ]
       }
+      generated_sections: {
+        Row: {
+          created_at: string
+          css_code: string
+          id: string
+          js_code: string
+          liquid_code: string
+          pipeline_project_id: string
+          section_name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          css_code?: string
+          id?: string
+          js_code?: string
+          liquid_code?: string
+          pipeline_project_id: string
+          section_name?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          css_code?: string
+          id?: string
+          js_code?: string
+          liquid_code?: string
+          pipeline_project_id?: string
+          section_name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generated_sections_pipeline_project_id_fkey"
+            columns: ["pipeline_project_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       google_drive_files: {
         Row: {
           client_name: string | null

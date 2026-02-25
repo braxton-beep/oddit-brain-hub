@@ -69,4 +69,7 @@ verify_jwt = false
 [functions.shopify-pull-theme]
 verify_jwt = false
 
+[functions.generate-shopify-code]
+verify_jwt = false
+
 
