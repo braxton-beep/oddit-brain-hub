@@ -60,6 +60,9 @@ serve(async (req) => {
     params.append("metadata[shop_url]", shop_url);
     params.append("metadata[focus_url]", focus_url ?? "");
     params.append("metadata[tier]", tier.toLowerCase());
+    if (body.client_email) {
+      params.append("metadata[client_email]", body.client_email);
+    }
 
     // Redirect URLs
     const origin = req.headers.get("origin") || "https://oddit-brain-hub.lovable.app";
