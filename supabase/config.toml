@@ -75,4 +75,7 @@ verify_jwt = false
 [functions.shopify-push-section]
 verify_jwt = false
 
+[functions.get-setup-screenshots]
+verify_jwt = false
+
 
