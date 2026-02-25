@@ -72,4 +72,7 @@ verify_jwt = false
 [functions.generate-shopify-code]
 verify_jwt = false
 
+[functions.shopify-push-section]
+verify_jwt = false
+
 
