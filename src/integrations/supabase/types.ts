@@ -853,6 +853,88 @@ export type Database = {
         }
         Relationships: []
       }
+      shopify_connections: {
+        Row: {
+          access_token: string
+          client_id: string | null
+          connected_at: string
+          created_at: string
+          id: string
+          scopes: string
+          shop_domain: string
+          status: string
+          theme_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          client_id?: string | null
+          connected_at?: string
+          created_at?: string
+          id?: string
+          scopes?: string
+          shop_domain: string
+          status?: string
+          theme_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          client_id?: string | null
+          connected_at?: string
+          created_at?: string
+          id?: string
+          scopes?: string
+          shop_domain?: string
+          status?: string
+          theme_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_connections_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_theme_files: {
+        Row: {
+          connection_id: string
+          content: string
+          created_at: string
+          filename: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          connection_id: string
+          content?: string
+          created_at?: string
+          filename: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          connection_id?: string
+          content?: string
+          created_at?: string
+          filename?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_theme_files_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tweet_drafts: {
         Row: {
           context_tweet_ids: string[] | null

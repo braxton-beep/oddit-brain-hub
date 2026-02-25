@@ -66,4 +66,7 @@ verify_jwt = false
 [functions.slack-events]
 verify_jwt = false
 
+[functions.shopify-pull-theme]
+verify_jwt = false
+
 
