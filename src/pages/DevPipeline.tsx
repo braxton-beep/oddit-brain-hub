@@ -21,6 +21,7 @@ import {
   ChevronUp,
   FileCode,
   Loader2,
+  Upload,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -128,6 +129,7 @@ async function fetchGeneratedSections(projectId: string): Promise<GeneratedSecti
 function CodeViewer({ section }: { section: GeneratedSection }) {
   const [activeTab, setActiveTab] = useState<"liquid" | "css" | "js">("liquid");
   const [expanded, setExpanded] = useState(false);
+  const [pushing, setPushing] = useState(false);
 
   const tabs = [
     { key: "liquid" as const, label: "Liquid/HTML", code: section.liquid_code },
@@ -137,12 +139,33 @@ function CodeViewer({ section }: { section: GeneratedSection }) {
 
   const currentCode = tabs.find((t) => t.key === activeTab)?.code || tabs[0]?.code || "";
 
+  const handlePush = async () => {
+    setPushing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-push-section", {
+        body: { generated_section_id: section.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`Pushed to Shopify: ${data?.asset_key || section.section_name}`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to push to Shopify");
+    } finally {
+      setPushing(false);
+    }
+  };
+
+  const isPushed = section.status === "pushed";
+
   return (
     <div className="mt-3 rounded-lg border border-border bg-background overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-secondary/50">
         <div className="flex items-center gap-1">
           <FileCode className="h-3.5 w-3.5 text-primary" />
           <span className="text-xs font-semibold text-foreground">{section.section_name}</span>
+          {isPushed && (
+            <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-accent/15 text-accent">PUSHED</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {tabs.map((t) => (
@@ -173,7 +196,18 @@ function CodeViewer({ section }: { section: GeneratedSection }) {
       >
         {currentCode}
       </pre>
-      <div className="flex items-center justify-end px-3 py-1.5 border-t border-border bg-secondary/30">
+      <div className="flex items-center justify-between px-3 py-1.5 border-t border-border bg-secondary/30">
+        <button
+          onClick={handlePush}
+          disabled={pushing}
+          className="flex items-center gap-1 text-[10px] font-bold text-primary hover:opacity-80 transition disabled:opacity-40"
+        >
+          {pushing ? (
+            <><Loader2 className="h-3 w-3 animate-spin" /> Pushing…</>
+          ) : (
+            <><Upload className="h-3 w-3" /> Push to Shopify</>
+          )}
+        </button>
         <button
           onClick={() => {
             navigator.clipboard.writeText(currentCode);
