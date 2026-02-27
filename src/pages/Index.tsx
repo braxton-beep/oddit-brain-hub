@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow, format } from "date-fns";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, forwardRef } from "react";
 import { useNavigate } from "react-router-dom";
 
 // ── Types ────────────────────────────────────────────────
@@ -94,7 +94,7 @@ function HealthDot({ score }: { score: "green" | "yellow" | "red" }) {
 }
 
 // ── Hero Banner (Fun & Compact) ──────────────────────────
-function HeroBanner({ actionCount }: { actionCount: number }) {
+const HeroBanner = forwardRef<HTMLDivElement, { actionCount: number }>(function HeroBanner({ actionCount }, ref) {
   const [quirkIndex, setQuirkIndex] = useState(() => Math.floor(Math.random() * QUIRKY_LINES.length));
 
   useEffect(() => {
@@ -136,10 +136,10 @@ function HeroBanner({ actionCount }: { actionCount: number }) {
       </div>
     </div>
   );
-}
+});
 
 // ── Live Stats Row ───────────────────────────────────────
-function StatsRow() {
+const StatsRow = forwardRef<HTMLDivElement, object>(function StatsRow(_props, ref) {
   const { data: counts } = useQuery({
     queryKey: ["dashboard-live-counts"],
     queryFn: async () => {
@@ -175,7 +175,7 @@ function StatsRow() {
       <StatCard icon={BarChart3} label="Oddit Scores" value={counts?.scores ?? "–"} color="gold" href="/cro-agent" subtext={counts?.reportsThisWeek ? `${counts.reportsThisWeek} reports this week` : undefined} />
     </div>
   );
-}
+});
 
 // ── Automation Phase Tracker ─────────────────────────────
 const PHASES = [
@@ -389,7 +389,7 @@ function ActionQueue({ pendingDrafts, onReviewDraft }: {
 }
 
 // ── Client Pulse ─────────────────────────────────────────
-function ClientPulse() {
+const ClientPulse = forwardRef<HTMLDivElement, object>(function ClientPulse(_props, ref) {
   const navigate = useNavigate();
   const { data: healthMap } = useClientHealthScores();
   const { data: clients } = useQuery({
@@ -430,7 +430,7 @@ function ClientPulse() {
       </div>
     </div>
   );
-}
+});
 
 // ── Quick Actions ────────────────────────────────────────
 function QuickActions() {
