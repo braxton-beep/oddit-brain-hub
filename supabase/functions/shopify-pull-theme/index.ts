@@ -6,16 +6,27 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-// File patterns we want to pull from the theme
+// File patterns we want to pull from the theme — expanded for richer AI context
 const TARGET_PATTERNS = [
   "layout/theme.liquid",
+  "layout/password.liquid",
   "sections/",
   "templates/",
+  "snippets/",
+  "config/settings_schema.json",
+  "config/settings_data.json",
+  "assets/base.css",
+  "assets/global.css",
+  "assets/theme.css",
+  "assets/section-",
+  "assets/component-",
 ];
 
 function shouldIncludeFile(key: string): boolean {
-  return TARGET_PATTERNS.some((p) => key.startsWith(p)) &&
-    (key.endsWith(".liquid") || key.endsWith(".json"));
+  const validExtensions = [".liquid", ".json", ".css"];
+  const hasValidExt = validExtensions.some((ext) => key.endsWith(ext));
+  if (!hasValidExt) return false;
+  return TARGET_PATTERNS.some((p) => key.startsWith(p));
 }
 
 serve(async (req) => {
