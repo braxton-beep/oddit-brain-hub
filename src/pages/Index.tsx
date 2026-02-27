@@ -436,7 +436,7 @@ function ClientPulse() {
 function QuickActions() {
   const navigate = useNavigate();
   const actions = [
-    { label: "Run Audit", emoji: "🧠", gradient: "from-primary/15 to-violet/10", border: "border-primary/20 hover:border-primary/40", text: "text-primary", href: "/oddit-brain" },
+    { label: "Run Audit", emoji: "🧠", gradient: "from-primary/15 to-violet/10", border: "border-primary/20 hover:border-primary/40", text: "text-primary", href: "/reports" },
     { label: "New Report", emoji: "📊", gradient: "from-accent/15 to-electric/10", border: "border-accent/20 hover:border-accent/40", text: "text-accent", href: "/reports" },
     { label: "Competitive Intel", emoji: "🔍", gradient: "from-coral/15 to-gold/10", border: "border-coral/20 hover:border-coral/40", text: "text-coral", href: "/competitive-intel" },
     { label: "Ask Brain", emoji: "⚡", gradient: "from-violet/15 to-primary/10", border: "border-violet/20 hover:border-violet/40", text: "text-violet", href: "/oddit-brain" },
