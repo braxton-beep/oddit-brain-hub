@@ -79,3 +79,6 @@ verify_jwt = false
 verify_jwt = false
 
 
+[functions.generate-wireframe]
+verify_jwt = false
+

@@ -1075,6 +1075,62 @@ export type Database = {
         }
         Relationships: []
       }
+      wireframe_briefs: {
+        Row: {
+          asana_notes: string | null
+          asana_task_gid: string | null
+          brand_context: Json | null
+          client_name: string
+          created_at: string
+          error: string | null
+          id: string
+          raw_scraped_content: string | null
+          sections: Json
+          setup_run_id: string | null
+          site_url: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          asana_notes?: string | null
+          asana_task_gid?: string | null
+          brand_context?: Json | null
+          client_name?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          raw_scraped_content?: string | null
+          sections?: Json
+          setup_run_id?: string | null
+          site_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          asana_notes?: string | null
+          asana_task_gid?: string | null
+          brand_context?: Json | null
+          client_name?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          raw_scraped_content?: string | null
+          sections?: Json
+          setup_run_id?: string | null
+          site_url?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wireframe_briefs_setup_run_id_fkey"
+            columns: ["setup_run_id"]
+            isOneToOne: false
+            referencedRelation: "setup_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workflows: {
         Row: {
           created_at: string
