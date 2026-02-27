@@ -71,6 +71,51 @@ const CRO_TIPS = [
 
 const EMOJIS_BY_HOUR = ["🌙", "🌙", "🌙", "🌙", "🌅", "🌅", "☀️", "☀️", "🔥", "🔥", "💪", "💪", "🍕", "☕", "⚡", "⚡", "🎯", "🌆", "🌆", "🌙", "🌙", "🌙", "🌙", "🌙"];
 
+const IDEAS_OF_THE_DAY = [
+  { emoji: "🧪", title: "A/B Test Countdown Timers", description: "Add a subtle urgency countdown on product pages during promotions. Test against static 'Limited Stock' badges — timers often lift conversions 9-14%.", category: "Experimentation" },
+  { emoji: "🎨", title: "Redesign the Empty Cart", description: "Turn the empty cart into a discovery moment: show bestsellers, trending items, or personalized picks instead of a sad empty state.", category: "UX Design" },
+  { emoji: "📸", title: "UGC Gallery on PDP", description: "Replace one lifestyle image with a user-generated content carousel. Authentic photos build trust and increase add-to-cart rates by up to 25%.", category: "Social Proof" },
+  { emoji: "🔔", title: "Back-in-Stock Automation", description: "Set up automated back-in-stock email flows. Capture demand during stockouts and convert it into revenue when items return.", category: "Retention" },
+  { emoji: "💬", title: "Exit Survey on Checkout", description: "Add a one-question exit survey for abandoners: 'What stopped you?' The qualitative data is gold for your next sprint.", category: "Research" },
+  { emoji: "🏷️", title: "Dynamic Bundle Pricing", description: "Test 'Complete the Look' bundles with a 10-15% discount. Bundles increase AOV and reduce decision fatigue.", category: "Pricing" },
+  { emoji: "📱", title: "Thumb-Zone Navigation Audit", description: "Map your mobile nav to the thumb-zone heat map. Move CTAs to the bottom 40% of the screen where thumbs naturally rest.", category: "Mobile UX" },
+  { emoji: "⚡", title: "Lazy Load Below-Fold Images", description: "Implement native lazy loading on all images below the fold. Every 100ms in load time = ~1% conversion drop.", category: "Performance" },
+  { emoji: "🎯", title: "Personalized Hero Banner", description: "Show returning visitors a different hero based on their last browsed category. Personalized heroes lift engagement by 20-30%.", category: "Personalization" },
+  { emoji: "🛡️", title: "Trust Badge Heatmap Test", description: "Run a heatmap session to find where users hesitate most, then place trust signals (reviews, guarantees, security badges) right there.", category: "Trust" },
+  { emoji: "✍️", title: "Rewrite CTAs with Benefit Language", description: "Change 'Add to Cart' to outcome-driven copy like 'Get Yours' or 'Start Your Glow-Up'. Small copy shifts can lift clicks 5-10%.", category: "Copywriting" },
+  { emoji: "🚀", title: "One-Click Reorder Flow", description: "For consumable products, add a 'Buy Again' shortcut on the account page. Reduce friction for repeat purchases to near zero.", category: "Retention" },
+  { emoji: "🎬", title: "Product Video Above the Fold", description: "Replace your hero image with a 10-second looping product video. Video on PDPs increases purchase intent by up to 144%.", category: "Content" },
+  { emoji: "📊", title: "Segment by Traffic Source", description: "Create different landing experiences for social vs. search vs. email traffic. Each cohort has wildly different intent and patience.", category: "Strategy" },
+];
+
+function IdeaOfTheDay() {
+  const now = new Date();
+  const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
+  const idea = IDEAS_OF_THE_DAY[dayOfYear % IDEAS_OF_THE_DAY.length];
+
+  return (
+    <div className="mb-8 rounded-2xl p-6 relative overflow-hidden animate-fade-in" style={{
+      background: "linear-gradient(135deg, hsl(270 70% 65% / 0.08) 0%, hsl(240 80% 68% / 0.06) 50%, hsl(330 70% 60% / 0.06) 100%)",
+      border: "1px solid hsl(270 70% 65% / 0.15)",
+    }}>
+      <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-violet/[0.06] blur-3xl pointer-events-none" />
+      <div className="flex items-start gap-4">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet/10 border border-violet/20 text-3xl shrink-0">
+          {idea.emoji}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-violet">💡 Idea of the Day</p>
+            <span className="inline-flex items-center rounded-full border border-violet/20 bg-violet/8 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-violet">{idea.category}</span>
+          </div>
+          <h3 className="text-lg font-extrabold text-foreground mb-1.5">{idea.title}</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed">{idea.description}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HeroBanner() {
   const [now, setNow] = useState(new Date());
 
@@ -402,6 +447,9 @@ const Index = () => {
           ))}
         </div>
       </div>
+
+      {/* ── Idea of the Day ───────────────────────────── */}
+      <IdeaOfTheDay />
 
       {/* ── Pending Drafts Banner ──────────────────────── */}
       {pendingCount > 0 && (
