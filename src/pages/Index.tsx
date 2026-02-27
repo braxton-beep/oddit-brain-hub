@@ -177,6 +177,140 @@ function StatsRow() {
   );
 }
 
+// ── Automation Phase Tracker ─────────────────────────────
+const PHASES = [
+  { id: "foundation", label: "Foundation", emoji: "🧱", description: "Clients & transcripts ingested", checks: ["clients", "transcripts"] as const },
+  { id: "intelligence", label: "Intelligence", emoji: "🧠", description: "Audits & scores running", checks: ["audits", "scores"] as const },
+  { id: "generation", label: "Generation", emoji: "⚡", description: "Reports, emails & tweets auto-generating", checks: ["reports", "emails", "tweets"] as const },
+  { id: "integration", label: "Integration", emoji: "🔗", description: "Shopify, Figma & Slack wired up", checks: ["shopify", "figma", "slack"] as const },
+  { id: "autonomous", label: "Fully Automated", emoji: "🚀", description: "All systems active with throughput", checks: ["pipeline", "competitive"] as const },
+];
+
+function AutomationPhaseTracker() {
+  const { data: phaseCounts } = useQuery({
+    queryKey: ["automation-phase-data"],
+    queryFn: async () => {
+      const [
+        { count: clients },
+        { count: transcripts },
+        { count: audits },
+        { count: scores },
+        { count: reports },
+        { count: emails },
+        { count: tweets },
+        { count: shopify },
+        { count: figma },
+        { data: slackActivity },
+        { count: pipeline },
+        { count: competitive },
+      ] = await Promise.all([
+        supabase.from("clients").select("*", { count: "exact", head: true }),
+        supabase.from("fireflies_transcripts").select("*", { count: "exact", head: true }),
+        supabase.from("cro_audits").select("*", { count: "exact", head: true }),
+        supabase.from("oddit_scores").select("*", { count: "exact", head: true }),
+        supabase.from("report_drafts").select("*", { count: "exact", head: true }),
+        supabase.from("email_drafts").select("*", { count: "exact", head: true }),
+        supabase.from("tweet_drafts").select("*", { count: "exact", head: true }),
+        supabase.from("shopify_connections").select("*", { count: "exact", head: true }),
+        supabase.from("figma_files").select("*", { count: "exact", head: true }),
+        supabase.from("activity_log").select("workflow_name").eq("workflow_name", "slack-weekly-digest").limit(1),
+        supabase.from("pipeline_projects").select("*", { count: "exact", head: true }),
+        supabase.from("competitive_intel").select("*", { count: "exact", head: true }),
+      ]);
+      return {
+        clients: clients ?? 0,
+        transcripts: transcripts ?? 0,
+        audits: audits ?? 0,
+        scores: scores ?? 0,
+        reports: reports ?? 0,
+        emails: emails ?? 0,
+        tweets: tweets ?? 0,
+        shopify: shopify ?? 0,
+        figma: figma ?? 0,
+        slack: slackActivity?.length ?? 0,
+        pipeline: pipeline ?? 0,
+        competitive: competitive ?? 0,
+      };
+    },
+  });
+
+  const phaseStatus = PHASES.map((phase) => {
+    const allComplete = phase.checks.every((key) => (phaseCounts?.[key] ?? 0) > 0);
+    const someComplete = phase.checks.some((key) => (phaseCounts?.[key] ?? 0) > 0);
+    const status: "complete" | "in-progress" | "locked" = allComplete ? "complete" : someComplete ? "in-progress" : "locked";
+    return { ...phase, status };
+  });
+
+  // Find the current phase (first non-complete, or last if all complete)
+  const currentPhaseIndex = phaseStatus.findIndex((p) => p.status !== "complete");
+  const activeIndex = currentPhaseIndex === -1 ? PHASES.length - 1 : currentPhaseIndex;
+  const completedPhases = phaseStatus.filter((p) => p.status === "complete").length;
+  const progressPct = Math.round((completedPhases / PHASES.length) * 100);
+
+  return (
+    <div className="mb-6 animate-fade-in">
+      <div className="rounded-2xl border border-border/60 bg-card/30 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Flame className="h-4 w-4 text-accent" />
+            <span className="text-sm font-bold text-foreground">Road to Full Automation</span>
+          </div>
+          <span className={`text-xs font-bold tabular-nums ${progressPct === 100 ? "text-accent" : "text-muted-foreground"}`}>
+            {progressPct === 100 ? "🎉 100%" : `${progressPct}%`}
+          </span>
+        </div>
+
+        {/* Phase bar */}
+        <div className="relative mb-5">
+          {/* Background track */}
+          <div className="h-2 rounded-full bg-secondary/80 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-1000"
+              style={{
+                width: `${Math.max(progressPct, 4)}%`,
+                background: progressPct === 100
+                  ? "linear-gradient(90deg, hsl(165 55% 55%), hsl(140 60% 50%))"
+                  : "linear-gradient(90deg, hsl(240 80% 68%), hsl(270 70% 65%), hsl(165 55% 55%))",
+              }}
+            />
+          </div>
+
+          {/* Phase dots on the track */}
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-between px-[2px]">
+            {phaseStatus.map((phase, i) => (
+              <div
+                key={phase.id}
+                className={`h-4 w-4 rounded-full border-2 transition-all duration-300 flex items-center justify-center ${
+                  phase.status === "complete"
+                    ? "bg-accent border-accent shadow-[0_0_8px_hsl(165_55%_55%_/_0.4)]"
+                    : phase.status === "in-progress"
+                    ? "bg-primary border-primary shadow-[0_0_8px_hsl(240_80%_68%_/_0.3)] animate-pulse"
+                    : "bg-secondary border-border/60"
+                }`}
+              >
+                {phase.status === "complete" && <Check className="h-2.5 w-2.5 text-accent-foreground" />}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Phase labels */}
+        <div className="grid grid-cols-5 gap-1">
+          {phaseStatus.map((phase, i) => (
+            <div key={phase.id} className={`text-center transition-opacity duration-300 ${phase.status === "locked" ? "opacity-40" : "opacity-100"}`}>
+              <span className="text-lg block mb-0.5">{phase.emoji}</span>
+              <p className={`text-[11px] font-bold leading-tight ${
+                phase.status === "complete" ? "text-accent" : phase.status === "in-progress" ? "text-primary" : "text-muted-foreground"
+              }`}>{phase.label}</p>
+              <p className="text-[9px] text-muted-foreground/60 leading-tight mt-0.5 hidden sm:block">{phase.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Action Queue ─────────────────────────────────────────
 function ActionQueue({ pendingDrafts, onReviewDraft }: {
   pendingDrafts: EmailDraft[];
@@ -510,6 +644,7 @@ const Index = () => {
     <DashboardLayout>
       <HeroBanner actionCount={pendingCount} />
       <StatsRow />
+      <AutomationPhaseTracker />
       <QuickActions />
       <ActionQueue pendingDrafts={pendingDrafts || []} onReviewDraft={setSelectedDraft} />
 
