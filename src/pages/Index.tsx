@@ -8,11 +8,11 @@ import {
   Brain, Zap, Mail, Copy, Check, X, CalendarDays, Loader2, FileText, Trophy,
   ArrowRight, RefreshCw, TrendingUp, AlertCircle, CheckCircle2, Clock, Users,
   Activity, Newspaper, ChevronRight, BarChart3, Sparkles, Twitter, Heart,
-  Repeat2, Eye, Rocket,
+  Repeat2, Eye, Rocket, Sun, Moon, CloudSun, Coffee,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow, format } from "date-fns";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 // ── Types & Constants ────────────────────────────────────
@@ -55,7 +55,95 @@ function SectionHeader({ icon: Icon, title, color, action }: {
   );
 }
 
-// ── Onboarding Card ──────────────────────────────────────
+// ── Hero Banner ──────────────────────────────────────────
+const CRO_TIPS = [
+  "Social proof above the fold increases conversions by up to 34%.",
+  "Reducing form fields from 4 to 3 can boost completion by 50%.",
+  "Free shipping thresholds drive 24% higher average order values.",
+  "Sticky add-to-cart buttons lift mobile conversions by 8%.",
+  "Trust badges near CTAs reduce abandonment by 18%.",
+  "Urgency copy works — but only when it's honest.",
+  "Video on product pages can increase purchase intent by 144%.",
+  "A/B test one thing at a time. Multivariate = noise.",
+  "Page speed: every 100ms delay costs 1% in conversions.",
+  "Your best-performing CTA color? The one that contrasts most.",
+];
+
+function HeroBanner() {
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const hour = now.getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const GreetIcon = hour < 12 ? Coffee : hour < 17 ? Sun : Moon;
+
+  const dayOfWeek = format(now, "EEEE");
+  const dateStr = format(now, "MMMM d, yyyy");
+  const timeStr = format(now, "h:mm:ss a");
+
+  // Day progress (0-100)
+  const minutesElapsed = hour * 60 + now.getMinutes();
+  const dayProgress = Math.round((minutesElapsed / 1440) * 100);
+
+  // Tip of the day based on day-of-year
+  const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
+  const todayTip = CRO_TIPS[dayOfYear % CRO_TIPS.length];
+
+  // Week number
+  const weekNum = Math.ceil(((now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / 86400000 + new Date(now.getFullYear(), 0, 1).getDay() + 1) / 7);
+
+  return (
+    <div className="glass-card rounded-2xl p-6 mb-8 animate-fade-in relative overflow-hidden">
+      {/* Decorative gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.06] via-violet/[0.03] to-accent/[0.04] pointer-events-none" />
+      <div className="absolute top-0 right-0 w-40 h-40 rounded-full bg-primary/[0.06] blur-3xl pointer-events-none" />
+
+      <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
+        {/* Left: Greeting + Date */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1.5">
+            <GreetIcon className="h-5 w-5 text-gold" />
+            <h1 className="text-lg font-extrabold text-foreground">{greeting}</h1>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-bold text-gradient">{dayOfWeek}</span>
+            <span className="text-xs text-muted-foreground">·</span>
+            <span className="text-xs text-muted-foreground">{dateStr}</span>
+            <span className="text-xs text-muted-foreground">·</span>
+            <span className="text-[11px] text-muted-foreground/70">Week {weekNum}</span>
+          </div>
+
+          {/* Day progress */}
+          <div className="mt-3 flex items-center gap-2.5">
+            <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden max-w-[200px]">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-primary via-violet to-accent transition-all duration-1000"
+                style={{ width: `${dayProgress}%` }}
+              />
+            </div>
+            <span className="text-[10px] font-semibold text-muted-foreground tabular-nums">{dayProgress}% of day</span>
+          </div>
+        </div>
+
+        {/* Right: Clock + Tip */}
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <div className="font-mono text-2xl font-bold text-foreground tabular-nums tracking-tight">
+            {timeStr}
+          </div>
+          <div className="flex items-start gap-1.5 max-w-[280px]">
+            <Sparkles className="h-3 w-3 text-gold shrink-0 mt-0.5" />
+            <p className="text-[10px] text-muted-foreground leading-relaxed italic">"{todayTip}"</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OnboardingCard() {
   const { data: credentials } = useIntegrationCredentials();
   const { data: clients } = useClients();
@@ -394,6 +482,7 @@ const Index = () => {
         )}
       </div>
 
+      <HeroBanner />
       <OnboardingCard />
 
       {/* ── Stat Row ──────────────────────────────────── */}
