@@ -1,20 +1,19 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useEmailDrafts, useUpdateEmailDraft, useActivityLog, type EmailDraft } from "@/hooks/useDashboardData";
-import { useClients } from "@/hooks/useClients";
-import { useIntegrationCredentials } from "@/hooks/useIntegrationCredentials";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Brain, Zap, Mail, Copy, Check, X, CalendarDays, Loader2, FileText, Trophy,
   ArrowRight, RefreshCw, TrendingUp, AlertCircle, CheckCircle2, Clock, Users,
-  Activity, Newspaper, ChevronRight, Sparkles, Heart,
-  Repeat2, Eye, Sun, Moon, Coffee, Target, Flame,
+  Activity, Newspaper, ChevronRight, Sparkles,
+  Sun, Moon, Coffee, Target, Flame, Rocket,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow, format } from "date-fns";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import brainMascot from "@/assets/brain-mascot.png";
+import { Progress } from "@/components/ui/progress";
 
 // ── Types & Constants ────────────────────────────────────
 interface NewsItem { title: string; summary: string; category: string; impact: "High" | "Medium" | "Low"; emoji: string; }
@@ -55,66 +54,20 @@ function SectionHeader({ icon: Icon, title, color, action }: {
   );
 }
 
+// ── Automation Milestones ────────────────────────────────
+const AUTOMATION_MILESTONES = [
+  { id: "audits", label: "AI CRO Audits", description: "Auto-generate audits from a URL", icon: "🧪", dataKey: "audits" },
+  { id: "reports", label: "AI Report Generation", description: "Reports from transcripts", icon: "📊", dataKey: "reports" },
+  { id: "transcripts", label: "Meeting Transcription", description: "Auto-import via Fireflies", icon: "🎙️", dataKey: "transcripts" },
+  { id: "emails", label: "Follow-up Email Drafts", description: "AI drafts from call notes", icon: "✉️", dataKey: "emails" },
+  { id: "tweets", label: "Tweet Engine", description: "AI-crafted tweets from audits", icon: "✨", dataKey: "tweets" },
+  { id: "competitive", label: "Competitive Intel", description: "Auto-analyze competitor sites", icon: "🔍", dataKey: "competitive" },
+  { id: "pipeline", label: "Dev Pipeline", description: "Figma → Shopify code generation", icon: "🚀", dataKey: "pipeline" },
+  { id: "slack", label: "Slack Agent", description: "Weekly digests & channel monitoring", icon: "💬", dataKey: "slack" },
+];
+
 // ── Hero Banner ──────────────────────────────────────────
-const CRO_TIPS = [
-  "Social proof above the fold increases conversions by up to 34% 📈",
-  "Reducing form fields from 4 to 3 can boost completion by 50% ✂️",
-  "Free shipping thresholds drive 24% higher AOV 🚚",
-  "Sticky add-to-cart buttons lift mobile conversions by 8% 📱",
-  "Trust badges near CTAs reduce abandonment by 18% 🛡️",
-  "Video on product pages increases purchase intent by 144% 🎬",
-  "Page speed: every 100ms delay costs 1% in conversions ⚡",
-  "Your best CTA color? The one that contrasts most 🎨",
-  "Personalized recommendations drive 26% of ecommerce revenue 🎯",
-  "Exit-intent popups recover 10-15% of abandoning visitors 🚪",
-];
-
 const EMOJIS_BY_HOUR = ["🌙", "🌙", "🌙", "🌙", "🌅", "🌅", "☀️", "☀️", "🔥", "🔥", "💪", "💪", "🍕", "☕", "⚡", "⚡", "🎯", "🌆", "🌆", "🌙", "🌙", "🌙", "🌙", "🌙"];
-
-const IDEAS_OF_THE_DAY = [
-  { emoji: "🧪", title: "A/B Test Countdown Timers", description: "Add a subtle urgency countdown on product pages during promotions. Test against static 'Limited Stock' badges — timers often lift conversions 9-14%.", category: "Experimentation" },
-  { emoji: "🎨", title: "Redesign the Empty Cart", description: "Turn the empty cart into a discovery moment: show bestsellers, trending items, or personalized picks instead of a sad empty state.", category: "UX Design" },
-  { emoji: "📸", title: "UGC Gallery on PDP", description: "Replace one lifestyle image with a user-generated content carousel. Authentic photos build trust and increase add-to-cart rates by up to 25%.", category: "Social Proof" },
-  { emoji: "🔔", title: "Back-in-Stock Automation", description: "Set up automated back-in-stock email flows. Capture demand during stockouts and convert it into revenue when items return.", category: "Retention" },
-  { emoji: "💬", title: "Exit Survey on Checkout", description: "Add a one-question exit survey for abandoners: 'What stopped you?' The qualitative data is gold for your next sprint.", category: "Research" },
-  { emoji: "🏷️", title: "Dynamic Bundle Pricing", description: "Test 'Complete the Look' bundles with a 10-15% discount. Bundles increase AOV and reduce decision fatigue.", category: "Pricing" },
-  { emoji: "📱", title: "Thumb-Zone Navigation Audit", description: "Map your mobile nav to the thumb-zone heat map. Move CTAs to the bottom 40% of the screen where thumbs naturally rest.", category: "Mobile UX" },
-  { emoji: "⚡", title: "Lazy Load Below-Fold Images", description: "Implement native lazy loading on all images below the fold. Every 100ms in load time = ~1% conversion drop.", category: "Performance" },
-  { emoji: "🎯", title: "Personalized Hero Banner", description: "Show returning visitors a different hero based on their last browsed category. Personalized heroes lift engagement by 20-30%.", category: "Personalization" },
-  { emoji: "🛡️", title: "Trust Badge Heatmap Test", description: "Run a heatmap session to find where users hesitate most, then place trust signals (reviews, guarantees, security badges) right there.", category: "Trust" },
-  { emoji: "✍️", title: "Rewrite CTAs with Benefit Language", description: "Change 'Add to Cart' to outcome-driven copy like 'Get Yours' or 'Start Your Glow-Up'. Small copy shifts can lift clicks 5-10%.", category: "Copywriting" },
-  { emoji: "🚀", title: "One-Click Reorder Flow", description: "For consumable products, add a 'Buy Again' shortcut on the account page. Reduce friction for repeat purchases to near zero.", category: "Retention" },
-  { emoji: "🎬", title: "Product Video Above the Fold", description: "Replace your hero image with a 10-second looping product video. Video on PDPs increases purchase intent by up to 144%.", category: "Content" },
-  { emoji: "📊", title: "Segment by Traffic Source", description: "Create different landing experiences for social vs. search vs. email traffic. Each cohort has wildly different intent and patience.", category: "Strategy" },
-];
-
-function IdeaOfTheDay() {
-  const now = new Date();
-  const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
-  const idea = IDEAS_OF_THE_DAY[dayOfYear % IDEAS_OF_THE_DAY.length];
-
-  return (
-    <div className="mb-8 rounded-2xl p-6 relative overflow-hidden animate-fade-in" style={{
-      background: "linear-gradient(135deg, hsl(270 70% 65% / 0.08) 0%, hsl(240 80% 68% / 0.06) 50%, hsl(330 70% 60% / 0.06) 100%)",
-      border: "1px solid hsl(270 70% 65% / 0.15)",
-    }}>
-      <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-violet/[0.06] blur-3xl pointer-events-none" />
-      <div className="flex items-start gap-4">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet/10 border border-violet/20 text-3xl shrink-0">
-          {idea.emoji}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-violet">💡 Idea of the Day</p>
-            <span className="inline-flex items-center rounded-full border border-violet/20 bg-violet/8 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-violet">{idea.category}</span>
-          </div>
-          <h3 className="text-lg font-extrabold text-foreground mb-1.5">{idea.title}</h3>
-          <p className="text-sm text-muted-foreground leading-relaxed">{idea.description}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function HeroBanner() {
   const [now, setNow] = useState(new Date());
@@ -126,9 +79,7 @@ function HeroBanner() {
 
   const hour = now.getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  const GreetIcon = hour < 12 ? Coffee : hour < 17 ? Sun : Moon;
   const hourEmoji = EMOJIS_BY_HOUR[hour];
-
   const dayOfWeek = format(now, "EEEE");
   const dateStr = format(now, "MMMM d, yyyy");
   const timeStr = format(now, "h:mm:ss a");
@@ -136,26 +87,21 @@ function HeroBanner() {
   const minutesElapsed = hour * 60 + now.getMinutes();
   const dayProgress = Math.round((minutesElapsed / 1440) * 100);
 
-  const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
-  const todayTip = CRO_TIPS[dayOfYear % CRO_TIPS.length];
-
   return (
     <div className="rounded-3xl p-8 mb-8 animate-fade-in relative overflow-hidden" style={{
       background: "linear-gradient(135deg, hsl(240 80% 68% / 0.12) 0%, hsl(270 70% 65% / 0.08) 40%, hsl(165 55% 55% / 0.06) 100%)",
       border: "1px solid hsl(240 80% 68% / 0.15)",
     }}>
-      {/* Decorative blobs */}
       <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full bg-primary/[0.08] blur-3xl pointer-events-none" />
       <div className="absolute -bottom-16 -left-16 w-48 h-48 rounded-full bg-accent/[0.06] blur-3xl pointer-events-none" />
 
       <div className="relative flex flex-col sm:flex-row sm:items-center gap-6">
-        {/* Left: Greeting + Date */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-3">
             <span className="text-4xl">{hourEmoji}</span>
             <div>
               <h1 className="text-3xl font-extrabold text-foreground tracking-tight">{greeting}</h1>
-              <p className="text-base text-muted-foreground mt-0.5">Let's optimize some stores today.</p>
+              <p className="text-base text-muted-foreground mt-0.5">Building the machine, one workflow at a time.</p>
             </div>
           </div>
 
@@ -167,7 +113,6 @@ function HeroBanner() {
             </div>
           </div>
 
-          {/* Day progress */}
           <div className="mt-4 flex items-center gap-3">
             <div className="flex-1 h-2.5 rounded-full bg-secondary/80 overflow-hidden max-w-[260px]">
               <div
@@ -182,7 +127,6 @@ function HeroBanner() {
           </div>
         </div>
 
-        {/* Right: Clock + Tip */}
         <div className="flex flex-col items-end gap-4 shrink-0">
           <div className="font-mono text-5xl font-bold text-foreground tabular-nums tracking-tighter" style={{
             background: "linear-gradient(135deg, hsl(0 0% 96%), hsl(240 80% 85%))",
@@ -191,14 +135,120 @@ function HeroBanner() {
           }}>
             {timeStr}
           </div>
-          <div className="flex items-start gap-2 max-w-[340px] rounded-xl bg-gold/[0.06] border border-gold/15 px-4 py-3">
-            <Sparkles className="h-4 w-4 text-gold shrink-0 mt-0.5" />
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              <span className="font-bold text-gold text-[10px] uppercase tracking-wider">Tip of the day</span>
-              <br />{todayTip}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Automation Progress Tracker ──────────────────────────
+function AutomationTracker() {
+  const { data: counts, isLoading } = useQuery({
+    queryKey: ["automation-progress"],
+    queryFn: async () => {
+      const [
+        { count: audits },
+        { count: reports },
+        { count: transcripts },
+        { count: emails },
+        { count: tweets },
+        { count: competitive },
+        { count: pipeline },
+        { data: activity },
+      ] = await Promise.all([
+        supabase.from("cro_audits").select("*", { count: "exact", head: true }),
+        supabase.from("report_drafts").select("*", { count: "exact", head: true }),
+        supabase.from("fireflies_transcripts").select("*", { count: "exact", head: true }),
+        supabase.from("email_drafts").select("*", { count: "exact", head: true }),
+        supabase.from("tweet_drafts").select("*", { count: "exact", head: true }),
+        supabase.from("competitive_intel").select("*", { count: "exact", head: true }),
+        supabase.from("pipeline_projects").select("*", { count: "exact", head: true }),
+        supabase.from("activity_log").select("workflow_name").eq("workflow_name", "slack-weekly-digest").limit(1),
+      ]);
+
+      return {
+        audits: audits ?? 0,
+        reports: reports ?? 0,
+        transcripts: transcripts ?? 0,
+        emails: emails ?? 0,
+        tweets: tweets ?? 0,
+        competitive: competitive ?? 0,
+        pipeline: pipeline ?? 0,
+        slack: activity?.length ?? 0,
+      };
+    },
+  });
+
+  const milestoneStatus = AUTOMATION_MILESTONES.map((m) => {
+    const count = counts?.[m.dataKey as keyof typeof counts] ?? 0;
+    const isActive = count > 0;
+    return { ...m, count, isActive };
+  });
+
+  const activeCount = milestoneStatus.filter((m) => m.isActive).length;
+  const totalPct = Math.round((activeCount / AUTOMATION_MILESTONES.length) * 100);
+
+  return (
+    <div className="mb-8 animate-fade-in">
+      {/* Overall progress header */}
+      <div className="rounded-2xl p-6 mb-4 relative overflow-hidden" style={{
+        background: "linear-gradient(135deg, hsl(165 55% 55% / 0.08) 0%, hsl(240 80% 68% / 0.06) 50%, hsl(270 70% 65% / 0.05) 100%)",
+        border: "1px solid hsl(165 55% 55% / 0.15)",
+      }}>
+        <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-accent/[0.06] blur-3xl pointer-events-none" />
+        <div className="relative flex items-center gap-5">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent/10 border border-accent/20 shrink-0">
+            <Rocket className="h-7 w-7 text-accent" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-3 mb-1">
+              <h2 className="text-lg font-extrabold text-foreground">Automation Progress</h2>
+              <span className="text-2xl font-extrabold text-accent tabular-nums">{totalPct}%</span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              {activeCount} of {AUTOMATION_MILESTONES.length} systems activated — {activeCount === AUTOMATION_MILESTONES.length ? "fully automated! 🎉" : `${AUTOMATION_MILESTONES.length - activeCount} to go`}
             </p>
+            <div className="h-3 rounded-full bg-secondary/80 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-1000"
+                style={{
+                  width: `${totalPct}%`,
+                  background: totalPct === 100
+                    ? "linear-gradient(90deg, hsl(165 55% 55%), hsl(140 60% 50%))"
+                    : "linear-gradient(90deg, hsl(165 55% 55%), hsl(240 80% 68%), hsl(270 70% 65%))",
+                }}
+              />
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* Milestone grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {milestoneStatus.map((m) => (
+          <div
+            key={m.id}
+            className={`rounded-2xl p-4 border transition-all duration-300 ${
+              m.isActive
+                ? "border-accent/25 bg-accent/[0.04]"
+                : "border-border/40 bg-secondary/20 opacity-60"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xl">{m.icon}</span>
+              {m.isActive ? (
+                <CheckCircle2 className="h-4 w-4 text-accent ml-auto" />
+              ) : (
+                <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 ml-auto" />
+              )}
+            </div>
+            <p className="text-sm font-bold text-foreground leading-tight mb-0.5">{m.label}</p>
+            <p className="text-[11px] text-muted-foreground leading-snug">{m.description}</p>
+            {m.isActive && (
+              <p className="text-xs font-bold text-accent mt-2 tabular-nums">{m.count} processed</p>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -284,12 +334,8 @@ function GreatestHits() {
   };
 
   const catEmoji: Record<string, string> = {
-    "Trust Signals": "🛡️",
-    "Copy & Messaging": "✍️",
-    "Visual Hierarchy": "👁️",
-    "Social Proof": "⭐",
-    "CTA Optimization": "🎯",
-    "Mobile UX": "📱",
+    "Trust Signals": "🛡️", "Copy & Messaging": "✍️", "Visual Hierarchy": "👁️",
+    "Social Proof": "⭐", "CTA Optimization": "🎯", "Mobile UX": "📱",
   };
 
   return (
@@ -308,7 +354,7 @@ function GreatestHits() {
         </div>
       ) : (
         <div className="space-y-2">
-          {(insights as any[]).map((insight, i) => (
+          {(insights as any[]).map((insight) => (
             <div key={insight.id} className="flex items-center gap-3 rounded-xl border border-border/50 bg-secondary/40 px-4 py-3 hover:bg-secondary/70 transition-colors group">
               <span className="text-lg shrink-0">{catEmoji[insight.category] || "💡"}</span>
               <div className="flex-1 min-w-0">
@@ -365,35 +411,12 @@ function DraftModal({ draft, onClose, onDismiss }: { draft: EmailDraft; onClose:
 // ── Main Dashboard ────────────────────────────────────────
 const Index = () => {
   const navigate = useNavigate();
-  const { data: credentials } = useIntegrationCredentials();
   const { data: pendingDrafts } = useEmailDrafts("pending");
   const { data: activity, isLoading: actLoading } = useActivityLog();
   const updateDraft = useUpdateEmailDraft();
   const [selectedDraft, setSelectedDraft] = useState<EmailDraft | null>(null);
 
-  const connectedIds = new Set((credentials ?? []).map((c) => c.integration_id));
   const pendingCount = pendingDrafts?.length ?? 0;
-
-  const { data: auditStats } = useQuery({
-    queryKey: ["audit-stats"],
-    queryFn: async () => {
-      const [{ count: totalAudits }, { count: totalClients }] = await Promise.all([
-        supabase.from("cro_audits").select("*", { count: "exact", head: true }),
-        supabase.from("clients").select("*", { count: "exact", head: true }),
-      ]);
-      return { totalAudits: totalAudits ?? 0, totalClients: totalClients ?? 0 };
-    },
-  });
-
-  const { data: tweetStats } = useQuery({
-    queryKey: ["tweet-stats-dash"],
-    queryFn: async () => { const { count } = await supabase.from("twitter_tweets").select("*", { count: "exact", head: true }); return { total: count ?? 0 }; },
-  });
-
-  const { data: transcriptCount } = useQuery({
-    queryKey: ["transcript-count-dash"],
-    queryFn: async () => { const { count } = await supabase.from("fireflies_transcripts").select("*", { count: "exact", head: true }); return count ?? 0; },
-  });
 
   const handleDismissDraft = (id: string) => { updateDraft.mutate({ id, status: "dismissed" }); setSelectedDraft(null); toast.success("Draft dismissed"); };
 
@@ -404,37 +427,16 @@ const Index = () => {
     { label: "Craft a Tweet", emoji: "✨", gradient: "from-violet/15 to-primary/10", border: "border-violet/20 hover:border-violet/40", text: "text-violet", href: "/twitter", glow: "hover:shadow-[0_0_40px_-8px_hsl(270_70%_65%_/_0.3)]" },
   ];
 
-  const statCards = [
-    { label: "Clients", value: auditStats?.totalClients ?? "—", emoji: "👥", color: "text-electric", glowClass: "stat-glow-electric", gradient: "from-electric/15 via-electric/5 to-transparent" },
-    { label: "CRO Audits", value: auditStats?.totalAudits ?? "—", emoji: "🧪", color: "text-primary", glowClass: "stat-glow-primary", gradient: "from-primary/15 via-primary/5 to-transparent" },
-    { label: "Tweets Indexed", value: tweetStats?.total ?? "—", emoji: "🐦", color: "text-violet", glowClass: "stat-glow-violet", gradient: "from-violet/15 via-violet/5 to-transparent" },
-    { label: "Meetings", value: transcriptCount ?? "—", emoji: "🎙️", color: "text-gold", glowClass: "stat-glow-gold", gradient: "from-gold/15 via-gold/5 to-transparent" },
-    { label: "Integrations", value: `${connectedIds.size}`, emoji: "⚡", color: "text-accent", glowClass: "stat-glow-electric", gradient: "from-accent/15 via-accent/5 to-transparent" },
-  ];
-
   const activityIcon: Record<string, typeof CheckCircle2> = {
     completed: CheckCircle2, failed: AlertCircle, running: Activity,
   };
 
   return (
     <DashboardLayout>
-      {/* ── Hero ──────────────────────────────────────── */}
       <HeroBanner />
 
-      {/* ── Stat Row ──────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8 stagger-children">
-        {statCards.map(({ label, value, emoji, color, glowClass, gradient }) => (
-          <div key={label} className="glass-card gradient-border rounded-2xl p-5 relative overflow-hidden group hover:translate-y-[-3px] transition-all duration-300 cursor-default">
-            <div className={`absolute inset-0 ${glowClass} opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`} />
-            <div className={`absolute inset-0 bg-gradient-to-br ${gradient} pointer-events-none opacity-60 group-hover:opacity-100 transition-opacity`} />
-            <div className="relative">
-              <span className="text-2xl block mb-2">{emoji}</span>
-              <p className="text-3xl font-extrabold text-foreground tabular-nums">{value}</p>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1 font-semibold">{label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* ── Automation Progress ────────────────────────── */}
+      <AutomationTracker />
 
       {/* ── Quick Actions ─────────────────────────────── */}
       <div className="mb-10">
@@ -447,9 +449,6 @@ const Index = () => {
           ))}
         </div>
       </div>
-
-      {/* ── Idea of the Day ───────────────────────────── */}
-      <IdeaOfTheDay />
 
       {/* ── Pending Drafts Banner ──────────────────────── */}
       {pendingCount > 0 && (
@@ -467,15 +466,12 @@ const Index = () => {
 
       {/* ── Main Grid ─────────────────────────────────── */}
       <div className="grid gap-6 lg:grid-cols-5">
-        {/* Left: Intel Feeds */}
         <div className="lg:col-span-3 space-y-6">
           <AINewsFeed />
           <GreatestHits />
         </div>
 
-        {/* Right: Activity */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Recent Activity */}
           <div className="glass-card rounded-2xl p-6">
             <SectionHeader icon={Clock} title="Recent Activity" color="text-coral" />
             {actLoading ? (
@@ -502,7 +498,6 @@ const Index = () => {
             )}
           </div>
 
-          {/* Pending Drafts List */}
           {pendingDrafts && pendingDrafts.length > 0 && (
             <div className="glass-card rounded-2xl p-6">
               <SectionHeader icon={Mail} title="Pending Drafts" color="text-gold" />
