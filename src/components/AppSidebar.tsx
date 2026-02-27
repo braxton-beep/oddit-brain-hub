@@ -20,6 +20,7 @@ import {
   Zap,
   Activity,
   Store,
+  Layout,
 } from "lucide-react";
 import { useState } from "react";
 import { useEmailDrafts } from "@/hooks/useDashboardData";
@@ -50,6 +51,7 @@ const mainNav = [
 
 const toolsNav = [
   { title: "CRO Agent", url: "/cro-agent", icon: Activity },
+  { title: "AI Wireframes", url: "/wireframes", icon: Layout },
   { title: "Dev Pipeline", url: "/dev-pipeline", icon: Code2 },
   { title: "Slack Agent", url: "/slack-agent", icon: MessageSquare },
   { title: "Social Content", url: "/twitter", icon: Twitter },
