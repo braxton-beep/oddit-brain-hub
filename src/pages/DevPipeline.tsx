@@ -126,10 +126,12 @@ async function fetchGeneratedSections(projectId: string): Promise<GeneratedSecti
 
 // ─── Code viewer ─────────────────────────────────────────────────────────────
 
-function CodeViewer({ section }: { section: GeneratedSection }) {
+function CodeViewer({ section, onRefine }: { section: GeneratedSection; onRefine: (sectionId: string, feedback: string) => void }) {
   const [activeTab, setActiveTab] = useState<"liquid" | "css" | "js">("liquid");
   const [expanded, setExpanded] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [showRefine, setShowRefine] = useState(false);
+  const [feedback, setFeedback] = useState("");
 
   const tabs = [
     { key: "liquid" as const, label: "Liquid/HTML", code: section.liquid_code },
@@ -156,6 +158,7 @@ function CodeViewer({ section }: { section: GeneratedSection }) {
   };
 
   const isPushed = section.status === "pushed";
+  const isRefined = section.status === "refined";
 
   return (
     <div className="mt-3 rounded-lg border border-border bg-background overflow-hidden">
@@ -165,6 +168,9 @@ function CodeViewer({ section }: { section: GeneratedSection }) {
           <span className="text-xs font-semibold text-foreground">{section.section_name}</span>
           {isPushed && (
             <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-accent/15 text-accent">PUSHED</span>
+          )}
+          {isRefined && (
+            <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold bg-primary/15 text-primary">REFINED</span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -196,18 +202,63 @@ function CodeViewer({ section }: { section: GeneratedSection }) {
       >
         {currentCode}
       </pre>
+
+      {/* Refinement feedback input */}
+      {showRefine && (
+        <div className="px-3 py-3 border-t border-border bg-primary/[0.03]">
+          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+            Refinement Feedback
+          </label>
+          <textarea
+            value={feedback}
+            onChange={(e) => setFeedback(e.target.value)}
+            placeholder="e.g. 'Make the hero section full-width, use the theme's --color-accent variable for the CTA, add a mobile hamburger menu…'"
+            className="w-full rounded-lg bg-secondary border border-border px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 min-h-[80px] resize-y"
+          />
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={() => {
+                if (feedback.trim()) {
+                  onRefine(section.id, feedback.trim());
+                  setShowRefine(false);
+                  setFeedback("");
+                }
+              }}
+              disabled={!feedback.trim()}
+              className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-[10px] font-bold text-primary-foreground hover:opacity-90 transition disabled:opacity-40"
+            >
+              <Wand2 className="h-3 w-3" /> Refine Code
+            </button>
+            <button
+              onClick={() => { setShowRefine(false); setFeedback(""); }}
+              className="text-[10px] font-medium text-muted-foreground hover:text-foreground px-2 py-1.5 transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between px-3 py-1.5 border-t border-border bg-secondary/30">
-        <button
-          onClick={handlePush}
-          disabled={pushing}
-          className="flex items-center gap-1 text-[10px] font-bold text-primary hover:opacity-80 transition disabled:opacity-40"
-        >
-          {pushing ? (
-            <><Loader2 className="h-3 w-3 animate-spin" /> Pushing…</>
-          ) : (
-            <><Upload className="h-3 w-3" /> Push to Shopify</>
-          )}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handlePush}
+            disabled={pushing}
+            className="flex items-center gap-1 text-[10px] font-bold text-primary hover:opacity-80 transition disabled:opacity-40"
+          >
+            {pushing ? (
+              <><Loader2 className="h-3 w-3 animate-spin" /> Pushing…</>
+            ) : (
+              <><Upload className="h-3 w-3" /> Push to Shopify</>
+            )}
+          </button>
+          <button
+            onClick={() => setShowRefine(!showRefine)}
+            className="flex items-center gap-1 text-[10px] font-bold text-gold hover:opacity-80 transition"
+          >
+            <RotateCcw className="h-3 w-3" /> Refine
+          </button>
+        </div>
         <button
           onClick={() => {
             navigator.clipboard.writeText(currentCode);
@@ -343,6 +394,25 @@ const DevPipeline = () => {
       setExpandedCode(projectId);
     } catch (err: any) {
       toast.error(err.message || "Code generation failed");
+    } finally {
+      setGeneratingId(null);
+    }
+  };
+
+  const handleRefineCode = async (projectId: string, sectionId: string, feedback: string) => {
+    setGeneratingId(projectId);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-shopify-code", {
+        body: { pipeline_project_id: projectId, previous_section_id: sectionId, refinement_feedback: feedback },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success(`Code refined: ${data?.section_name || "section"}`);
+      qc.invalidateQueries({ queryKey: ["pipeline_projects"] });
+      qc.invalidateQueries({ queryKey: ["generated_sections", projectId] });
+    } catch (err: any) {
+      toast.error(err.message || "Refinement failed");
     } finally {
       setGeneratingId(null);
     }
@@ -501,6 +571,7 @@ const DevPipeline = () => {
               codeExpanded={expandedCode === p.id}
               onToggleCode={() => setExpandedCode(expandedCode === p.id ? null : p.id)}
               onGenerateCode={() => handleGenerateCode(p.id)}
+              onRefineCode={(sectionId, feedback) => handleRefineCode(p.id, sectionId, feedback)}
               onStart={() => startProject(p)}
               onAdvance={() => advanceStage(p)}
               onRetry={() => retryStage(p)}
@@ -521,6 +592,7 @@ function ProjectCard({
   codeExpanded,
   onToggleCode,
   onGenerateCode,
+  onRefineCode,
   onStart,
   onAdvance,
   onRetry,
@@ -531,6 +603,7 @@ function ProjectCard({
   codeExpanded: boolean;
   onToggleCode: () => void;
   onGenerateCode: () => void;
+  onRefineCode: (sectionId: string, feedback: string) => void;
   onStart: () => void;
   onAdvance: () => void;
   onRetry: () => void;
@@ -680,7 +753,7 @@ function ProjectCard({
               No generated code yet. Click "Generate Code" to start.
             </p>
           ) : (
-            sections.map((s) => <CodeViewer key={s.id} section={s} />)
+            sections.map((s) => <CodeViewer key={s.id} section={s} onRefine={onRefineCode} />)
           )}
         </div>
       )}
