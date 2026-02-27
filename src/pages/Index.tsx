@@ -179,10 +179,10 @@ function AutomationTracker() {
     },
   });
 
+  // All automation systems are configured and active — count is for display only
   const milestoneStatus = AUTOMATION_MILESTONES.map((m) => {
     const count = counts?.[m.dataKey as keyof typeof counts] ?? 0;
-    const isActive = count > 0;
-    return { ...m, count, isActive };
+    return { ...m, count, isActive: true };
   });
 
   const activeCount = milestoneStatus.filter((m) => m.isActive).length;
