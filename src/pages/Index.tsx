@@ -105,38 +105,38 @@ function HeroBanner() {
       <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
         {/* Left: Greeting + Date */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5">
-            <GreetIcon className="h-5 w-5 text-gold" />
-            <h1 className="text-lg font-extrabold text-foreground">{greeting}</h1>
+          <div className="flex items-center gap-3 mb-2">
+            <GreetIcon className="h-7 w-7 text-gold" />
+            <h1 className="text-3xl font-extrabold text-foreground">{greeting}</h1>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-bold text-gradient">{dayOfWeek}</span>
-            <span className="text-xs text-muted-foreground">·</span>
-            <span className="text-xs text-muted-foreground">{dateStr}</span>
-            <span className="text-xs text-muted-foreground">·</span>
-            <span className="text-[11px] text-muted-foreground/70">Week {weekNum}</span>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="text-xl font-bold text-gradient">{dayOfWeek}</span>
+            <span className="text-base text-muted-foreground">·</span>
+            <span className="text-base text-muted-foreground">{dateStr}</span>
+            <span className="text-base text-muted-foreground">·</span>
+            <span className="text-sm text-muted-foreground/70">Week {weekNum}</span>
           </div>
 
           {/* Day progress */}
-          <div className="mt-3 flex items-center gap-2.5">
-            <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden max-w-[200px]">
+          <div className="mt-4 flex items-center gap-3">
+            <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden max-w-[240px]">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-primary via-violet to-accent transition-all duration-1000"
                 style={{ width: `${dayProgress}%` }}
               />
             </div>
-            <span className="text-[10px] font-semibold text-muted-foreground tabular-nums">{dayProgress}% of day</span>
+            <span className="text-xs font-semibold text-muted-foreground tabular-nums">{dayProgress}% of day</span>
           </div>
         </div>
 
         {/* Right: Clock + Tip */}
-        <div className="flex flex-col items-end gap-2 shrink-0">
-          <div className="font-mono text-2xl font-bold text-foreground tabular-nums tracking-tight">
+        <div className="flex flex-col items-end gap-3 shrink-0">
+          <div className="font-mono text-4xl font-bold text-foreground tabular-nums tracking-tight">
             {timeStr}
           </div>
-          <div className="flex items-start gap-1.5 max-w-[280px]">
-            <Sparkles className="h-3 w-3 text-gold shrink-0 mt-0.5" />
-            <p className="text-[10px] text-muted-foreground leading-relaxed italic">"{todayTip}"</p>
+          <div className="flex items-start gap-2 max-w-[320px]">
+            <Sparkles className="h-4 w-4 text-gold shrink-0 mt-0.5" />
+            <p className="text-sm text-muted-foreground leading-relaxed italic">"{todayTip}"</p>
           </div>
         </div>
       </div>
