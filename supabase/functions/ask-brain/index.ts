@@ -26,6 +26,42 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    // Detect URLs in the query and scrape them for context
+    const urlRegex = /https?:\/\/(?:twitter\.com|x\.com|[^\s<>]+)/gi;
+    const urls = query.match(urlRegex) || [];
+    let scrapedContext = "";
+
+    if (urls.length > 0) {
+      const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
+      if (FIRECRAWL_API_KEY) {
+        const scrapeResults = await Promise.all(
+          urls.slice(0, 3).map(async (url: string) => {
+            try {
+              const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ url: url.trim(), formats: ["markdown"], onlyMainContent: true }),
+              });
+              if (!res.ok) return null;
+              const data = await res.json();
+              const markdown = data?.data?.markdown || data?.markdown || "";
+              return markdown ? `--- SCRAPED URL: ${url} ---\n${markdown.slice(0, 3000)}` : null;
+            } catch (e) {
+              console.error("Scrape failed for", url, e);
+              return null;
+            }
+          })
+        );
+        const validResults = scrapeResults.filter(Boolean);
+        if (validResults.length > 0) {
+          scrapedContext = `\n\nSCRAPED WEB CONTENT (from URLs in the user's message):\n${validResults.join("\n\n")}`;
+        }
+      }
+    }
+
     // Build dynamic context from the database
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -158,8 +194,11 @@ ${projectBlock}
 
 ${intBlock}
 ${meetingBlock}
+${scrapedContext}
 
 Answer questions concisely and specifically using this context when relevant.
+
+When the user shares a URL (tweet, article, etc.), use the SCRAPED WEB CONTENT above to give a precise explanation of what the link contains. Reference specific content from the scraped text.
 
 You are ALSO a knowledgeable general assistant. If the user asks about industry news, AI tools, tweets, tech updates, marketing trends, or anything outside the internal data — answer using your general knowledge. Don't refuse or say "I only have access to internal data." Be helpful on ANY topic.
 
