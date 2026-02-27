@@ -406,7 +406,7 @@ function ClientPulse() {
   if (!clients || clients.length === 0) return null;
 
   return (
-    <div className="glass-card rounded-2xl p-5">
+    <div className="glass-card rounded-2xl p-5 mb-6">
       <SectionHeader icon={Users} title="Client Pulse" color="text-primary" action={
         <button onClick={() => navigate("/clients")} className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors">
           View all →
@@ -647,11 +647,11 @@ const Index = () => {
       <AutomationPhaseTracker />
       <QuickActions />
       <ActionQueue pendingDrafts={pendingDrafts || []} onReviewDraft={setSelectedDraft} />
+      <ClientPulse />
 
       {/* Main Grid */}
       <div className="grid gap-5 lg:grid-cols-5">
         <div className="lg:col-span-3 space-y-5">
-          <ClientPulse />
           <RecentActivity />
         </div>
         <div className="lg:col-span-2 space-y-5">
