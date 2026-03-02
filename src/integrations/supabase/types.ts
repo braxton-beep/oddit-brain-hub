@@ -65,6 +65,47 @@ export type Database = {
         }
         Relationships: []
       }
+      client_brand_assets: {
+        Row: {
+          asset_type: string
+          client_id: string
+          created_at: string
+          file_name: string
+          file_url: string
+          id: string
+          storage_path: string
+          updated_at: string
+        }
+        Insert: {
+          asset_type?: string
+          client_id: string
+          created_at?: string
+          file_name?: string
+          file_url?: string
+          id?: string
+          storage_path?: string
+          updated_at?: string
+        }
+        Update: {
+          asset_type?: string
+          client_id?: string
+          created_at?: string
+          file_name?: string
+          file_url?: string
+          id?: string
+          storage_path?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_brand_assets_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_implementations: {
         Row: {
           audit_id: string

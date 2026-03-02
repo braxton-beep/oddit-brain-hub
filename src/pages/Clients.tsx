@@ -27,6 +27,7 @@ import {
   type Client,
   type ClientInsert,
 } from "@/hooks/useClients";
+import { ClientBrandAssets } from "@/components/ClientBrandAssets";
 import { useClientHealthScores } from "@/hooks/useClientHealthScores";
 
 const EMPTY_FORM: ClientInsert = {
@@ -556,6 +557,9 @@ export default function Clients() {
                         {client.notes && (
                           <p className="text-[11px] text-muted-foreground line-clamp-2 border-t border-border pt-2">{client.notes}</p>
                         )}
+
+                        {/* Brand Assets */}
+                        <ClientBrandAssets clientId={client.id} clientName={client.name} />
                       </div>
                     )}
                   </div>
