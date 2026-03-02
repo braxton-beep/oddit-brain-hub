@@ -81,6 +81,23 @@ serve(async (req) => {
       }
     }
 
+    // Fetch past Figma designs for this client to inform design continuity
+    let figmaContext = "";
+    if (audit.client_name) {
+      const { data: figmaFiles } = await supabase
+        .from("figma_files")
+        .select("name, design_type, figma_url, thumbnail_url, last_modified")
+        .ilike("client_name", audit.client_name)
+        .eq("enabled", true)
+        .order("last_modified", { ascending: false })
+        .limit(10);
+
+      if (figmaFiles?.length) {
+        figmaContext = "\n\nPAST FIGMA DESIGNS FOR THIS CLIENT (reference for design continuity):\n" +
+          figmaFiles.map((f: any) => `  • [${f.design_type}] "${f.name}" — ${f.figma_url || "no link"}`).join("\n");
+      }
+    }
+
     // Build section-specific context from the recommendation
     let sectionContext = "";
     if (targetRec) {
@@ -139,7 +156,7 @@ ${numVariants > 1 ? `6. Create variant #\${VARIANT_NUM} — vary the layout appr
     // Add text context
     userContent.push({
       type: "text",
-      text: `Store: ${audit.shop_url} | Client: ${audit.client_name}${odditScoreContext}${sectionContext}${brandAssetContext}
+      text: `Store: ${audit.shop_url} | Client: ${audit.client_name}${odditScoreContext}${sectionContext}${brandAssetContext}${figmaContext}
 
 DESIGN BRIEF:
 ${mockupPrompt}`,
