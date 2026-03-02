@@ -103,7 +103,39 @@ async function captureHomepageScreenshot(
         url,
         formats: ["screenshot@fullPage"],
         mobile,
-        waitFor: 3000,
+        waitFor: 2000,
+        actions: [
+          {
+            type: "executeJavascript",
+            script: `
+              // Dismiss common cookie/popup overlays
+              const selectors = [
+                '[class*="cookie"] button', '[class*="Cookie"] button',
+                '[id*="cookie"] button', '[id*="Cookie"] button',
+                '[class*="consent"] button', '[class*="Consent"] button',
+                '[class*="popup"] [class*="close"]', '[class*="modal"] [class*="close"]',
+                '[class*="banner"] [class*="close"]', '[class*="overlay"] [class*="close"]',
+                '[aria-label="Close"]', '[aria-label="close"]',
+                '[aria-label="Accept"]', '[aria-label="Accept cookies"]',
+                'button[class*="accept"]', 'button[class*="Accept"]',
+                'button[class*="dismiss"]', 'button[class*="Dismiss"]',
+                'button[class*="got-it"]', 'button[class*="agree"]',
+                '.cc-btn', '.cc-dismiss', '.cc-allow',
+                '#onetrust-accept-btn-handler',
+                '.js-cookie-consent-agree',
+                '[data-testid="cookie-accept"]',
+              ];
+              for (const sel of selectors) {
+                document.querySelectorAll(sel).forEach(el => el.click());
+              }
+              // Remove fixed/sticky overlays
+              document.querySelectorAll('[class*="cookie"], [class*="consent"], [id*="cookie"], [id*="consent"], [class*="popup-overlay"]').forEach(el => {
+                el.style.display = 'none';
+              });
+            `,
+          },
+          { type: "wait", milliseconds: 1000 },
+        ],
       }),
     });
 
