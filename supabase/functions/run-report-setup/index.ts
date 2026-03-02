@@ -75,10 +75,20 @@ async function getAsanaToken(sb: ReturnType<typeof createClient>): Promise<strin
 }
 
 async function getFigmaToken(sb: ReturnType<typeof createClient>): Promise<string | null> {
-  const { data: cred } = await sb
-    .from("integration_credentials").select("api_key")
-    .eq("integration_id", "figma").order("created_at", { ascending: false }).limit(1).single();
-  return cred?.api_key ?? null;
+  try {
+    const { data: cred, error } = await sb
+      .from("integration_credentials").select("api_key")
+      .eq("integration_id", "figma").order("created_at", { ascending: false }).limit(1).single();
+    if (error) {
+      console.error("[Figma] Error fetching token from DB:", error.message);
+      return null;
+    }
+    console.log(`[Figma] Token found: ${cred?.api_key ? "yes (" + cred.api_key.substring(0, 8) + "...)" : "no"}`);
+    return cred?.api_key ?? null;
+  } catch (e) {
+    console.error("[Figma] Exception fetching token:", e);
+    return null;
+  }
 }
 
 function getFirecrawlKey(): string | null {
@@ -468,6 +478,7 @@ serve(async (req) => {
 
     // ── STEP 6: Duplicate Figma templates ────────────────────────────────────
     steps.push({ step: 6, name: "Duplicate Figma Templates", status: "running" });
+    console.log(`[Figma] Step 6 starting. figmaToken=${figmaToken ? "present" : "NULL"}, project_type=${project_type}, tier=${tier}`);
     if (!figmaToken) {
       steps[steps.length - 1] = { step: 6, name: "Duplicate Figma Templates", status: "skipped", detail: "No Figma token" };
     } else {
