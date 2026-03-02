@@ -487,163 +487,51 @@ serve(async (req) => {
       steps[steps.length - 1] = { step: 5, name: "Add Asana Tags", status: "error", error: String(e) };
     }
 
-    // ── STEP 6: Duplicate Figma templates ────────────────────────────────────
-    // TEMP: Skip Figma duplication until template keys are updated
-    const SKIP_FIGMA_DUPLICATION = true;
-    steps.push({ step: 6, name: "Duplicate Figma Templates", status: "running" });
-    console.log(`[Figma] Step 6 starting. figmaToken=${figmaToken ? "present" : "NULL"}, project_type=${project_type}, tier=${tier}, SKIP=${SKIP_FIGMA_DUPLICATION}`);
-    if (!figmaToken || SKIP_FIGMA_DUPLICATION) {
-      steps[steps.length - 1] = { step: 6, name: "Duplicate Figma Templates", status: "skipped", detail: SKIP_FIGMA_DUPLICATION ? "Figma duplication temporarily disabled" : "No Figma token" };
-    } else {
-      const figmaResults: string[] = [];
-
-      // Helper: duplicate a Figma file and optionally move to a project
-      async function duplicateFigmaFile(
-        templateKey: string, fileName: string, destProjectId?: string
-      ): Promise<string | null> {
-        console.log(`[Figma] Duplicating template ${templateKey} as "${fileName}"${destProjectId ? ` → project ${destProjectId}` : ""}`);
-        const dupRes = await fetch(`${FIGMA_API}/files/${templateKey}/duplicate`, {
-          method: "POST",
-          headers: { "X-Figma-Token": figmaToken!, "Content-Type": "application/json" },
-          body: JSON.stringify({ name: fileName }),
-        });
-        if (!dupRes.ok) {
-          const errText = await dupRes.text();
-          console.error(`[Figma] Duplicate failed (${dupRes.status}): ${errText}`);
-          return null;
-        }
-        const dupData = await dupRes.json();
-        const newKey = dupData.key ?? dupData.file?.key ?? null;
-        console.log(`[Figma] Duplicated → key: ${newKey}`);
-        if (!newKey) return null;
-
-        // Move to destination project if specified
-        if (destProjectId) {
-          try {
-            const moveRes = await fetch(`${FIGMA_API}/projects/${destProjectId}/move`, {
-              method: "POST",
-              headers: { "X-Figma-Token": figmaToken!, "Content-Type": "application/json" },
-              body: JSON.stringify({ files: [newKey] }),
-            });
-            if (!moveRes.ok) console.warn(`[Figma] Move failed (${moveRes.status}): ${await moveRes.text()}`);
-          } catch (e) {
-            console.warn(`[Figma] Failed to move file ${newKey} to project ${destProjectId}:`, e);
-          }
-        }
-        return newKey;
-      }
+    // ── STEP 6: Add Figma Template Links to Asana ──────────────────────────
+    steps.push({ step: 6, name: "Add Figma Template Links", status: "running" });
+    try {
+      // Build template URLs based on project type and tier
+      const templateLinks: string[] = [];
 
       if (project_type === "landing_page") {
-        // Landing Page: single template, naming: "Client Name // Landing Page"
-        try {
-          const newKey = await duplicateFigmaFile(
-            DEFAULT_FIGMA_LANDING_PAGE_TEMPLATE_KEY,
-            `${client_name} // Landing Page`,
-            FIGMA_PROJECT_LANDING_PAGES
-          );
-          if (newKey) {
-            figmaFileLink = `https://www.figma.com/file/${newKey}`;
-            figmaResults.push("Landing Page: ✓");
-          } else {
-            figmaResults.push("Landing Page: skipped");
-          }
-        } catch (e) {
-          figmaResults.push(`Landing Page: error — ${e}`);
-        }
+        templateLinks.push(`📐 Figma Template (Landing Page): https://www.figma.com/file/${DEFAULT_FIGMA_LANDING_PAGE_TEMPLATE_KEY}`);
       } else if (project_type === "new_site_design") {
-        // New Site Design: single template, naming: "Client Name // New Site Design"
-        try {
-          const newKey = await duplicateFigmaFile(
-            DEFAULT_FIGMA_NEW_SITE_TEMPLATE_KEY,
-            `${client_name} // New Site Design`,
-            FIGMA_PROJECT_NEW_SITE_DESIGNS
-          );
-          if (newKey) {
-            figmaFileLink = `https://www.figma.com/file/${newKey}`;
-            figmaResults.push("New Site Design: ✓");
-          } else {
-            figmaResults.push("New Site Design: skipped");
-          }
-        } catch (e) {
-          figmaResults.push(`New Site Design: error — ${e}`);
-        }
+        templateLinks.push(`📐 Figma Template (New Site): https://www.figma.com/file/${DEFAULT_FIGMA_NEW_SITE_TEMPLATE_KEY}`);
       } else {
-        // Report (default): Audit + Slides templates — tier-aware
-        const auditTemplateKey = tier === "essential"
+        // Report — tier-aware
+        const auditKey = tier === "essential"
           ? (Deno.env.get("FIGMA_TEMPLATE_ODDIT_ESSENTIAL") || DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY)
           : DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY;
-        const slidesTemplateKey = tier === "essential"
+        const slidesKey = tier === "essential"
           ? (Deno.env.get("FIGMA_SLIDES_ODDIT_ESSENTIAL") || DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY)
           : DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY;
 
-        // Determine destination project based on tier
-        const destProject = tier === "essential" ? "57384340" : (tier === "pro" ? "53086867" : FIGMA_PROJECT_REPORTS);
+        templateLinks.push(`📐 Figma Audit Template (${tierLabel}): https://www.figma.com/file/${auditKey}`);
+        templateLinks.push(`📊 Figma Slides Template (${tierLabel}): https://www.figma.com/file/${slidesKey}`);
+      }
 
-        console.log(`[Figma] Report tier=${tier}, auditTemplate=${auditTemplateKey}, slidesTemplate=${slidesTemplateKey}, destProject=${destProject}`);
-
-        try {
-          const newKey = await duplicateFigmaFile(
-            auditTemplateKey,
-            `${client_name} // ${tierLabel} Report`,
-            destProject
-          );
-          if (newKey) {
-            figmaFileLink = `https://www.figma.com/file/${newKey}`;
-            figmaResults.push("Audit: ✓");
-          } else {
-            figmaResults.push("Audit: skipped");
-          }
-        } catch (e) {
-          figmaResults.push(`Audit: error — ${e}`);
-        }
-
-        try {
-          const newKey = await duplicateFigmaFile(
-            slidesTemplateKey,
-            `${client_name} // ${tierLabel} Report Slides`,
-            FIGMA_PROJECT_REPORTS
-          );
-          if (newKey) {
-            figmaSlidesLink = `https://www.figma.com/file/${newKey}`;
-            figmaResults.push("Slides: ✓");
-          } else {
-            figmaResults.push("Slides: skipped");
-          }
-        } catch (e) {
-          figmaResults.push(`Slides: error — ${e}`);
+      // Add screenshot URLs for pasting into Figma
+      if (Object.keys(screenshotUrls).length > 0) {
+        templateLinks.push(`\n🖼️ Paste these into Figma template frames:`);
+        for (const [label, url] of Object.entries(screenshotUrls)) {
+          templateLinks.push(`  → ${label} Screenshot: ${url}`);
         }
       }
 
-      // Append Figma links to Asana notes
-      if (figmaFileLink || figmaSlidesLink) {
-        try {
-          const existing = await asanaFetch(`/tasks/${taskGid}?opt_fields=notes`, asanaToken);
-          const additions: string[] = [];
-          if (figmaFileLink) additions.push(`📎 Figma File: ${figmaFileLink}`);
-          if (figmaSlidesLink) additions.push(`📊 Figma Slides: ${figmaSlidesLink}`);
+      templateLinks.push(`\n⚡ Duplicate the template(s) above, then rename with client name.`);
 
-          if (Object.keys(screenshotUrls).length > 0) {
-            additions.push(`\n🖼️ Paste these into Figma template frames:`);
-            for (const [label, url] of Object.entries(screenshotUrls)) {
-              additions.push(`  → ${label} Screenshot: ${url}`);
-            }
-          }
+      // Append to Asana task notes
+      const existing = await asanaFetch(`/tasks/${taskGid}?opt_fields=notes`, asanaToken);
+      const newNotes = `${existing.notes ?? ""}\n\n${templateLinks.join("\n")}`.trim();
+      await asanaFetch(`/tasks/${taskGid}`, asanaToken, {
+        method: "PUT",
+        body: JSON.stringify({ data: { notes: newNotes } }),
+      });
 
-          const newNotes = `${existing.notes ?? ""}\n\n${additions.join("\n")}`.trim();
-          await asanaFetch(`/tasks/${taskGid}`, asanaToken, {
-            method: "PUT",
-            body: JSON.stringify({ data: { notes: newNotes } }),
-          });
-        } catch (e) {
-          console.warn("Failed to append Figma links to Asana:", e);
-        }
-      }
-
-      steps[steps.length - 1] = {
-        step: 6, name: "Duplicate Figma Templates",
-        status: figmaFileLink || figmaSlidesLink ? "done" : "skipped",
-        detail: figmaResults.join(" | "),
-      };
+      steps[steps.length - 1] = { step: 6, name: "Add Figma Template Links", status: "done", detail: `${templateLinks.length} links added` };
+    } catch (e) {
+      console.warn("Step 6 error:", e);
+      steps[steps.length - 1] = { step: 6, name: "Add Figma Template Links", status: "error", error: String(e) };
     }
 
     // ── STEP 7: Card stays in Ready for Setup ────────────────────────────────
