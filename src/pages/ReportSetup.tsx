@@ -406,7 +406,7 @@ function ManualRunForm() {
     client_name: "",
     shop_url: "",
     tier: "pro" as "pro" | "essential",
-    pages: 5,
+    pages: 1,
   });
   const [focusUrls, setFocusUrls] = useState<string[]>([""]);
 
