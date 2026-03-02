@@ -33,7 +33,7 @@ const FIGMA_NEW_SITE_TEMPLATE = "I5FKz7pnaTL1iXlujGTQvU";
 // Figma destination projects
 const FIGMA_PROJECT_LANDING_PAGES = "105286773";
 const FIGMA_PROJECT_NEW_SITE_DESIGNS = "229666225";
-const FIGMA_PROJECT_REPORTS: string | null = null; // TODO: set when provided
+const FIGMA_PROJECT_REPORTS = "258925701";
 
 // Figma frame names to inject screenshots into
 const FRAME_DESKTOP_MAIN  = "Desktop Screenshot";
@@ -724,6 +724,88 @@ async function processCard(
     push({ step: 4, name: "Move to Ready for Review", status: "done", detail: "Card moved for human QA" });
   } catch (e) {
     push({ step: 4, name: "Move to Ready for Review", status: "error", error: String(e) });
+  }
+
+  // ── STEP 5: Auto-generate wireframe brief for Landing Page projects ──────
+  if (projectType === "landing_page") {
+    try {
+      // Search for a Fireflies transcript matching this client
+      let transcriptContent = "";
+      let transcriptTitle = "";
+      const clientSearch = displayClient.toLowerCase();
+
+      const { data: transcripts } = await sb
+        .from("fireflies_transcripts")
+        .select("title, transcript_text, summary, action_items")
+        .or(`title.ilike.%${clientSearch}%,participants.cs.{${clientSearch}}`)
+        .order("date", { ascending: false })
+        .limit(1);
+
+      if (transcripts?.length) {
+        const t = transcripts[0];
+        transcriptTitle = t.title;
+        transcriptContent = [
+          t.summary ? `CALL SUMMARY:\n${t.summary}` : "",
+          t.action_items ? `ACTION ITEMS:\n${t.action_items}` : "",
+          t.transcript_text ? `TRANSCRIPT:\n${t.transcript_text.slice(0, 15000)}` : "",
+        ].filter(Boolean).join("\n\n");
+        console.log(`[Wireframe] Found transcript "${t.title}" for ${displayClient}`);
+      } else {
+        console.log(`[Wireframe] No transcript found for ${displayClient}, proceeding with notes only`);
+      }
+
+      // Combine Asana notes + transcript as the brief input
+      const combinedNotes = [
+        task.notes ? `ASANA CARD NOTES:\n${task.notes}` : "",
+        transcriptContent,
+      ].filter(Boolean).join("\n\n---\n\n");
+
+      // Call generate-wireframe edge function
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+      const wireframeResp = await fetch(`${supabaseUrl}/functions/v1/generate-wireframe`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${supabaseAnonKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          client_name: displayClient,
+          site_url: websiteUrl,
+          asana_notes: combinedNotes,
+          asana_task_gid: task.gid,
+          setup_run_id: runId,
+        }),
+      });
+
+      if (wireframeResp.ok) {
+        const wireframeData = await wireframeResp.json();
+        push({
+          step: 5,
+          name: "Generate Wireframe Brief",
+          status: "done",
+          detail: `Brief ${wireframeData.brief_id}${transcriptTitle ? ` (using transcript: "${transcriptTitle}")` : " (no transcript, notes only)"}`,
+        });
+      } else {
+        const errText = await wireframeResp.text();
+        console.error("[Wireframe] Generation failed:", wireframeResp.status, errText);
+        push({
+          step: 5,
+          name: "Generate Wireframe Brief",
+          status: "error",
+          error: `HTTP ${wireframeResp.status}: ${errText.slice(0, 200)}`,
+        });
+      }
+    } catch (e) {
+      console.error("[Wireframe] Error:", e);
+      push({
+        step: 5,
+        name: "Generate Wireframe Brief",
+        status: "error",
+        error: String(e),
+      });
+    }
   }
 
   // ── Finalise run record ───────────────────────────────────────────────────
