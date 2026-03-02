@@ -24,11 +24,13 @@ const CF_TYPE_REPORT_WL = "1207991920217334";
 const CF_TYPE_LANDING_PAGE = "1205565239136673";
 const CF_TYPE_NEW_SITE_DESIGN = "1208115310094826";
 
-// Figma template keys
-const FIGMA_AUDIT_TEMPLATE = "3EfexlsSpqIciz7PkcSPwu";
-const FIGMA_SLIDES_TEMPLATE = "7iTirmji3y4s35Xyrk2Cwg";
-const FIGMA_LANDING_PAGE_TEMPLATE = "Jvl3mHljgyBWOJXunGjL1b";
-const FIGMA_NEW_SITE_TEMPLATE = "I5FKz7pnaTL1iXlujGTQvU";
+// Figma template keys (from secrets, with hardcoded fallbacks)
+const FIGMA_TEMPLATE_ODDIT_PRO = Deno.env.get("FIGMA_TEMPLATE_ODDIT_PRO") || "3EfexlsSpqIciz7PkcSPwu";
+const FIGMA_SLIDES_ODDIT_PRO = Deno.env.get("FIGMA_SLIDES_ODDIT_PRO") || "7iTirmji3y4s35Xyrk2Cwg";
+const FIGMA_TEMPLATE_ODDIT_ESSENTIAL = Deno.env.get("FIGMA_TEMPLATE_ODDIT_ESSENTIAL") || "";
+const FIGMA_SLIDES_ODDIT_ESSENTIAL = Deno.env.get("FIGMA_SLIDES_ODDIT_ESSENTIAL") || "";
+const FIGMA_TEMPLATE_LANDING_PAGE = Deno.env.get("FIGMA_TEMPLATE_LANDING_PAGE") || "Jvl3mHljgyBWOJXunGjL1b";
+const FIGMA_TEMPLATE_NEW_SITE = Deno.env.get("FIGMA_TEMPLATE_NEW_SITE") || "I5FKz7pnaTL1iXlujGTQvU";
 
 // Figma destination projects
 const FIGMA_PROJECT_LANDING_PAGES = "105286773";
@@ -41,8 +43,8 @@ const FRAME_MOBILE_MAIN   = "Mobile Screenshot";
 const FRAME_DESKTOP_FOCUS = "Desktop Focus";
 const FRAME_MOBILE_FOCUS  = "Mobile Focus";
 
-// Hardcoded default Figma template key (can be overridden per-run)
-const DEFAULT_FIGMA_TEMPLATE_KEY = "";
+
+// ── Asana helpers ─────────────────────────────────────────────────────────────
 
 // ── Asana helpers ─────────────────────────────────────────────────────────────
 async function asanaFetch(path: string, token: string, options: RequestInit = {}) {
@@ -572,7 +574,7 @@ async function processCard(
       if (projectType === "landing_page") {
         const newKey = await duplicateFigmaFile(
           figmaToken,
-          FIGMA_LANDING_PAGE_TEMPLATE,
+          FIGMA_TEMPLATE_LANDING_PAGE,
           `${displayClient} // Landing Page`,
           FIGMA_PROJECT_LANDING_PAGES
         );
@@ -585,7 +587,7 @@ async function processCard(
       } else if (projectType === "new_site_design") {
         const newKey = await duplicateFigmaFile(
           figmaToken,
-          FIGMA_NEW_SITE_TEMPLATE,
+          FIGMA_TEMPLATE_NEW_SITE,
           `${displayClient} // New Site Design`,
           FIGMA_PROJECT_NEW_SITE_DESIGNS
         );
@@ -596,32 +598,42 @@ async function processCard(
           figmaResults.push("New Site Design: ✗");
         }
       } else if (projectType === "report") {
-        // Audit template
-        const auditKey = await duplicateFigmaFile(
-          figmaToken,
-          FIGMA_AUDIT_TEMPLATE,
-          `${displayClient} // ${tierLabel} Report`,
-          FIGMA_PROJECT_REPORTS
-        );
-        if (auditKey) {
-          figmaFileLink = `https://www.figma.com/file/${auditKey}`;
-          figmaResults.push("Audit: ✓");
+        // Select template based on tier (pro vs essential)
+        const auditTemplate = tier === "essential" ? FIGMA_TEMPLATE_ODDIT_ESSENTIAL : FIGMA_TEMPLATE_ODDIT_PRO;
+        const slidesTemplate = tier === "essential" ? FIGMA_SLIDES_ODDIT_ESSENTIAL : FIGMA_SLIDES_ODDIT_PRO;
+
+        if (!auditTemplate) {
+          figmaResults.push(`Audit: ✗ (no ${tierLabel} template configured)`);
         } else {
-          figmaResults.push("Audit: ✗");
+          const auditKey = await duplicateFigmaFile(
+            figmaToken,
+            auditTemplate,
+            `${displayClient} // ${tierLabel} Report`,
+            FIGMA_PROJECT_REPORTS
+          );
+          if (auditKey) {
+            figmaFileLink = `https://www.figma.com/file/${auditKey}`;
+            figmaResults.push(`Audit (${tierLabel}): ✓`);
+          } else {
+            figmaResults.push(`Audit (${tierLabel}): ✗`);
+          }
         }
 
-        // Slides template
-        const slidesKey = await duplicateFigmaFile(
-          figmaToken,
-          FIGMA_SLIDES_TEMPLATE,
-          `${displayClient} // ${tierLabel} Report Slides`,
-          FIGMA_PROJECT_REPORTS
-        );
-        if (slidesKey) {
-          figmaSlidesLink = `https://www.figma.com/file/${slidesKey}`;
-          figmaResults.push("Slides: ✓");
+        if (!slidesTemplate) {
+          figmaResults.push(`Slides: skipped (no ${tierLabel} slides template)`);
         } else {
-          figmaResults.push("Slides: ✗");
+          const slidesKey = await duplicateFigmaFile(
+            figmaToken,
+            slidesTemplate,
+            `${displayClient} // ${tierLabel} Report Slides`,
+            FIGMA_PROJECT_REPORTS
+          );
+          if (slidesKey) {
+            figmaSlidesLink = `https://www.figma.com/file/${slidesKey}`;
+            figmaResults.push(`Slides (${tierLabel}): ✓`);
+          } else {
+            figmaResults.push(`Slides (${tierLabel}): ✗`);
+          }
         }
       } else {
         figmaResults.push(`Skipped — unsupported type: ${projectType}`);
