@@ -14,10 +14,26 @@ const FIRECRAWL_API = "https://api.firecrawl.dev/v1";
 
 // Oddit Setups project
 const ASANA_PROJECT_GID = "1207443359385412";
-// The "Ready For Setup" column that triggers the pipeline
-const SECTION_READY_FOR_SETUP = "1207443359385417"; // "Ready For Setup"
-// The "Setup Complete" column the card moves to after pipeline finishes
-// SECTION_SETUP_COMPLETE removed — cards must NOT be moved there by automation
+const SECTION_READY_FOR_SETUP = "1207443359385417";
+const SECTION_READY_FOR_REVIEW = "1213418243007820";
+
+// Asana "Type" custom field
+const CF_TYPE_GID = "1205565239136671";
+const CF_TYPE_REPORT = "1205565239136672";
+const CF_TYPE_REPORT_WL = "1207991920217334";
+const CF_TYPE_LANDING_PAGE = "1205565239136673";
+const CF_TYPE_NEW_SITE_DESIGN = "1208115310094826";
+
+// Figma template keys
+const FIGMA_AUDIT_TEMPLATE = "3EfexlsSpqIciz7PkcSPwu";
+const FIGMA_SLIDES_TEMPLATE = "7iTirmji3y4s35Xyrk2Cwg";
+const FIGMA_LANDING_PAGE_TEMPLATE = "Jvl3mHljgyBWOJXunGjL1b";
+const FIGMA_NEW_SITE_TEMPLATE = "I5FKz7pnaTL1iXlujGTQvU";
+
+// Figma destination projects
+const FIGMA_PROJECT_LANDING_PAGES = "105286773";
+const FIGMA_PROJECT_NEW_SITE_DESIGNS = "229666225";
+const FIGMA_PROJECT_REPORTS: string | null = null; // TODO: set when provided
 
 // Figma frame names to inject screenshots into
 const FRAME_DESKTOP_MAIN  = "Desktop Screenshot";
@@ -399,13 +415,113 @@ async function updateRun(
   await sb.from("setup_runs").update(patch).eq("id", id);
 }
 
+// ── Detect project type from Asana custom fields ─────────────────────────────
+type ProjectType = "report" | "landing_page" | "new_site_design" | "other";
+
+function detectProjectType(customFields: any[]): ProjectType {
+  if (!Array.isArray(customFields)) return "other";
+  const typeField = customFields.find((cf: any) => cf.gid === CF_TYPE_GID);
+  const enumGid = typeField?.enum_value?.gid;
+  if (!enumGid) return "other";
+
+  if (enumGid === CF_TYPE_REPORT || enumGid === CF_TYPE_REPORT_WL) return "report";
+  if (enumGid === CF_TYPE_LANDING_PAGE) return "landing_page";
+  if (enumGid === CF_TYPE_NEW_SITE_DESIGN) return "new_site_design";
+  return "other";
+}
+
+// ── Duplicate a Figma file and move to project ────────────────────────────────
+async function duplicateFigmaFile(
+  figmaToken: string,
+  templateKey: string,
+  fileName: string,
+  destProjectId?: string | null
+): Promise<string | null> {
+  const dupRes = await fetch(`${FIGMA_API}/files/${templateKey}/duplicate`, {
+    method: "POST",
+    headers: { "X-Figma-Token": figmaToken, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: fileName }),
+  });
+  if (!dupRes.ok) {
+    console.warn(`Figma duplication failed (${dupRes.status}):`, await dupRes.text().catch(() => ""));
+    return null;
+  }
+  const dupData = await dupRes.json();
+  const newKey = dupData.key ?? dupData.file?.key ?? null;
+  if (!newKey) return null;
+
+  if (destProjectId) {
+    try {
+      await fetch(`${FIGMA_API}/projects/${destProjectId}/move`, {
+        method: "POST",
+        headers: { "X-Figma-Token": figmaToken, "Content-Type": "application/json" },
+        body: JSON.stringify({ files: [newKey] }),
+      });
+    } catch (e) {
+      console.warn(`Failed to move file ${newKey} to project ${destProjectId}:`, e);
+    }
+  }
+  return newKey;
+}
+
+// ── Full-page homepage screenshot via Firecrawl ───────────────────────────────
+async function captureFullPageScreenshot(
+  url: string,
+  firecrawlKey: string,
+  mobile: boolean,
+  label: string
+): Promise<Uint8Array | null> {
+  console.log(`[Screenshot] Capturing ${label} (${mobile ? "mobile" : "desktop"}, full page): ${url}`);
+  try {
+    const resp = await fetch(`${FIRECRAWL_API}/scrape`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${firecrawlKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        url,
+        formats: ["screenshot@fullPage"],
+        mobile,
+        waitFor: 3000,
+      }),
+    });
+
+    if (!resp.ok) {
+      console.error(`[Screenshot] Firecrawl error for ${label}: ${resp.status}`);
+      return null;
+    }
+
+    const data = await resp.json();
+    const screenshotField = data.data?.screenshot || data.screenshot || "";
+    if (!screenshotField) return null;
+
+    if (screenshotField.startsWith("http")) {
+      const imgRes = await fetch(screenshotField);
+      if (!imgRes.ok) return null;
+      return new Uint8Array(await imgRes.arrayBuffer());
+    }
+
+    const raw = screenshotField.replace(/^data:image\/[a-z]+;base64,/, "");
+    const padded = raw + "=".repeat((4 - (raw.length % 4)) % 4);
+    const binaryStr = atob(padded);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+    console.log(`[Screenshot] ${label}: ${bytes.length} bytes`);
+    return bytes;
+  } catch (e) {
+    console.error(`[Screenshot] Error for ${label}:`, e);
+    return null;
+  }
+}
+
 // ── Process a single Asana card through the full pipeline ─────────────────────
 async function processCard(
   sb: ReturnType<typeof createClient>,
   asanaToken: string,
   figmaToken: string | null,
   firecrawlKey: string | null,
-  task: { gid: string; name: string; notes: string },
+  task: { gid: string; name: string; notes: string; custom_fields?: any[] },
   runId: string
 ) {
   type StepStatus = "done" | "error" | "skipped";
@@ -422,6 +538,10 @@ async function processCard(
     steps.push(s);
     updateRun(sb, runId, { steps, status: "running" });
   };
+
+  // ── Detect project type from custom fields ──────────────────────────────
+  const projectType = detectProjectType(task.custom_fields ?? []);
+  console.log(`[${task.name}] Detected project type: ${projectType}`);
 
   const { clientName, websiteUrl, focusUrls, tier } = parseTaskNotes(task.notes ?? "");
   const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
@@ -441,104 +561,146 @@ async function processCard(
   let figmaSlidesLink: string | null = null;
   const screenshotUrls: Record<string, string> = {};
 
-  // ── STEP 1: AI-driven CRO Section Screenshots ────────────────────────────
-  const lovableApiKey = Deno.env.get("LOVABLE_API_KEY") ?? null;
+  // ── STEP 1: Duplicate Figma template(s) based on project type ───────────
+  push({ step: 1, name: "Duplicate Figma Templates", status: "done", detail: "Starting..." });
+  if (!figmaToken) {
+    steps[steps.length - 1] = { step: 1, name: "Duplicate Figma Templates", status: "skipped", detail: "No Figma token" };
+  } else {
+    const figmaResults: string[] = [];
 
-  if (!firecrawlKey) {
-    push({ step: 1, name: "CRO Section Screenshots", status: "skipped", detail: "No Firecrawl key configured" });
-  } else if (!lovableApiKey) {
-    push({ step: 1, name: "CRO Section Screenshots", status: "skipped", detail: "No LOVABLE_API_KEY configured" });
-  } else if (!websiteUrl) {
-    push({ step: 1, name: "CRO Section Screenshots", status: "skipped", detail: "No Website URL found on Asana card" });
+    try {
+      if (projectType === "landing_page") {
+        const newKey = await duplicateFigmaFile(
+          figmaToken,
+          FIGMA_LANDING_PAGE_TEMPLATE,
+          `${displayClient} // Landing Page`,
+          FIGMA_PROJECT_LANDING_PAGES
+        );
+        if (newKey) {
+          figmaFileLink = `https://www.figma.com/file/${newKey}`;
+          figmaResults.push("Landing Page: ✓");
+        } else {
+          figmaResults.push("Landing Page: ✗");
+        }
+      } else if (projectType === "new_site_design") {
+        const newKey = await duplicateFigmaFile(
+          figmaToken,
+          FIGMA_NEW_SITE_TEMPLATE,
+          `${displayClient} // New Site Design`,
+          FIGMA_PROJECT_NEW_SITE_DESIGNS
+        );
+        if (newKey) {
+          figmaFileLink = `https://www.figma.com/file/${newKey}`;
+          figmaResults.push("New Site Design: ✓");
+        } else {
+          figmaResults.push("New Site Design: ✗");
+        }
+      } else if (projectType === "report") {
+        // Audit template
+        const auditKey = await duplicateFigmaFile(
+          figmaToken,
+          FIGMA_AUDIT_TEMPLATE,
+          `${displayClient} // ${tierLabel} Report`,
+          FIGMA_PROJECT_REPORTS
+        );
+        if (auditKey) {
+          figmaFileLink = `https://www.figma.com/file/${auditKey}`;
+          figmaResults.push("Audit: ✓");
+        } else {
+          figmaResults.push("Audit: ✗");
+        }
+
+        // Slides template
+        const slidesKey = await duplicateFigmaFile(
+          figmaToken,
+          FIGMA_SLIDES_TEMPLATE,
+          `${displayClient} // ${tierLabel} Report Slides`,
+          FIGMA_PROJECT_REPORTS
+        );
+        if (slidesKey) {
+          figmaSlidesLink = `https://www.figma.com/file/${slidesKey}`;
+          figmaResults.push("Slides: ✓");
+        } else {
+          figmaResults.push("Slides: ✗");
+        }
+      } else {
+        figmaResults.push(`Skipped — unsupported type: ${projectType}`);
+      }
+    } catch (e) {
+      figmaResults.push(`Error: ${e}`);
+    }
+
+    steps[steps.length - 1] = {
+      step: 1,
+      name: "Duplicate Figma Templates",
+      status: figmaFileLink || figmaSlidesLink ? "done" : (projectType === "other" ? "skipped" : "error"),
+      detail: figmaResults.join(" | "),
+    };
+  }
+
+  // ── STEP 2: Homepage screenshots (Desktop + Mobile, full page) ──────────
+  if (!firecrawlKey || !websiteUrl) {
+    push({ step: 2, name: "Homepage Screenshots", status: "skipped", detail: !firecrawlKey ? "No Firecrawl key" : "No website URL" });
   } else {
     try {
       const slug = displayClient.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       const ts = Date.now();
 
-      // 1A: Scrape page for AI analysis
-      console.log("Scraping page for CRO section identification:", websiteUrl);
-      const scrapeResp = await fetch(`${FIRECRAWL_API}/scrape`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${firecrawlKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ url: websiteUrl, formats: ["markdown"], onlyMainContent: true, waitFor: 2000 }),
-      });
+      const [desktopBytes, mobileBytes] = await Promise.all([
+        captureFullPageScreenshot(websiteUrl, firecrawlKey, false, "Desktop Homepage"),
+        captureFullPageScreenshot(websiteUrl, firecrawlKey, true, "Mobile Homepage"),
+      ]);
 
-      let markdown = "";
-      if (scrapeResp.ok) {
-        const scrapeData = await scrapeResp.json();
-        markdown = scrapeData.data?.markdown || scrapeData.markdown || "";
-      }
+      const results: string[] = [];
 
-      // 1B: AI identifies key CRO sections
-      console.log("Identifying CRO sections with AI...");
-      const sections = await identifyCROSections(websiteUrl, markdown, lovableApiKey);
-      console.log(`AI identified ${sections.length} sections`);
-
-      if (sections.length === 0) {
-        push({ step: 1, name: "CRO Section Screenshots", status: "error", detail: "AI could not identify sections" });
+      if (desktopBytes) {
+        const filename = `${slug}-desktop-${ts}.png`;
+        const url = await uploadToStorage(sb, desktopBytes, filename);
+        if (url) screenshotUrls["Desktop"] = url;
+        await attachImageToAsana(task.gid, asanaToken, desktopBytes, `${displayClient} - Desktop.png`);
+        results.push(`✓ Desktop (${desktopBytes.length} bytes)`);
       } else {
-        // 1C: Capture targeted screenshot for each section (3 at a time)
-        const sectionResults: string[] = [];
-        for (let i = 0; i < sections.length; i += 3) {
-          const batch = sections.slice(i, i + 3);
-          const batchResults = await Promise.all(
-            batch.map(async (section) => {
-              const bytes = await captureSectionScreenshot(websiteUrl, section, firecrawlKey);
-              if (!bytes) return { section, url: null, bytes: null };
-
-              const sectionSlug = section.section_name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-              const filename = `${slug}-${sectionSlug}-${ts}.png`;
-              const url = await uploadToStorage(sb, bytes, filename);
-              return { section, url, bytes };
-            })
-          );
-
-          for (const result of batchResults) {
-            if (result.url) {
-              screenshotUrls[result.section.section_name] = result.url;
-              sectionResults.push(`✓ ${result.section.section_name}`);
-
-              // Attach to Asana task
-              if (result.bytes) {
-                await attachImageToAsana(task.gid, asanaToken, result.bytes, `${result.section.section_name}.png`);
-              }
-            } else {
-              sectionResults.push(`✗ ${result.section.section_name}`);
-            }
-          }
-        }
-
-        const successCount = Object.keys(screenshotUrls).length;
-        push({
-          step: 1,
-          name: "CRO Section Screenshots",
-          status: successCount > 0 ? "done" : "error",
-          detail: `${successCount}/${sections.length} sections captured — ${sectionResults.join(" | ")}`,
-        });
+        results.push("✗ Desktop");
       }
+
+      if (mobileBytes) {
+        const filename = `${slug}-mobile-${ts}.png`;
+        const url = await uploadToStorage(sb, mobileBytes, filename);
+        if (url) screenshotUrls["Mobile"] = url;
+        await attachImageToAsana(task.gid, asanaToken, mobileBytes, `${displayClient} - Mobile.png`);
+        results.push(`✓ Mobile (${mobileBytes.length} bytes)`);
+      } else {
+        results.push("✗ Mobile");
+      }
+
+      push({
+        step: 2,
+        name: "Homepage Screenshots",
+        status: Object.keys(screenshotUrls).length > 0 ? "done" : "error",
+        detail: results.join(" | "),
+      });
     } catch (e) {
-      push({ step: 1, name: "CRO Section Screenshots", status: "error", error: String(e) });
+      push({ step: 2, name: "Homepage Screenshots", status: "error", error: String(e) });
     }
   }
 
-  // ── STEP 2: Link Figma file back to Asana ────────────────────────────────
-  // ── STEP 2: Update Asana notes with section screenshots + Figma links ──
+  // ── STEP 3: Update Asana notes with Figma links + screenshot URLs ───────
   try {
     const existing = await asanaFetch(`/tasks/${task.gid}?opt_fields=notes`, asanaToken);
     const parts = [existing.notes ?? ""];
 
-    if (figmaFileLink) {
-      parts.push(`\n\nInternal Figma: ${figmaFileLink}`);
-    }
+    if (figmaFileLink) parts.push(`\n\n📎 Figma File: ${figmaFileLink}`);
+    if (figmaSlidesLink) parts.push(`\n📊 Figma Slides: ${figmaSlidesLink}`);
 
     if (Object.keys(screenshotUrls).length > 0) {
-      const screenshotSummary = Object.entries(screenshotUrls)
-        .map(([section, url]) => `  📌 ${section}: ${url}`)
+      const lines = Object.entries(screenshotUrls)
+        .map(([label, url]) => `  📸 ${label}: ${url}`)
         .join("\n");
-      parts.push(`\n\n📸 Section Screenshots:\n${screenshotSummary}`);
+      parts.push(`\n\n📸 Homepage Screenshots:\n${lines}`);
+      parts.push(`\n🖼️ Paste these into Figma template frames:`);
+      for (const [label, url] of Object.entries(screenshotUrls)) {
+        parts.push(`  → ${label} Screenshot: ${url}`);
+      }
     }
 
     const newNotes = parts.join("").trim();
@@ -548,68 +710,21 @@ async function processCard(
         body: JSON.stringify({ data: { notes: newNotes } }),
       });
     }
-    push({ step: 2, name: "Update Asana Notes", status: "done", detail: `${Object.keys(screenshotUrls).length} section URLs + Figma links in notes` });
+    push({ step: 3, name: "Update Asana Notes", status: "done", detail: "Figma links + screenshots added" });
   } catch (e) {
-    push({ step: 2, name: "Update Asana Notes", status: "error", error: String(e) });
+    push({ step: 3, name: "Update Asana Notes", status: "error", error: String(e) });
   }
 
-  // ── STEP 3: Create Figma Slides report ───────────────────────────────────
-  // Slides template key is tier-dependent (extend as needed)
-  const slidesTemplateKey: string | null = null; // TODO: set per-tier keys when available
-
-  if (!figmaToken || !slidesTemplateKey) {
-    push({
-      step: 3,
-      name: "Create Figma Slides Report",
-      status: "skipped",
-      detail: slidesTemplateKey ? "No Figma token" : "No slides template key configured",
+  // ── STEP 4: Move card to "Ready for Review" ─────────────────────────────
+  try {
+    await asanaFetch(`/sections/${SECTION_READY_FOR_REVIEW}/addTask`, asanaToken, {
+      method: "POST",
+      body: JSON.stringify({ data: { task: task.gid } }),
     });
-  } else {
-    try {
-      const dupRes = await fetch(`${FIGMA_API}/files/${slidesTemplateKey}/duplicate`, {
-        method: "POST",
-        headers: { "X-Figma-Token": figmaToken, "Content-Type": "application/json" },
-        body: JSON.stringify({ name: `${displayClient} — ${tierLabel} Report Slides` }),
-      });
-      if (dupRes.ok) {
-        const dupData = await dupRes.json();
-        const newFileKey = dupData.key ?? dupData.file?.key ?? null;
-        if (newFileKey) {
-          figmaSlidesLink = `https://www.figma.com/file/${newFileKey}`;
-          push({ step: 3, name: "Create Figma Slides Report", status: "done", detail: figmaSlidesLink });
-        } else {
-          push({ step: 3, name: "Create Figma Slides Report", status: "skipped", detail: "Duplicated but no key returned" });
-        }
-      } else {
-        push({ step: 3, name: "Create Figma Slides Report", status: "skipped", detail: `Duplication failed (${dupRes.status})` });
-      }
-    } catch (e) {
-      push({ step: 3, name: "Create Figma Slides Report", status: "error", error: String(e) });
-    }
+    push({ step: 4, name: "Move to Ready for Review", status: "done", detail: "Card moved for human QA" });
+  } catch (e) {
+    push({ step: 4, name: "Move to Ready for Review", status: "error", error: String(e) });
   }
-
-  // ── STEP 4: Link Figma Slides → Asana ────────────────────────────────────
-  if (figmaSlidesLink) {
-    try {
-      const existing = await asanaFetch(`/tasks/${task.gid}?opt_fields=notes`, asanaToken);
-      const newNotes = `${existing.notes ?? ""}\n\nFigma Slides: ${figmaSlidesLink}`.trim();
-      await asanaFetch(`/tasks/${task.gid}`, asanaToken, {
-        method: "PUT",
-        body: JSON.stringify({ data: { notes: newNotes } }),
-      });
-      push({ step: 4, name: "Link Figma Slides → Asana", status: "done", detail: "Slides link added to card" });
-    } catch (e) {
-      push({ step: 4, name: "Link Figma Slides → Asana", status: "error", error: String(e) });
-    }
-  } else {
-    push({ step: 4, name: "Link Figma Slides → Asana", status: "skipped", detail: "No slides to link" });
-  }
-
-  // ── STEP 5: Keep card in Ready For Setup (human moves to Setup Complete) ──
-  // IMPORTANT: Do NOT move to Setup Complete automatically.
-  // An Asana automation rule moves cards from Setup Complete → Oddit Design.
-  // Only a human should trigger that transition.
-  push({ step: 5, name: "Card Placement", status: "done", detail: "Card stays in Ready For Setup — human moves to Setup Complete when ready" });
 
   // ── Finalise run record ───────────────────────────────────────────────────
   const allOk = steps.every((s) => s.status === "done" || s.status === "skipped");
@@ -625,7 +740,7 @@ async function processCard(
   // Activity log
   try {
     await sb.from("activity_log").insert({
-      workflow_name: `Auto Setup: ${displayClient} (${tier})`,
+      workflow_name: `Auto Setup: ${displayClient} (${projectType})`,
       status: allOk ? "completed" : hasError ? "partial" : "completed",
     });
   } catch { /* non-fatal */ }
@@ -646,9 +761,9 @@ serve(async (req) => {
     ]);
     const firecrawlKey = Deno.env.get("FIRECRAWL_API_KEY") ?? null;
 
-    // 1. Fetch all tasks in the "Ready For Setup" section
+    // 1. Fetch all tasks in the "Ready For Setup" section (include custom fields for type detection)
     const tasks = await asanaFetch(
-      `/sections/${SECTION_READY_FOR_SETUP}/tasks?opt_fields=gid,name,notes,memberships.section.gid&limit=50`,
+      `/sections/${SECTION_READY_FOR_SETUP}/tasks?opt_fields=gid,name,notes,custom_fields.gid,custom_fields.enum_value.gid,custom_fields.enum_value.name&limit=50`,
       asanaToken
     );
 
