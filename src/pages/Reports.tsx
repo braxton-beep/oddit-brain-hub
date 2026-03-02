@@ -52,6 +52,7 @@ interface Recommendation {
   expected_impact: string;
   mockup_prompt: string;
   mockup_url?: string;
+  mockup_variants?: string[];
   section_screenshot_url?: string;
   scroll_percentage?: number;
   cro_rationale: string;
@@ -135,6 +136,7 @@ const Reports = () => {
   const [batchGenerating, setBatchGenerating] = useState(false);
   const [expandedRecs, setExpandedRecs] = useState<Set<number>>(new Set());
   const [expandedMockupPrompts, setExpandedMockupPrompts] = useState<Set<number>>(new Set());
+  const [selectedVariants, setSelectedVariants] = useState<Record<number, number>>({});
   const [generatingScore, setGeneratingScore] = useState<string | null>(null);
   const [sharingPortal, setSharingPortal] = useState<string | null>(null);
   const [copiedPortal, setCopiedPortal] = useState<string | null>(null);
@@ -236,10 +238,10 @@ const Reports = () => {
     }
   };
 
-  const handleGenerateMockup = async (audit: CroAudit, rec: Recommendation) => {
+  const handleGenerateMockup = async (audit: CroAudit, rec: Recommendation, variantCount = 2) => {
     setGeneratingMockups((prev) => new Set(prev).add(rec.id));
     const toastId = `mockup-${rec.id}`;
-    toast.loading(`Generating mockup for "${rec.section}"...`, { id: toastId });
+    toast.loading(`Generating ${variantCount > 1 ? `${variantCount} mockup variants` : "mockup"} for "${rec.section}"...`, { id: toastId });
 
     try {
       const resp = await fetch(GENERATE_MOCKUP_URL, {
@@ -252,6 +254,7 @@ const Reports = () => {
           auditId: audit.id,
           recommendationId: rec.id,
           mockupPrompt: rec.mockup_prompt,
+          variantCount,
         }),
       });
 
@@ -261,11 +264,12 @@ const Reports = () => {
       }
 
       const result = await resp.json();
-      toast.success(`Mockup generated!`, { id: toastId });
+      const variantUrls = result.variants || [result.mockupUrl];
+      toast.success(`${variantUrls.length} mockup variant${variantUrls.length > 1 ? "s" : ""} generated!`, { id: toastId });
 
       // Update local state
       const updatedRecs = audit.recommendations.map((r) =>
-        r.id === rec.id ? { ...r, mockup_url: result.mockupUrl } : r
+        r.id === rec.id ? { ...r, mockup_url: result.mockupUrl, mockup_variants: variantUrls } : r
       );
       const updatedAudit = { ...audit, recommendations: updatedRecs };
       setViewingAudit(updatedAudit);
@@ -833,17 +837,50 @@ const Reports = () => {
                                 <Sparkles className="h-3 w-3" /> After — AI Concept
                               </p>
                               {rec.mockup_url ? (
-                                <img src={rec.mockup_url} alt={`Mockup for ${rec.section}`} className="w-full rounded-lg border border-accent/20 object-cover max-h-52" />
+                                <div className="space-y-2">
+                                  <img
+                                    src={rec.mockup_variants && rec.mockup_variants.length > 1
+                                      ? rec.mockup_variants[selectedVariants[rec.id] ?? 0]
+                                      : rec.mockup_url}
+                                    alt={`Mockup for ${rec.section}`}
+                                    className="w-full rounded-lg border border-accent/20 object-cover max-h-52"
+                                  />
+                                  {rec.mockup_variants && rec.mockup_variants.length > 1 && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider">Variants:</span>
+                                      {rec.mockup_variants.map((vUrl, vi) => (
+                                        <button
+                                          key={vi}
+                                          onClick={() => setSelectedVariants(prev => ({ ...prev, [rec.id]: vi }))}
+                                          className={`h-10 w-10 rounded border overflow-hidden transition-all ${
+                                            (selectedVariants[rec.id] ?? 0) === vi
+                                              ? "border-accent ring-1 ring-accent"
+                                              : "border-border opacity-60 hover:opacity-100"
+                                          }`}
+                                        >
+                                          <img src={vUrl} alt={`Variant ${vi + 1}`} className="h-full w-full object-cover" />
+                                        </button>
+                                      ))}
+                                      <button
+                                        onClick={() => handleGenerateMockup(viewingAudit, rec, 2)}
+                                        disabled={isMockupLoading}
+                                        className="ml-auto flex items-center gap-1 rounded bg-accent/10 border border-accent/20 px-2 py-1 text-[9px] font-bold text-accent hover:bg-accent/20 transition-colors disabled:opacity-50"
+                                      >
+                                        <RefreshCw className="h-2.5 w-2.5" /> Regenerate
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               ) : (
                                 <button
-                                  onClick={() => handleGenerateMockup(viewingAudit, rec)}
+                                  onClick={() => handleGenerateMockup(viewingAudit, rec, 2)}
                                   disabled={isMockupLoading}
                                   className="w-full h-32 rounded-lg border border-dashed border-accent/30 bg-accent/5 flex flex-col items-center justify-center gap-2 text-xs font-bold text-accent hover:bg-accent/10 transition-colors disabled:opacity-50"
                                 >
                                   {isMockupLoading ? (
-                                    <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
+                                    <><Loader2 className="h-4 w-4 animate-spin" /> Generating 2 variants...</>
                                   ) : (
-                                    <><ImageIcon className="h-4 w-4" /> Generate AI Concept</>
+                                    <><ImageIcon className="h-4 w-4" /> Generate AI Concepts (2 variants)</>
                                   )}
                                 </button>
                               )}
@@ -961,7 +998,7 @@ const Reports = () => {
                           {/* If no screenshots at all, show standalone mockup section */}
                           {!rec.section_screenshot_url && !rec.mockup_url && (
                             <button
-                              onClick={() => handleGenerateMockup(viewingAudit, rec)}
+                              onClick={() => handleGenerateMockup(viewingAudit, rec, 2)}
                               disabled={isMockupLoading}
                               className="flex items-center gap-2 rounded-lg bg-primary/10 border border-primary/20 px-4 py-2.5 text-xs font-bold text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
                             >
@@ -970,7 +1007,7 @@ const Reports = () => {
                               ) : (
                                 <ImageIcon className="h-3.5 w-3.5" />
                               )}
-                              {isMockupLoading ? "Generating mockup..." : "Generate Concept Mockup"}
+                              {isMockupLoading ? "Generating 2 variants..." : "Generate Concept Mockups (2 variants)"}
                             </button>
                           )}
                           {/* Send to Dev Pipeline */}
