@@ -103,7 +103,26 @@ async function captureHomepageScreenshot(
         url,
         formats: ["screenshot@fullPage"],
         mobile,
-        waitFor: 3000,
+        waitFor: 2000,
+        actions: [
+          // Wait for page to load, then dismiss common popups/modals/cookie banners
+          { type: "wait", milliseconds: 1500 },
+          // Try clicking common close/dismiss buttons for popups
+          { type: "click", selector: "[class*='close' i], [aria-label*='close' i], [aria-label*='dismiss' i], button[class*='dismiss' i], .modal-close, .popup-close, [data-dismiss], [class*='cookie'] button, [id*='cookie'] button, [class*='banner'] button, .klaviyo-close-form, .needsclick.klaviyo-close-form", ignoreIfNotFound: true },
+          { type: "wait", milliseconds: 500 },
+          // Try pressing Escape to close any remaining modals
+          { type: "key", key: "Escape" },
+          { type: "wait", milliseconds: 500 },
+          // Try hiding overlay elements via JS
+          { type: "evaluate", code: `
+            document.querySelectorAll('[class*="popup" i], [class*="modal" i], [class*="overlay" i], [class*="cookie" i], [id*="popup" i], [id*="modal" i], [class*="klaviyo" i], [class*="newsletter" i], [class*="subscribe" i]').forEach(el => {
+              if (el.offsetHeight > 100) el.style.display = 'none';
+            });
+            document.querySelectorAll('[class*="backdrop" i], [class*="overlay" i]').forEach(el => el.style.display = 'none');
+            document.body.style.overflow = 'auto';
+          `},
+          { type: "wait", milliseconds: 500 },
+        ],
       }),
     });
 
