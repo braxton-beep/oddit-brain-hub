@@ -27,10 +27,11 @@ const CF_NUM_PAGES_MAP: Record<number, string> = {
   10: "1207661312443022",
 };
 
-const DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY = "3EfexlsSpqIciz7PkcSPwu";
-const DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY = "7iTirmji3y4s35Xyrk2Cwg";
-const DEFAULT_FIGMA_LANDING_PAGE_TEMPLATE_KEY = "Jvl3mHljgyBWOJXunGjL1b";
-const DEFAULT_FIGMA_NEW_SITE_TEMPLATE_KEY = "I5FKz7pnaTL1iXlujGTQvU";
+// Defaults — overridden by env secrets if set
+const DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY = Deno.env.get("FIGMA_TEMPLATE_ODDIT_PRO") || "3EfexlsSpqIciz7PkcSPwu";
+const DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY = Deno.env.get("FIGMA_SLIDES_ODDIT_PRO") || "7iTirmji3y4s35Xyrk2Cwg";
+const DEFAULT_FIGMA_LANDING_PAGE_TEMPLATE_KEY = Deno.env.get("FIGMA_TEMPLATE_LANDING_PAGE") || "Jvl3mHljgyBWOJXunGjL1b";
+const DEFAULT_FIGMA_NEW_SITE_TEMPLATE_KEY = Deno.env.get("FIGMA_TEMPLATE_NEW_SITE") || "I5FKz7pnaTL1iXlujGTQvU";
 
 // Figma destination project IDs for file placement
 const FIGMA_PROJECT_LANDING_PAGES = "105286773";
@@ -103,38 +104,13 @@ async function captureHomepageScreenshot(
         url,
         formats: ["screenshot@fullPage"],
         mobile,
-        waitFor: 2000,
+        waitFor: 3000,
         actions: [
           {
-            type: "executeJavascript",
-            script: `
-              // Dismiss common cookie/popup overlays
-              const selectors = [
-                '[class*="cookie"] button', '[class*="Cookie"] button',
-                '[id*="cookie"] button', '[id*="Cookie"] button',
-                '[class*="consent"] button', '[class*="Consent"] button',
-                '[class*="popup"] [class*="close"]', '[class*="modal"] [class*="close"]',
-                '[class*="banner"] [class*="close"]', '[class*="overlay"] [class*="close"]',
-                '[aria-label="Close"]', '[aria-label="close"]',
-                '[aria-label="Accept"]', '[aria-label="Accept cookies"]',
-                'button[class*="accept"]', 'button[class*="Accept"]',
-                'button[class*="dismiss"]', 'button[class*="Dismiss"]',
-                'button[class*="got-it"]', 'button[class*="agree"]',
-                '.cc-btn', '.cc-dismiss', '.cc-allow',
-                '#onetrust-accept-btn-handler',
-                '.js-cookie-consent-agree',
-                '[data-testid="cookie-accept"]',
-              ];
-              for (const sel of selectors) {
-                document.querySelectorAll(sel).forEach(el => el.click());
-              }
-              // Remove fixed/sticky overlays
-              document.querySelectorAll('[class*="cookie"], [class*="consent"], [id*="cookie"], [id*="consent"], [class*="popup-overlay"]').forEach(el => {
-                el.style.display = 'none';
-              });
-            `,
+            type: "click",
+            selector: "[class*='cookie'] button, [id*='cookie'] button, [class*='consent'] button, #onetrust-accept-btn-handler, .cc-btn, .cc-dismiss, .cc-allow, button[class*='accept'], [aria-label='Close'], [aria-label='Accept']",
           },
-          { type: "wait", milliseconds: 1000 },
+          { type: "wait", milliseconds: 500 },
         ],
       }),
     });
@@ -501,26 +477,33 @@ serve(async (req) => {
       async function duplicateFigmaFile(
         templateKey: string, fileName: string, destProjectId?: string
       ): Promise<string | null> {
+        console.log(`[Figma] Duplicating template ${templateKey} as "${fileName}"${destProjectId ? ` → project ${destProjectId}` : ""}`);
         const dupRes = await fetch(`${FIGMA_API}/files/${templateKey}/duplicate`, {
           method: "POST",
           headers: { "X-Figma-Token": figmaToken!, "Content-Type": "application/json" },
           body: JSON.stringify({ name: fileName }),
         });
-        if (!dupRes.ok) return null;
+        if (!dupRes.ok) {
+          const errText = await dupRes.text();
+          console.error(`[Figma] Duplicate failed (${dupRes.status}): ${errText}`);
+          return null;
+        }
         const dupData = await dupRes.json();
         const newKey = dupData.key ?? dupData.file?.key ?? null;
+        console.log(`[Figma] Duplicated → key: ${newKey}`);
         if (!newKey) return null;
 
         // Move to destination project if specified
         if (destProjectId) {
           try {
-            await fetch(`${FIGMA_API}/projects/${destProjectId}/move`, {
+            const moveRes = await fetch(`${FIGMA_API}/projects/${destProjectId}/move`, {
               method: "POST",
               headers: { "X-Figma-Token": figmaToken!, "Content-Type": "application/json" },
               body: JSON.stringify({ files: [newKey] }),
             });
+            if (!moveRes.ok) console.warn(`[Figma] Move failed (${moveRes.status}): ${await moveRes.text()}`);
           } catch (e) {
-            console.warn(`Failed to move file ${newKey} to project ${destProjectId}:`, e);
+            console.warn(`[Figma] Failed to move file ${newKey} to project ${destProjectId}:`, e);
           }
         }
         return newKey;
@@ -561,12 +544,24 @@ serve(async (req) => {
           figmaResults.push(`New Site Design: error — ${e}`);
         }
       } else {
-        // Report (default): Audit + Slides templates
+        // Report (default): Audit + Slides templates — tier-aware
+        const auditTemplateKey = tier === "essential"
+          ? (Deno.env.get("FIGMA_TEMPLATE_ODDIT_ESSENTIAL") || DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY)
+          : DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY;
+        const slidesTemplateKey = tier === "essential"
+          ? (Deno.env.get("FIGMA_SLIDES_ODDIT_ESSENTIAL") || DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY)
+          : DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY;
+
+        // Determine destination project based on tier
+        const destProject = tier === "essential" ? "57384340" : (tier === "pro" ? "53086867" : FIGMA_PROJECT_REPORTS);
+
+        console.log(`[Figma] Report tier=${tier}, auditTemplate=${auditTemplateKey}, slidesTemplate=${slidesTemplateKey}, destProject=${destProject}`);
+
         try {
           const newKey = await duplicateFigmaFile(
-            DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY,
+            auditTemplateKey,
             `${client_name} // ${tierLabel} Report`,
-            FIGMA_PROJECT_REPORTS
+            destProject
           );
           if (newKey) {
             figmaFileLink = `https://www.figma.com/file/${newKey}`;
@@ -580,7 +575,7 @@ serve(async (req) => {
 
         try {
           const newKey = await duplicateFigmaFile(
-            DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY,
+            slidesTemplateKey,
             `${client_name} // ${tierLabel} Report Slides`,
             FIGMA_PROJECT_REPORTS
           );
