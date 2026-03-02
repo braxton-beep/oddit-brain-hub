@@ -262,8 +262,22 @@ serve(async (req) => {
     // ── STEP 1: Create / update Asana card ───────────────────────────────────
     steps.push({ step: 1, name: "Create Asana Card", status: "running" });
     try {
-      const buildNotes = () =>
-        `Client: ${client_name}\nWebsite URL: ${shop_url}${focus_url ? `\nFocus URL: ${focus_url}` : ""}\nTier: ${tier.toUpperCase()}${pageCount ? `\nPages: ${pageCount}` : ""}\n\nTriggered via Oddit Brain automation.`;
+      const buildNotes = () => {
+        const lines = [
+          `Client: ${client_name}`,
+          `Website URL: ${shop_url}`,
+        ];
+        if (focus_url) lines.push(`Focus URL: ${focus_url}`);
+        if (extra_urls && Array.isArray(extra_urls) && extra_urls.length > 0) {
+          extra_urls.forEach((u: string, i: number) => {
+            if (u && u.trim()) lines.push(`Page ${i + 2} URL: ${u.trim()}`);
+          });
+        }
+        lines.push(`Tier: ${tier.toUpperCase()}`);
+        if (pageCount) lines.push(`Pages: ${pageCount}`);
+        lines.push("", "Triggered via Oddit Brain automation.");
+        return lines.join("\n");
+      };
 
       if (taskGid) {
         const task = await asanaFetch(`/tasks/${taskGid}?opt_fields=notes,name`, asanaToken);
