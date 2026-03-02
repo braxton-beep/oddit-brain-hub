@@ -488,10 +488,12 @@ serve(async (req) => {
     }
 
     // ── STEP 6: Duplicate Figma templates ────────────────────────────────────
+    // TEMP: Skip Figma duplication until template keys are updated
+    const SKIP_FIGMA_DUPLICATION = true;
     steps.push({ step: 6, name: "Duplicate Figma Templates", status: "running" });
-    console.log(`[Figma] Step 6 starting. figmaToken=${figmaToken ? "present" : "NULL"}, project_type=${project_type}, tier=${tier}`);
-    if (!figmaToken) {
-      steps[steps.length - 1] = { step: 6, name: "Duplicate Figma Templates", status: "skipped", detail: "No Figma token" };
+    console.log(`[Figma] Step 6 starting. figmaToken=${figmaToken ? "present" : "NULL"}, project_type=${project_type}, tier=${tier}, SKIP=${SKIP_FIGMA_DUPLICATION}`);
+    if (!figmaToken || SKIP_FIGMA_DUPLICATION) {
+      steps[steps.length - 1] = { step: 6, name: "Duplicate Figma Templates", status: "skipped", detail: SKIP_FIGMA_DUPLICATION ? "Figma duplication temporarily disabled" : "No Figma token" };
     } else {
       const figmaResults: string[] = [];
 
