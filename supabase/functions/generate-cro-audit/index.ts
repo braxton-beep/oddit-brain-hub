@@ -107,6 +107,24 @@ serve(async (req) => {
       .update({ status: "analyzing", screenshot_url: screenshotUrl })
       .eq("id", auditId);
 
+    // Fetch past Figma designs for this client to enrich AI context
+    let figmaContext = "";
+    if (clientName) {
+      const { data: figmaFiles } = await supabase
+        .from("figma_files")
+        .select("name, design_type, figma_url, client_name, thumbnail_url, last_modified")
+        .ilike("client_name", clientName)
+        .eq("enabled", true)
+        .order("last_modified", { ascending: false })
+        .limit(20);
+
+      if (figmaFiles?.length) {
+        figmaContext = "\n\nPAST FIGMA DESIGNS FOR THIS CLIENT (reference these for design continuity and to avoid repeating solved issues):\n" +
+          figmaFiles.map((f: any) => `  • [${f.design_type}] "${f.name}" — ${f.figma_url || "no link"} (last modified: ${f.last_modified || "unknown"})`).join("\n");
+        console.log(`Found ${figmaFiles.length} Figma files for client "${clientName}"`);
+      }
+    }
+
     // Step 2: Analyze with Gemini
     console.log("Analyzing with AI...");
     const truncatedMarkdown = markdown.slice(0, 15000); // Keep within context limits
@@ -163,7 +181,7 @@ For each of the 10 recommendations, think through:
           },
           {
             role: "user",
-            content: `Analyze this DTC/e-commerce website and produce 10 specific, copy-ready CRO recommendations. Remember: write actual headlines, reference real brands, specify mobile behavior, and make every mockup_prompt a complete design brief.\n\nURL: ${formattedUrl}\n\nPage content (use this to reference ACTUAL text, images, and layout on the site — be specific):\n${truncatedMarkdown}`,
+            content: `Analyze this DTC/e-commerce website and produce 10 specific, copy-ready CRO recommendations. Remember: write actual headlines, reference real brands, specify mobile behavior, and make every mockup_prompt a complete design brief.\n\nURL: ${formattedUrl}\n\nPage content (use this to reference ACTUAL text, images, and layout on the site — be specific):\n${truncatedMarkdown}${figmaContext}`,
           },
         ],
         tools: [
