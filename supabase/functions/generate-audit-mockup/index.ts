@@ -28,8 +28,56 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Generate mockup image using Gemini Image model
-    console.log(`Generating mockup for audit ${auditId}, recommendation ${recommendationId}`);
+    // Fetch audit to get client_name
+    const { data: audit } = await supabase
+      .from("cro_audits")
+      .select("client_name, recommendations")
+      .eq("id", auditId)
+      .single();
+
+    // Fetch brand assets for this client (match by name)
+    let brandAssetUrls: string[] = [];
+    if (audit?.client_name) {
+      // Find client by name
+      const { data: clients } = await supabase
+        .from("clients")
+        .select("id")
+        .ilike("name", audit.client_name)
+        .limit(1);
+
+      if (clients?.length) {
+        const { data: assets } = await supabase
+          .from("client_brand_assets")
+          .select("file_url, asset_type, file_name")
+          .eq("client_id", clients[0].id)
+          .order("asset_type");
+
+        if (assets?.length) {
+          brandAssetUrls = assets.map(
+            (a: any) => `[${a.asset_type}] ${a.file_name}: ${a.file_url}`
+          );
+        }
+      }
+    }
+
+    // Build enhanced prompt with brand assets context
+    let fullPrompt =
+      "You are generating a high-fidelity web design concept mockup for a CRO recommendation. " +
+      "Create a clean, modern, professional e-commerce design that looks like a real Shopify store. " +
+      "Use realistic product photography placeholders, proper typography hierarchy, and modern UI patterns. " +
+      "The design should be immediately implementable.";
+
+    if (brandAssetUrls.length > 0) {
+      fullPrompt +=
+        "\n\nIMPORTANT — The client has provided brand assets. You MUST incorporate their actual brand identity into the mockup. " +
+        "Use their logo, product images, colors, and visual style to make this look like THEIR store, not a generic mockup. " +
+        "Here are the available brand assets:\n" +
+        brandAssetUrls.join("\n");
+    }
+
+    fullPrompt += "\n\nHere is the specific design brief: " + mockupPrompt;
+
+    console.log(`Generating mockup for audit ${auditId}, recommendation ${recommendationId}, ${brandAssetUrls.length} brand assets`);
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -42,7 +90,7 @@ serve(async (req) => {
         messages: [
           {
             role: "user",
-            content: "You are generating a high-fidelity web design concept mockup for a CRO recommendation. Create a clean, modern, professional e-commerce design that looks like a real Shopify store. Use realistic product photography placeholders, proper typography hierarchy, and modern UI patterns. The design should be immediately implementable. Here is the specific design brief: " + mockupPrompt,
+            content: fullPrompt,
           },
         ],
         modalities: ["image", "text"],
@@ -107,12 +155,6 @@ serve(async (req) => {
     const mockupUrl = urlData.publicUrl;
 
     // Update the recommendation in the audit record
-    const { data: audit } = await supabase
-      .from("cro_audits")
-      .select("recommendations")
-      .eq("id", auditId)
-      .single();
-
     if (audit?.recommendations) {
       const recs = audit.recommendations as any[];
       const updatedRecs = recs.map((r: any) =>
