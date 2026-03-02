@@ -179,11 +179,11 @@ function StatsRow() {
 
 // ── Automation Phase Tracker ─────────────────────────────
 const PHASES = [
-  { id: "foundation", label: "Foundation", emoji: "🧱", description: "Clients & transcripts ingested", checks: ["clients", "transcripts"] as const },
+  { id: "foundation", label: "Foundation", emoji: "🧱", description: "Transcripts & data ingested", checks: ["transcripts", "figma"] as const },
   { id: "intelligence", label: "Intelligence", emoji: "🧠", description: "Audits, scores & competitive intel", checks: ["audits", "scores", "competitive"] as const },
-  { id: "generation", label: "Content Engine", emoji: "⚡", description: "Reports, mockups & wireframes", checks: ["reports", "mockups", "wireframes"] as const },
-  { id: "setup_automation", label: "Setup Automation", emoji: "🔗", description: "Asana → Figma → screenshots", checks: ["setups", "figma", "brandAssets"] as const },
-  { id: "autonomous", label: "Full Pipeline", emoji: "🚀", description: "Code gen, Shopify push & self-serve", checks: ["pipeline", "shopifyCode", "selfServe"] as const },
+  { id: "generation", label: "Content Engine", emoji: "⚡", description: "Mockups, wireframes & reports", checks: ["mockups", "wireframes"] as const },
+  { id: "setup_automation", label: "Setup Automation", emoji: "🔗", description: "Asana → Figma → screenshots", checks: ["setups", "figma"] as const },
+  { id: "autonomous", label: "Full Pipeline", emoji: "🚀", description: "Code gen & Shopify push", checks: ["pipeline", "shopifyCode"] as const },
 ];
 
 function AutomationPhaseTracker() {
