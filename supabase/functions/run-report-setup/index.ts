@@ -122,13 +122,6 @@ async function captureHomepageScreenshot(
         formats: ["screenshot@fullPage"],
         mobile,
         waitFor: 3000,
-        actions: [
-          {
-            type: "click",
-            selector: "[class*='cookie'] button, [id*='cookie'] button, [class*='consent'] button, #onetrust-accept-btn-handler, .cc-btn, .cc-dismiss, .cc-allow, button[class*='accept'], [aria-label='Close'], [aria-label='Accept']",
-          },
-          { type: "wait", milliseconds: 500 },
-        ],
       }),
     });
 
