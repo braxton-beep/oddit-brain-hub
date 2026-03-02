@@ -29,6 +29,12 @@ const CF_NUM_PAGES_MAP: Record<number, string> = {
 
 const DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY = "3EfexlsSpqIciz7PkcSPwu";
 const DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY = "7iTirmji3y4s35Xyrk2Cwg";
+const DEFAULT_FIGMA_LANDING_PAGE_TEMPLATE_KEY = "Jvl3mHljgyBWOJXunGjL1b";
+const DEFAULT_FIGMA_NEW_SITE_TEMPLATE_KEY = "I5FKz7pnaTL1iXlujGTQvU";
+
+// Figma destination project IDs for file placement
+const FIGMA_PROJECT_LANDING_PAGES = "105286773";
+const FIGMA_PROJECT_NEW_SITE_DESIGNS = "229666225";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type StepStatus = "running" | "done" | "error" | "skipped";
@@ -215,6 +221,7 @@ serve(async (req) => {
     const {
       client_name, shop_url, focus_url, tier = "pro",
       existing_task_gid, pages, extra_urls,
+      project_type = "report", // "report" | "landing_page" | "new_site_design"
     } = body;
 
     if (!client_name || !shop_url) {
@@ -415,46 +422,100 @@ serve(async (req) => {
     } else {
       const figmaResults: string[] = [];
 
-      // Audit template
-      try {
-        const dupRes = await fetch(`${FIGMA_API}/files/${DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY}/duplicate`, {
+      // Helper: duplicate a Figma file and optionally move to a project
+      async function duplicateFigmaFile(
+        templateKey: string, fileName: string, destProjectId?: string
+      ): Promise<string | null> {
+        const dupRes = await fetch(`${FIGMA_API}/files/${templateKey}/duplicate`, {
           method: "POST",
-          headers: { "X-Figma-Token": figmaToken, "Content-Type": "application/json" },
-          body: JSON.stringify({ name: `${client_name} — ${tierLabel} Report` }),
+          headers: { "X-Figma-Token": figmaToken!, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: fileName }),
         });
-        if (dupRes.ok) {
-          const dupData = await dupRes.json();
-          const newKey = dupData.key ?? dupData.file?.key ?? null;
-          if (newKey) {
-            figmaFileLink = `https://www.figma.com/file/${newKey}`;
-            figmaResults.push(`Audit: ✓`);
+        if (!dupRes.ok) return null;
+        const dupData = await dupRes.json();
+        const newKey = dupData.key ?? dupData.file?.key ?? null;
+        if (!newKey) return null;
+
+        // Move to destination project if specified
+        if (destProjectId) {
+          try {
+            await fetch(`${FIGMA_API}/projects/${destProjectId}/move`, {
+              method: "POST",
+              headers: { "X-Figma-Token": figmaToken!, "Content-Type": "application/json" },
+              body: JSON.stringify({ files: [newKey] }),
+            });
+          } catch (e) {
+            console.warn(`Failed to move file ${newKey} to project ${destProjectId}:`, e);
           }
-        } else {
-          figmaResults.push(`Audit: skipped (${dupRes.status})`);
         }
-      } catch (e) {
-        figmaResults.push(`Audit: error — ${e}`);
+        return newKey;
       }
 
-      // Slides template
-      try {
-        const dupRes = await fetch(`${FIGMA_API}/files/${DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY}/duplicate`, {
-          method: "POST",
-          headers: { "X-Figma-Token": figmaToken, "Content-Type": "application/json" },
-          body: JSON.stringify({ name: `${client_name} — ${tierLabel} Report Slides` }),
-        });
-        if (dupRes.ok) {
-          const dupData = await dupRes.json();
-          const newKey = dupData.key ?? dupData.file?.key ?? null;
+      if (project_type === "landing_page") {
+        // Landing Page: single template, naming: "Client Name // Landing Page"
+        try {
+          const newKey = await duplicateFigmaFile(
+            DEFAULT_FIGMA_LANDING_PAGE_TEMPLATE_KEY,
+            `${client_name} // Landing Page`,
+            FIGMA_PROJECT_LANDING_PAGES
+          );
+          if (newKey) {
+            figmaFileLink = `https://www.figma.com/file/${newKey}`;
+            figmaResults.push("Landing Page: ✓");
+          } else {
+            figmaResults.push("Landing Page: skipped");
+          }
+        } catch (e) {
+          figmaResults.push(`Landing Page: error — ${e}`);
+        }
+      } else if (project_type === "new_site_design") {
+        // New Site Design: single template, naming: "Client Name // New Site Design"
+        try {
+          const newKey = await duplicateFigmaFile(
+            DEFAULT_FIGMA_NEW_SITE_TEMPLATE_KEY,
+            `${client_name} // New Site Design`,
+            FIGMA_PROJECT_NEW_SITE_DESIGNS
+          );
+          if (newKey) {
+            figmaFileLink = `https://www.figma.com/file/${newKey}`;
+            figmaResults.push("New Site Design: ✓");
+          } else {
+            figmaResults.push("New Site Design: skipped");
+          }
+        } catch (e) {
+          figmaResults.push(`New Site Design: error — ${e}`);
+        }
+      } else {
+        // Report (default): Audit + Slides templates
+        try {
+          const newKey = await duplicateFigmaFile(
+            DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY,
+            `${client_name} // ${tierLabel} Report`
+          );
+          if (newKey) {
+            figmaFileLink = `https://www.figma.com/file/${newKey}`;
+            figmaResults.push("Audit: ✓");
+          } else {
+            figmaResults.push("Audit: skipped");
+          }
+        } catch (e) {
+          figmaResults.push(`Audit: error — ${e}`);
+        }
+
+        try {
+          const newKey = await duplicateFigmaFile(
+            DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY,
+            `${client_name} // ${tierLabel} Report Slides`
+          );
           if (newKey) {
             figmaSlidesLink = `https://www.figma.com/file/${newKey}`;
-            figmaResults.push(`Slides: ✓`);
+            figmaResults.push("Slides: ✓");
+          } else {
+            figmaResults.push("Slides: skipped");
           }
-        } else {
-          figmaResults.push(`Slides: skipped (${dupRes.status})`);
+        } catch (e) {
+          figmaResults.push(`Slides: error — ${e}`);
         }
-      } catch (e) {
-        figmaResults.push(`Slides: error — ${e}`);
       }
 
       // Append Figma links to Asana notes
@@ -465,7 +526,6 @@ serve(async (req) => {
           if (figmaFileLink) additions.push(`📎 Figma File: ${figmaFileLink}`);
           if (figmaSlidesLink) additions.push(`📊 Figma Slides: ${figmaSlidesLink}`);
 
-          // Also add screenshot URLs for easy Figma paste
           if (Object.keys(screenshotUrls).length > 0) {
             additions.push(`\n🖼️ Paste these into Figma template frames:`);
             for (const [label, url] of Object.entries(screenshotUrls)) {
