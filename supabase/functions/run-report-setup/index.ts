@@ -35,6 +35,7 @@ const DEFAULT_FIGMA_NEW_SITE_TEMPLATE_KEY = "I5FKz7pnaTL1iXlujGTQvU";
 // Figma destination project IDs for file placement
 const FIGMA_PROJECT_LANDING_PAGES = "105286773";
 const FIGMA_PROJECT_NEW_SITE_DESIGNS = "229666225";
+const FIGMA_PROJECT_REPORTS = "258925701";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type StepStatus = "running" | "done" | "error" | "skipped";
@@ -490,7 +491,8 @@ serve(async (req) => {
         try {
           const newKey = await duplicateFigmaFile(
             DEFAULT_FIGMA_AUDIT_TEMPLATE_KEY,
-            `${client_name} // ${tierLabel} Report`
+            `${client_name} // ${tierLabel} Report`,
+            FIGMA_PROJECT_REPORTS
           );
           if (newKey) {
             figmaFileLink = `https://www.figma.com/file/${newKey}`;
@@ -505,7 +507,8 @@ serve(async (req) => {
         try {
           const newKey = await duplicateFigmaFile(
             DEFAULT_FIGMA_SLIDES_TEMPLATE_KEY,
-            `${client_name} // ${tierLabel} Report Slides`
+            `${client_name} // ${tierLabel} Report Slides`,
+            FIGMA_PROJECT_REPORTS
           );
           if (newKey) {
             figmaSlidesLink = `https://www.figma.com/file/${newKey}`;
