@@ -105,21 +105,13 @@ async function captureHomepageScreenshot(
         mobile,
         waitFor: 2000,
         actions: [
-          // Wait for page to load, then dismiss common popups/modals/cookie banners
-          { type: "wait", milliseconds: 1500 },
-          // Try clicking common close/dismiss buttons for popups
-          { type: "click", selector: "[class*='close' i], [aria-label*='close' i], [aria-label*='dismiss' i], button[class*='dismiss' i], .modal-close, .popup-close, [data-dismiss], [class*='cookie'] button, [id*='cookie'] button, [class*='banner'] button, .klaviyo-close-form, .needsclick.klaviyo-close-form", ignoreIfNotFound: true },
-          { type: "wait", milliseconds: 500 },
-          // Try pressing Escape to close any remaining modals
-          { type: "key", key: "Escape" },
-          { type: "wait", milliseconds: 500 },
-          // Try hiding overlay elements via JS
+          { type: "wait", milliseconds: 1000 },
+          // Dismiss popups via JS — fast single injection
           { type: "evaluate", code: `
-            document.querySelectorAll('[class*="popup" i], [class*="modal" i], [class*="overlay" i], [class*="cookie" i], [id*="popup" i], [id*="modal" i], [class*="klaviyo" i], [class*="newsletter" i], [class*="subscribe" i]').forEach(el => {
-              if (el.offsetHeight > 100) el.style.display = 'none';
-            });
-            document.querySelectorAll('[class*="backdrop" i], [class*="overlay" i]').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('[class*="popup" i], [class*="modal" i], [class*="overlay" i], [class*="cookie" i], [id*="popup" i], [id*="modal" i], [class*="klaviyo" i], [class*="newsletter" i], [class*="subscribe" i], [class*="banner" i]').forEach(el => { if (el.offsetHeight > 50) el.remove(); });
+            document.querySelectorAll('[class*="backdrop" i], [class*="overlay" i]').forEach(el => el.remove());
             document.body.style.overflow = 'auto';
+            document.documentElement.style.overflow = 'auto';
           `},
           { type: "wait", milliseconds: 500 },
         ],
@@ -264,6 +256,7 @@ serve(async (req) => {
     let figmaSlidesLink: string | null = null;
     const screenshotUrls: Record<string, string> = {};
     const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
+    let setupRunId: string | null = null;
 
     const pageCount: number | null = tier === "pro" && pages ? Number(pages) : (
       tier === "essential" && extra_urls ? (extra_urls as string[]).length + 1 : null
@@ -315,6 +308,29 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: false, steps, error: String(e) }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // ── Create setup_runs record ─────────────────────────────────────────────
+    try {
+      const { data: runRecord } = await sb.from("setup_runs").upsert({
+        asana_task_gid: taskGid!,
+        client_name,
+        shop_url,
+        tier,
+        status: "running",
+        started_at: new Date().toISOString(),
+        asana_url: `https://app.asana.com/0/${ASANA_PROJECT_GID}/${taskGid}`,
+        steps,
+      }, { onConflict: "asana_task_gid" }).select("id").single();
+      if (runRecord) setupRunId = runRecord.id;
+    } catch (e) {
+      console.warn("Failed to create setup_runs record:", e);
+    }
+
+    // Helper to persist step progress
+    async function persistSteps() {
+      if (!setupRunId) return;
+      try { await sb.from("setup_runs").update({ steps, updated_at: new Date().toISOString() }).eq("id", setupRunId); } catch (_) {}
     }
 
     // ── STEP 2: Move to Ready for Setup ──────────────────────────────────────
@@ -575,8 +591,22 @@ serve(async (req) => {
     // ── STEP 7: Card stays in Ready for Setup ────────────────────────────────
     steps.push({ step: 7, name: "Card Placement", status: "done", detail: "Card stays in Ready for Setup — human moves to Setup Complete" });
 
-    // ── Activity log ──────────────────────────────────────────────────────────
+    // ── Finalize setup_runs record ──────────────────────────────────────────
     const allOk = steps.every((s) => s.status === "done" || s.status === "skipped");
+    if (setupRunId) {
+      try {
+        await sb.from("setup_runs").update({
+          status: allOk ? "done" : "error",
+          steps,
+          figma_file_link: figmaFileLink,
+          figma_slides_link: figmaSlidesLink,
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }).eq("id", setupRunId);
+      } catch (_) {}
+    }
+
+    // ── Activity log ──────────────────────────────────────────────────────────
     try {
       await sb.from("activity_log").insert({
         workflow_name: `Report Setup: ${client_name} (${tier})`,
