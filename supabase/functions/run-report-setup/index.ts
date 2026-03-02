@@ -288,15 +288,26 @@ serve(async (req) => {
         const lines = [
           `Client: ${client_name}`,
           `Website URL: ${shop_url}`,
+          "",
+          `Tier: ${tier.toUpperCase()}`,
         ];
-        if (focus_url) lines.push(`Focus URL: ${focus_url}`);
-        if (extra_urls && Array.isArray(extra_urls) && extra_urls.length > 0) {
-          extra_urls.forEach((u: string, i: number) => {
-            if (u && u.trim()) lines.push(`Page ${i + 2} URL: ${u.trim()}`);
+        if (pageCount) lines.push(`Pages: ${pageCount}`);
+
+        // Focus URLs section — skip if same as shop_url
+        const allFocusUrls: string[] = [];
+        if (focus_url && focus_url.trim() !== shop_url.trim()) allFocusUrls.push(focus_url.trim());
+        if (extra_urls && Array.isArray(extra_urls)) {
+          extra_urls.forEach((u: string) => {
+            if (u && u.trim() && u.trim() !== shop_url.trim()) allFocusUrls.push(u.trim());
           });
         }
-        lines.push(`Tier: ${tier.toUpperCase()}`);
-        if (pageCount) lines.push(`Pages: ${pageCount}`);
+        if (allFocusUrls.length > 0) {
+          lines.push("");
+          allFocusUrls.forEach((u, i) => {
+            lines.push(i === 0 ? `Focus URL: ${u}` : `Page ${i + 1} URL: ${u}`);
+          });
+        }
+
         lines.push("", "Triggered via Oddit Brain automation.");
         return lines.join("\n");
       };
