@@ -103,18 +103,7 @@ async function captureHomepageScreenshot(
         url,
         formats: ["screenshot@fullPage"],
         mobile,
-        waitFor: 2000,
-        actions: [
-          { type: "wait", milliseconds: 1000 },
-          // Dismiss popups via JS — fast single injection
-          { type: "evaluate", code: `
-            document.querySelectorAll('[class*="popup" i], [class*="modal" i], [class*="overlay" i], [class*="cookie" i], [id*="popup" i], [id*="modal" i], [class*="klaviyo" i], [class*="newsletter" i], [class*="subscribe" i], [class*="banner" i]').forEach(el => { if (el.offsetHeight > 50) el.remove(); });
-            document.querySelectorAll('[class*="backdrop" i], [class*="overlay" i]').forEach(el => el.remove());
-            document.body.style.overflow = 'auto';
-            document.documentElement.style.overflow = 'auto';
-          `},
-          { type: "wait", milliseconds: 500 },
-        ],
+        waitFor: 3000,
       }),
     });
 
