@@ -220,10 +220,14 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const {
-      client_name, shop_url, focus_url, tier = "pro",
-      existing_task_gid, pages, extra_urls,
+      client_name, shop_url, tier = "pro",
+      existing_task_gid, pages,
       project_type = "report", // "report" | "landing_page" | "new_site_design"
     } = body;
+
+    // Support both naming conventions from different callers
+    const focus_url: string | undefined = body.focus_url ?? (Array.isArray(body.focus_urls) ? body.focus_urls[0] : undefined);
+    const extra_urls: string[] | undefined = body.extra_urls ?? (Array.isArray(body.focus_urls) && body.focus_urls.length > 1 ? body.focus_urls.slice(1) : undefined);
 
     if (!client_name || !shop_url) {
       return new Response(
