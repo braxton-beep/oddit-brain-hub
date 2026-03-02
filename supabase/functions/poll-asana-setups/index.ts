@@ -108,7 +108,8 @@ function parseTaskNotes(notes: string): {
     } else if (
       lower.startsWith("focus url:") ||
       lower.startsWith("focus page:") ||
-      lower.startsWith("focus:")
+      lower.startsWith("focus:") ||
+      /^page\s*\d+\s*url:/i.test(line)
     ) {
       const url = line.split(":").slice(1).join(":").trim();
       if (url.startsWith("http")) focusUrls.push(url);
