@@ -75,6 +75,13 @@ async function getAsanaToken(sb: ReturnType<typeof createClient>): Promise<strin
 }
 
 async function getFigmaToken(sb: ReturnType<typeof createClient>): Promise<string | null> {
+  // 1. Check env variable first (fastest)
+  const envToken = Deno.env.get("FIGMA_ACCESS_TOKEN");
+  if (envToken) {
+    console.log(`[Figma] Using FIGMA_ACCESS_TOKEN env var (${envToken.substring(0, 8)}...)`);
+    return envToken;
+  }
+  // 2. Fall back to DB credentials
   try {
     const { data: cred, error } = await sb
       .from("integration_credentials").select("api_key")
@@ -83,7 +90,7 @@ async function getFigmaToken(sb: ReturnType<typeof createClient>): Promise<strin
       console.error("[Figma] Error fetching token from DB:", error.message);
       return null;
     }
-    console.log(`[Figma] Token found: ${cred?.api_key ? "yes (" + cred.api_key.substring(0, 8) + "...)" : "no"}`);
+    console.log(`[Figma] Token from DB: ${cred?.api_key ? "yes (" + cred.api_key.substring(0, 8) + "...)" : "no"}`);
     return cred?.api_key ?? null;
   } catch (e) {
     console.error("[Figma] Exception fetching token:", e);
