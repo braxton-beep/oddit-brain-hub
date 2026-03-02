@@ -405,42 +405,48 @@ function ManualRunForm() {
   const [form, setForm] = useState({
     client_name: "",
     shop_url: "",
-    focus_url: "",
     tier: "pro" as "pro" | "essential",
     pages: 5,
   });
-  const [extraUrls, setExtraUrls] = useState<string[]>([]);
+  const [focusUrls, setFocusUrls] = useState<string[]>([""]);
 
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [key]: key === "pages" ? Number(e.target.value) : e.target.value }));
 
+  // Keep focusUrls array in sync with page count
+  const pageCount = form.tier === "pro" ? form.pages : 1 + focusUrls.length - 1;
+  const requiredUrlCount = form.tier === "pro" ? form.pages : focusUrls.length;
+
   const handleRun = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.client_name || !form.shop_url) return;
+    const trimmedUrls = focusUrls.map((u) => u.trim()).filter(Boolean);
+    if (trimmedUrls.length === 0) {
+      toast.error("At least one focus URL is required");
+      return;
+    }
     setRunning(true);
     setSubmitted(null);
-    const allUrls = [form.shop_url.trim(), ...extraUrls.map((u) => u.trim()).filter(Boolean)];
     try {
       const { data, error } = await supabase.functions.invoke("run-report-setup", {
         body: {
           client_name: form.client_name.trim(),
-          shop_url: allUrls[0],
-          focus_url: form.focus_url.trim() || undefined,
+          shop_url: form.shop_url.trim(),
+          focus_urls: trimmedUrls,
           tier: form.tier,
-          pages: form.tier === "pro" ? form.pages : undefined,
-          extra_urls: allUrls.length > 1 ? allUrls.slice(1) : undefined,
+          pages: form.tier === "pro" ? form.pages : trimmedUrls.length,
         },
       });
       if (error) throw error;
       setSubmitted({
         tier: form.tier,
-        pages: form.tier === "pro" ? form.pages : 1,
+        pages: form.tier === "pro" ? form.pages : trimmedUrls.length,
         client: form.client_name,
-        urlCount: allUrls.length,
+        urlCount: trimmedUrls.length,
       });
       toast.success(`Pipeline started for ${form.client_name}`);
-      setForm({ client_name: "", shop_url: "", focus_url: "", tier: "pro", pages: 5 });
-      setExtraUrls([]);
+      setForm({ client_name: "", shop_url: "", tier: "pro", pages: 5 });
+      setFocusUrls([""]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start pipeline");
     } finally {
@@ -482,43 +488,21 @@ function ManualRunForm() {
               <label className="block text-xs font-medium text-muted-foreground mb-1">Shop URL *</label>
               <input type="url" value={form.shop_url} onChange={set("shop_url")} placeholder="https://yourstore.com" required className={inputClass} />
             </div>
-            {form.tier === "essential" && extraUrls.map((url, i) => (
-              <div key={i} className="sm:col-span-2 flex gap-2">
-                <input
-                  type="url"
-                  value={url}
-                  onChange={(e) => setExtraUrls((prev) => prev.map((u, j) => j === i ? e.target.value : u))}
-                  placeholder={`https://yourstore.com/page-${i + 2}`}
-                  className={inputClass + " flex-1"}
-                />
-                <button
-                  type="button"
-                  onClick={() => setExtraUrls((prev) => prev.filter((_, j) => j !== i))}
-                  className="px-2 text-muted-foreground hover:text-destructive transition-colors text-sm"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-            {form.tier === "essential" && (
-              <div className="sm:col-span-2">
-                <button
-                  type="button"
-                  onClick={() => setExtraUrls((prev) => [...prev, ""])}
-                  className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
-                >
-                  + Add URL
-                </button>
-              </div>
-            )}
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Focus URL <span className="text-muted-foreground/50">(optional)</span></label>
-              <input type="url" value={form.focus_url} onChange={set("focus_url")} placeholder="https://yourstore.com/products" className={inputClass} />
-            </div>
             {form.tier === "pro" && (
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Pages to audit <span className="text-muted-foreground/50">(1–10)</span></label>
-                <select value={form.pages} onChange={set("pages")} className={inputClass}>
+                <select
+                  value={form.pages}
+                  onChange={(e) => {
+                    const newPages = Number(e.target.value);
+                    setForm((f) => ({ ...f, pages: newPages }));
+                    setFocusUrls((prev) => {
+                      if (prev.length < newPages) return [...prev, ...Array(newPages - prev.length).fill("")];
+                      return prev.slice(0, newPages);
+                    });
+                  }}
+                  className={inputClass}
+                >
                   {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                     <option key={n} value={n}>{n} {n === 1 ? "page" : "pages"}</option>
                   ))}
@@ -526,8 +510,48 @@ function ManualRunForm() {
               </div>
             )}
           </div>
+
+          {/* Focus URLs — one per page */}
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-foreground">
+              Focus URLs <span className="text-destructive">*</span>
+              <span className="text-muted-foreground font-normal ml-1">— one URL per page to audit</span>
+            </label>
+            {focusUrls.map((url, i) => (
+              <div key={i} className="flex gap-2 items-center">
+                <span className="text-[10px] font-bold text-muted-foreground w-5 text-right shrink-0">{i + 1}.</span>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => setFocusUrls((prev) => prev.map((u, j) => j === i ? e.target.value : u))}
+                  placeholder={i === 0 ? "https://yourstore.com" : `https://yourstore.com/page-${i + 1}`}
+                  required
+                  className={inputClass + " flex-1"}
+                />
+                {form.tier === "essential" && focusUrls.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setFocusUrls((prev) => prev.filter((_, j) => j !== i))}
+                    className="px-2 text-muted-foreground hover:text-destructive transition-colors text-sm"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+            {form.tier === "essential" && (
+              <button
+                type="button"
+                onClick={() => setFocusUrls((prev) => [...prev, ""])}
+                className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+              >
+                + Add another page
+              </button>
+            )}
+          </div>
+
           <div className="flex items-center gap-3">
-            <Button type="submit" disabled={running || !form.client_name || !form.shop_url} size="sm" className="gap-2">
+            <Button type="submit" disabled={running || !form.client_name || !form.shop_url || focusUrls.every((u) => !u.trim())} size="sm" className="gap-2">
               {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
               {running ? "Running…" : "Run Pipeline"}
             </Button>
