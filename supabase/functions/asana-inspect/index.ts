@@ -16,7 +16,6 @@ serve(async (req) => {
   try {
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // Get Asana token
     const envToken = Deno.env.get("ASANA_ACCESS_TOKEN");
     let token = envToken;
     if (!token) {
@@ -28,8 +27,27 @@ serve(async (req) => {
     if (!token) throw new Error("No Asana token");
 
     const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+    const body = await req.json().catch(() => ({}));
 
-    // Fetch sections and custom fields in parallel
+    if (body.action === "create_section") {
+      // Create "Ready for Review" section, inserted before "Setup Complete"
+      const res = await fetch(`${ASANA_API}/projects/${ASANA_PROJECT_GID}/sections`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          data: {
+            name: "Ready for Review",
+            insert_before: "1207443359385418", // Before "Setup Complete"
+          },
+        }),
+      });
+      const data = await res.json();
+      return new Response(JSON.stringify(data, null, 2), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Default: inspect
     const [sectionsRes, projectRes] = await Promise.all([
       fetch(`${ASANA_API}/projects/${ASANA_PROJECT_GID}/sections?opt_fields=name,gid`, { headers }),
       fetch(`${ASANA_API}/projects/${ASANA_PROJECT_GID}/custom_field_settings?opt_fields=custom_field.name,custom_field.gid,custom_field.type,custom_field.enum_options.name,custom_field.enum_options.gid,custom_field.enum_options.enabled`, { headers }),
