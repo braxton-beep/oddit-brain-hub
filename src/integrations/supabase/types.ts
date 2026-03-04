@@ -938,6 +938,59 @@ export type Database = {
         }
         Relationships: []
       }
+      setup_screenshots: {
+        Row: {
+          client_name: string
+          created_at: string
+          device_type: string
+          full_screenshot_url: string | null
+          id: string
+          section_name: string
+          section_order: number
+          setup_run_id: string | null
+          storage_url: string | null
+          updated_at: string
+          y_end_pct: number
+          y_start_pct: number
+        }
+        Insert: {
+          client_name?: string
+          created_at?: string
+          device_type?: string
+          full_screenshot_url?: string | null
+          id?: string
+          section_name?: string
+          section_order?: number
+          setup_run_id?: string | null
+          storage_url?: string | null
+          updated_at?: string
+          y_end_pct?: number
+          y_start_pct?: number
+        }
+        Update: {
+          client_name?: string
+          created_at?: string
+          device_type?: string
+          full_screenshot_url?: string | null
+          id?: string
+          section_name?: string
+          section_order?: number
+          setup_run_id?: string | null
+          storage_url?: string | null
+          updated_at?: string
+          y_end_pct?: number
+          y_start_pct?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "setup_screenshots_setup_run_id_fkey"
+            columns: ["setup_run_id"]
+            isOneToOne: false
+            referencedRelation: "setup_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shopify_connections: {
         Row: {
           access_token: string
