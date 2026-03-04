@@ -10,53 +10,54 @@
       padding: 16px;
       font-size: 13px;
     }
-    h2 {
-      font-size: 16px;
-      font-weight: 700;
-      margin-bottom: 4px;
-      color: #FF6B4A;
-    }
+    h2 { font-size: 16px; font-weight: 700; margin-bottom: 4px; color: #FF6B4A; }
     .subtitle { color: #888; font-size: 11px; margin-bottom: 16px; }
     label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 12px; }
-    input {
-      width: 100%;
-      padding: 8px 10px;
-      border: 1px solid #333;
-      border-radius: 6px;
-      background: #0d0d1a;
-      color: #e0e0e0;
-      font-size: 13px;
-      margin-bottom: 12px;
+    input, select {
+      width: 100%; padding: 8px 10px; border: 1px solid #333; border-radius: 6px;
+      background: #0d0d1a; color: #e0e0e0; font-size: 13px; margin-bottom: 12px;
     }
-    input:focus { outline: none; border-color: #FF6B4A; }
+    input:focus, select:focus { outline: none; border-color: #FF6B4A; }
     button {
-      width: 100%;
-      padding: 10px;
-      border: none;
-      border-radius: 6px;
-      font-weight: 700;
-      font-size: 13px;
-      cursor: pointer;
-      transition: opacity 0.15s;
+      width: 100%; padding: 10px; border: none; border-radius: 6px;
+      font-weight: 700; font-size: 13px; cursor: pointer; transition: opacity 0.15s;
     }
     button:hover { opacity: 0.9; }
     button:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn-primary { background: #FF6B4A; color: white; margin-bottom: 8px; }
-    .btn-secondary { background: #333; color: #aaa; }
+    .btn-secondary { background: #333; color: #aaa; margin-bottom: 8px; }
+    .btn-scan { background: #2563eb; color: white; margin-bottom: 8px; }
     .status {
-      margin-top: 12px;
-      padding: 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      line-height: 1.5;
+      margin-top: 12px; padding: 10px; border-radius: 6px; font-size: 12px; line-height: 1.5;
     }
     .status.success { background: #0d2818; color: #4ade80; }
     .status.error { background: #2d0a0a; color: #f87171; }
     .status.loading { background: #1a1a2e; color: #fbbf24; border: 1px solid #333; }
-    .preview { margin: 12px 0; padding: 10px; background: #0d0d1a; border-radius: 6px; font-size: 11px; }
-    .preview-item { margin-bottom: 4px; }
-    .preview-label { color: #888; }
-    .preview-value { color: #4ade80; word-break: break-all; }
+    .sections-grid {
+      margin: 12px 0; max-height: 200px; overflow-y: auto;
+      border: 1px solid #333; border-radius: 6px; background: #0d0d1a;
+    }
+    .section-row {
+      display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+      border-bottom: 1px solid #1a1a2e; font-size: 11px;
+    }
+    .section-row:last-child { border-bottom: none; }
+    .section-badge {
+      background: #FF6B4A20; color: #FF6B4A; border: 1px solid #FF6B4A40;
+      border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 600;
+    }
+    .section-device { color: #888; font-size: 10px; }
+    .section-match { color: #4ade80; font-size: 10px; font-weight: 600; }
+    .section-nomatch { color: #666; font-size: 10px; }
+    .mode-tabs {
+      display: flex; gap: 4px; margin-bottom: 12px;
+    }
+    .mode-tab {
+      flex: 1; padding: 8px; border: 1px solid #333; border-radius: 6px;
+      background: #0d0d1a; color: #888; font-size: 11px; font-weight: 600;
+      text-align: center; cursor: pointer;
+    }
+    .mode-tab.active { border-color: #FF6B4A; color: #FF6B4A; background: #FF6B4A10; }
     .frames-note { font-size: 11px; color: #666; margin-top: 8px; line-height: 1.4; }
   </style>
 </head>
@@ -64,21 +65,45 @@
   <h2>🔭 Oddit Injector</h2>
   <p class="subtitle">Auto-fill Figma template frames with client screenshots</p>
 
+  <div class="mode-tabs">
+    <div class="mode-tab active" id="tabSections" onclick="switchMode('sections')">🧠 AI Sections</div>
+    <div class="mode-tab" id="tabLegacy" onclick="switchMode('legacy')">📸 Legacy</div>
+  </div>
+
   <label>Client Name</label>
   <input type="text" id="clientName" placeholder="e.g. Acme Co" />
 
   <label>API Base URL</label>
   <input type="text" id="apiBase" value="" placeholder="https://ihvylnngpenyazafnsps.supabase.co/functions/v1" />
 
-  <button class="btn-primary" id="fetchBtn" onclick="fetchScreenshots()">
-    🔍 Fetch Screenshots
-  </button>
+  <!-- Sections mode -->
+  <div id="sectionsMode">
+    <button class="btn-primary" id="detectBtn" onclick="detectSections()">
+      🧠 Detect Page Sections
+    </button>
+    <div id="sectionsPreview" style="display:none"></div>
+    <button class="btn-scan" id="scanBtn" style="display:none" onclick="scanTemplate()">
+      🔍 Scan Template Frames
+    </button>
+    <button class="btn-primary" id="injectSectionsBtn" style="display:none" onclick="injectSections()">
+      🚀 Auto-Fill All Sections
+    </button>
+  </div>
 
-  <div id="preview" style="display:none" class="preview"></div>
-
-  <button class="btn-primary" id="injectBtn" style="display:none" onclick="injectScreenshots()">
-    🚀 Inject into Frames
-  </button>
+  <!-- Legacy mode -->
+  <div id="legacyMode" style="display:none">
+    <button class="btn-primary" id="fetchBtn" onclick="fetchScreenshots()">
+      🔍 Fetch Screenshots
+    </button>
+    <div id="preview" style="display:none"></div>
+    <button class="btn-primary" id="injectBtn" style="display:none" onclick="injectScreenshots()">
+      🚀 Inject into Frames
+    </button>
+    <p class="frames-note">
+      💡 Needs frames named: <strong>Desktop Screenshot</strong>, <strong>Mobile Screenshot</strong>,
+      <strong>Desktop Focus</strong>, <strong>Mobile Focus</strong>
+    </p>
+  </div>
 
   <button class="btn-secondary" onclick="parent.postMessage({pluginMessage:{type:'close'}}, '*')">
     Close
@@ -86,22 +111,98 @@
 
   <div id="status" style="display:none" class="status"></div>
 
-  <p class="frames-note">
-    💡 Make sure your template has frames named:<br>
-    <strong>Desktop Screenshot</strong>, <strong>Mobile Screenshot</strong>,
-    <strong>Desktop Focus</strong>, <strong>Mobile Focus</strong>
-  </p>
-
   <script>
     let cachedScreenshots = null;
+    let cachedSections = null;
+    let cachedScreenshotUrls = null;
+    let templateFrameNames = [];
+    let currentMode = 'sections';
 
+    function switchMode(mode) {
+      currentMode = mode;
+      document.getElementById('tabSections').className = 'mode-tab' + (mode === 'sections' ? ' active' : '');
+      document.getElementById('tabLegacy').className = 'mode-tab' + (mode === 'legacy' ? ' active' : '');
+      document.getElementById('sectionsMode').style.display = mode === 'sections' ? 'block' : 'none';
+      document.getElementById('legacyMode').style.display = mode === 'legacy' ? 'block' : 'none';
+    }
+
+    // ── AI Sections Mode ──
+    async function detectSections() {
+      const clientName = document.getElementById("clientName").value.trim();
+      const apiBase = document.getElementById("apiBase").value.trim();
+      if (!clientName || !apiBase) { showStatus("Fill in both fields.", "error"); return; }
+
+      showStatus("🧠 Detecting page sections with AI...", "loading");
+      document.getElementById("detectBtn").disabled = true;
+
+      try {
+        const res = await fetch(`${apiBase}/detect-sections`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ client_name: clientName }),
+        });
+        const data = await res.json();
+        if (!res.ok) { showStatus(`Error: ${data.error || res.statusText}`, "error"); return; }
+
+        cachedSections = data.sections || [];
+        cachedScreenshotUrls = data.screenshot_urls || {};
+
+        if (cachedSections.length === 0) {
+          showStatus("No sections detected. Try Legacy mode.", "error");
+          return;
+        }
+
+        // Show sections preview
+        const container = document.getElementById("sectionsPreview");
+        container.style.display = "block";
+        container.innerHTML = `
+          <div class="sections-grid">
+            ${cachedSections.map(s => `
+              <div class="section-row">
+                <span class="section-badge">${s.section_order}</span>
+                <span style="flex:1">${s.section_name}</span>
+                <span class="section-device">${s.device_type}</span>
+                <span style="color:#888">${s.y_start_pct.toFixed(1)}–${s.y_end_pct.toFixed(1)}%</span>
+              </div>
+            `).join('')}
+          </div>
+          <p style="font-size:11px;color:#888;margin-top:6px">
+            ${cachedSections.length} sections detected across ${Object.keys(cachedScreenshotUrls).length} device(s)
+          </p>
+        `;
+
+        document.getElementById("scanBtn").style.display = "block";
+        document.getElementById("injectSectionsBtn").style.display = "block";
+        showStatus(`✓ ${cachedSections.length} sections detected! Scan template or inject now.`, "success");
+      } catch (e) {
+        showStatus(`Error: ${e.message}`, "error");
+      } finally {
+        document.getElementById("detectBtn").disabled = false;
+      }
+    }
+
+    function scanTemplate() {
+      showStatus("Scanning template frames...", "loading");
+      parent.postMessage({ pluginMessage: { type: "scan-template" } }, "*");
+    }
+
+    function injectSections() {
+      if (!cachedSections || !cachedScreenshotUrls) return;
+      showStatus("🚀 Auto-filling all sections...", "loading");
+      parent.postMessage({
+        pluginMessage: {
+          type: "inject-sections",
+          sections: cachedSections,
+          screenshotUrls: cachedScreenshotUrls,
+        },
+      }, "*");
+    }
+
+    // ── Legacy Mode ──
     async function fetchScreenshots() {
       const clientName = document.getElementById("clientName").value.trim();
       const apiBase = document.getElementById("apiBase").value.trim();
-      if (!clientName || !apiBase) {
-        showStatus("Please fill in both fields.", "error");
-        return;
-      }
+      if (!clientName || !apiBase) { showStatus("Fill in both fields.", "error"); return; }
 
       showStatus("Fetching screenshots...", "loading");
       document.getElementById("fetchBtn").disabled = true;
@@ -110,34 +211,25 @@
         const url = `${apiBase}/get-setup-screenshots?client_name=${encodeURIComponent(clientName)}`;
         const res = await fetch(url);
         const data = await res.json();
-
-        if (!res.ok) {
-          showStatus(`Error: ${data.error || res.statusText}`, "error");
-          return;
-        }
+        if (!res.ok) { showStatus(`Error: ${data.error || res.statusText}`, "error"); return; }
 
         cachedScreenshots = data.screenshots || {};
-        const hasDesktop = !!cachedScreenshots.desktop;
-        const hasMobile = !!cachedScreenshots.mobile;
+        const hasD = !!cachedScreenshots.desktop, hasM = !!cachedScreenshots.mobile;
+        if (!hasD && !hasM) { showStatus("No screenshots found.", "error"); return; }
 
-        if (!hasDesktop && !hasMobile) {
-          showStatus("No screenshots found for this client.", "error");
-          return;
-        }
-
-        // Show preview
         const previewEl = document.getElementById("preview");
         previewEl.style.display = "block";
         previewEl.innerHTML = `
-          <div class="preview-item"><span class="preview-label">Client: </span><span class="preview-value">${data.client_name}</span></div>
-          <div class="preview-item"><span class="preview-label">Desktop: </span><span class="preview-value">${hasDesktop ? "✓ Found" : "✗ Missing"}</span></div>
-          <div class="preview-item"><span class="preview-label">Mobile: </span><span class="preview-value">${hasMobile ? "✓ Found" : "✗ Missing"}</span></div>
+          <div style="padding:10px;background:#0d0d1a;border-radius:6px;font-size:11px">
+            <div>Client: <span style="color:#4ade80">${data.client_name}</span></div>
+            <div>Desktop: <span style="color:#4ade80">${hasD ? "✓" : "✗"}</span></div>
+            <div>Mobile: <span style="color:#4ade80">${hasM ? "✓" : "✗"}</span></div>
+          </div>
         `;
-
         document.getElementById("injectBtn").style.display = "block";
-        showStatus("Screenshots found! Click Inject to fill frames.", "success");
+        showStatus("Screenshots found! Click Inject.", "success");
       } catch (e) {
-        showStatus(`Fetch error: ${e.message}`, "error");
+        showStatus(`Error: ${e.message}`, "error");
       } finally {
         document.getElementById("fetchBtn").disabled = false;
       }
@@ -147,22 +239,63 @@
       if (!cachedScreenshots) return;
       showStatus("Injecting into frames...", "loading");
       parent.postMessage({
-        pluginMessage: {
-          type: "inject-screenshots",
-          screenshots: cachedScreenshots,
-        },
+        pluginMessage: { type: "inject-screenshots", screenshots: cachedScreenshots },
       }, "*");
     }
 
+    // ── Messages from plugin code ──
     window.onmessage = (event) => {
       const msg = event.data.pluginMessage;
       if (!msg) return;
+
       if (msg.type === "inject-result") {
         const lines = [`✓ Filled ${msg.filled} frame(s)`];
-        if (msg.errors?.length) {
-          lines.push(...msg.errors.map((e) => `✗ ${e}`));
-        }
-        showStatus(lines.join("\n"), msg.errors?.length ? "error" : "success");
+        if (msg.errors?.length) lines.push(...msg.errors.map(e => `✗ ${e}`));
+        showStatus(lines.join("\n"), msg.errors?.length && msg.filled === 0 ? "error" : "success");
+      }
+
+      if (msg.type === "scan-result") {
+        templateFrameNames = msg.frameNames || [];
+        if (!cachedSections) return;
+
+        // Match sections to frames
+        const container = document.getElementById("sectionsPreview");
+        const matchInfo = cachedSections.map(s => {
+          const deviceLabel = s.device_type === "desktop" ? "Desktop" : "Mobile";
+          const names = [
+            `${s.section_name} ${deviceLabel}`,
+            `${s.section_name} - ${deviceLabel}`,
+            `${deviceLabel} ${s.section_name}`,
+            `${deviceLabel} - ${s.section_name}`,
+            s.section_name,
+          ];
+          const match = templateFrameNames.find(fn =>
+            names.some(n => fn.toLowerCase() === n.toLowerCase())
+          );
+          return { ...s, matchedFrame: match || null };
+        });
+
+        const matched = matchInfo.filter(m => m.matchedFrame).length;
+        container.innerHTML = `
+          <div class="sections-grid">
+            ${matchInfo.map(s => `
+              <div class="section-row">
+                <span class="section-badge">${s.section_order}</span>
+                <span style="flex:1">${s.section_name}</span>
+                <span class="section-device">${s.device_type}</span>
+                ${s.matchedFrame
+                  ? `<span class="section-match">✓ ${s.matchedFrame}</span>`
+                  : `<span class="section-nomatch">no frame</span>`
+                }
+              </div>
+            `).join('')}
+          </div>
+          <p style="font-size:11px;color:#888;margin-top:6px">
+            ${matched}/${matchInfo.length} sections matched to template frames.
+            ${templateFrameNames.length} total frames found.
+          </p>
+        `;
+        showStatus(`Scan complete: ${matched} sections will be filled.`, matched > 0 ? "success" : "error");
       }
     };
 
