@@ -59,12 +59,21 @@ serve(async (req) => {
       }
     }
 
+    // Fetch detected sections if available
+    const { data: sections } = await sb
+      .from("setup_screenshots")
+      .select("*")
+      .ilike("client_name", clientName)
+      .order("section_order", { ascending: true });
+
     return new Response(JSON.stringify({
       client_name: run.client_name,
       shop_url: run.shop_url,
       figma_file_link: run.figma_file_link,
       figma_slides_link: run.figma_slides_link,
       screenshots,
+      sections: sections ?? [],
+      has_sections: (sections?.length ?? 0) > 0,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e) {
     console.error("get-setup-screenshots error:", e);
