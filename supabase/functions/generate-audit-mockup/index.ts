@@ -21,6 +21,8 @@ serve(async (req) => {
     }
 
     const numVariants = Math.min(Math.max(variantCount || 1, 1), 3);
+    const useProModel = quality === "final";
+    const modelId = useProModel ? "google/gemini-3-pro-image-preview" : "google/gemini-2.5-flash-image";
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
