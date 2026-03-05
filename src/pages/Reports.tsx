@@ -308,6 +308,7 @@ const Reports = () => {
     toast.success(rating >= 4 ? "⭐ Starred as reference quality!" : `Rated ${rating}/5`);
   };
 
+  const handleGenerateScore = async (audit: CroAudit) => {
     setGeneratingScore(audit.id);
     const toastId = `score-${audit.id}`;
     toast.loading("Generating Oddit Score...", { id: toastId, description: "Scoring 8 dimensions with Gemini" });
