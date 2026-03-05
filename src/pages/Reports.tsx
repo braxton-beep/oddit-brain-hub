@@ -140,6 +140,8 @@ const Reports = () => {
   const [generatingScore, setGeneratingScore] = useState<string | null>(null);
   const [sharingPortal, setSharingPortal] = useState<string | null>(null);
   const [copiedPortal, setCopiedPortal] = useState<string | null>(null);
+  const [refinementInputs, setRefinementInputs] = useState<Record<number, string>>({});
+  const [showRefinementInput, setShowRefinementInput] = useState<Set<number>>(new Set());
   const qc = useQueryClient();
 
   const { data: scores } = useQuery({
@@ -238,10 +240,11 @@ const Reports = () => {
     }
   };
 
-  const handleGenerateMockup = async (audit: CroAudit, rec: Recommendation, variantCount = 2) => {
+  const handleGenerateMockup = async (audit: CroAudit, rec: Recommendation, variantCount = 2, refinementNotes?: string) => {
     setGeneratingMockups((prev) => new Set(prev).add(rec.id));
+    const isRefinement = !!refinementNotes;
     const toastId = `mockup-${rec.id}`;
-    toast.loading(`Generating ${variantCount > 1 ? `${variantCount} mockup variants` : "mockup"} for "${rec.section}"...`, { id: toastId });
+    toast.loading(isRefinement ? `Refining mockup for "${rec.section}"...` : `Generating ${variantCount > 1 ? `${variantCount} mockup variants` : "mockup"} for "${rec.section}"...`, { id: toastId });
 
     try {
       const resp = await fetch(GENERATE_MOCKUP_URL, {
@@ -254,7 +257,9 @@ const Reports = () => {
           auditId: audit.id,
           recommendationId: rec.id,
           mockupPrompt: rec.mockup_prompt,
-          variantCount,
+          variantCount: isRefinement ? 1 : variantCount,
+          refinementNotes: refinementNotes || undefined,
+          previousMockupUrl: isRefinement ? (rec.mockup_variants?.[selectedVariants[rec.id] ?? 0] || rec.mockup_url) : undefined,
         }),
       });
 
@@ -265,7 +270,7 @@ const Reports = () => {
 
       const result = await resp.json();
       const variantUrls = result.variants || [result.mockupUrl];
-      toast.success(`${variantUrls.length} mockup variant${variantUrls.length > 1 ? "s" : ""} generated!`, { id: toastId });
+      toast.success(isRefinement ? "Mockup refined!" : `${variantUrls.length} mockup variant${variantUrls.length > 1 ? "s" : ""} generated!`, { id: toastId });
 
       // Update local state
       const updatedRecs = audit.recommendations.map((r) =>
@@ -274,6 +279,9 @@ const Reports = () => {
       const updatedAudit = { ...audit, recommendations: updatedRecs };
       setViewingAudit(updatedAudit);
       setAudits((prev) => prev.map((a) => (a.id === audit.id ? updatedAudit : a)));
+      // Clear refinement input
+      setRefinementInputs((prev) => ({ ...prev, [rec.id]: "" }));
+      setShowRefinementInput((prev) => { const n = new Set(prev); n.delete(rec.id); return n; });
     } catch (e: any) {
       toast.error("Mockup generation failed", { id: toastId, description: e.message });
     } finally {
@@ -846,6 +854,7 @@ const Reports = () => {
                                     className="w-full rounded-lg border border-accent/20 object-cover max-h-52"
                                   />
                                   {rec.mockup_variants && rec.mockup_variants.length > 1 && (
+                                    <>
                                     <div className="flex items-center gap-1.5">
                                       <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider">Variants:</span>
                                       {rec.mockup_variants.map((vUrl, vi) => (
@@ -868,7 +877,38 @@ const Reports = () => {
                                       >
                                         <RefreshCw className="h-2.5 w-2.5" /> Regenerate
                                       </button>
+                                      <button
+                                        onClick={() => setShowRefinementInput(prev => { const n = new Set(prev); if (n.has(rec.id)) n.delete(rec.id); else n.add(rec.id); return n; })}
+                                        className="flex items-center gap-1 rounded bg-primary/10 border border-primary/20 px-2 py-1 text-[9px] font-bold text-primary hover:bg-primary/20 transition-colors"
+                                      >
+                                        <Sparkles className="h-2.5 w-2.5" /> Refine
+                                      </button>
                                     </div>
+                                    {showRefinementInput.has(rec.id) && (
+                                      <div className="flex gap-2 mt-1">
+                                        <input
+                                          type="text"
+                                          value={refinementInputs[rec.id] || ""}
+                                          onChange={(e) => setRefinementInputs(prev => ({ ...prev, [rec.id]: e.target.value }))}
+                                          placeholder="e.g. Make the CTA bigger, use darker background..."
+                                          className="flex-1 rounded-lg border border-border bg-secondary px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter" && refinementInputs[rec.id]?.trim()) {
+                                              handleGenerateMockup(viewingAudit, rec, 1, refinementInputs[rec.id]);
+                                            }
+                                          }}
+                                        />
+                                        <button
+                                          onClick={() => refinementInputs[rec.id]?.trim() && handleGenerateMockup(viewingAudit, rec, 1, refinementInputs[rec.id])}
+                                          disabled={isMockupLoading || !refinementInputs[rec.id]?.trim()}
+                                          className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+                                        >
+                                          {isMockupLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowRight className="h-3 w-3" />}
+                                          Apply
+                                        </button>
+                                      </div>
+                                    )}
+                                    </>
                                   )}
                                 </div>
                               ) : (
