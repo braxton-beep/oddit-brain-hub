@@ -240,10 +240,11 @@ const Reports = () => {
     }
   };
 
-  const handleGenerateMockup = async (audit: CroAudit, rec: Recommendation, variantCount = 2) => {
+  const handleGenerateMockup = async (audit: CroAudit, rec: Recommendation, variantCount = 2, refinementNotes?: string) => {
     setGeneratingMockups((prev) => new Set(prev).add(rec.id));
+    const isRefinement = !!refinementNotes;
     const toastId = `mockup-${rec.id}`;
-    toast.loading(`Generating ${variantCount > 1 ? `${variantCount} mockup variants` : "mockup"} for "${rec.section}"...`, { id: toastId });
+    toast.loading(isRefinement ? `Refining mockup for "${rec.section}"...` : `Generating ${variantCount > 1 ? `${variantCount} mockup variants` : "mockup"} for "${rec.section}"...`, { id: toastId });
 
     try {
       const resp = await fetch(GENERATE_MOCKUP_URL, {
@@ -256,7 +257,9 @@ const Reports = () => {
           auditId: audit.id,
           recommendationId: rec.id,
           mockupPrompt: rec.mockup_prompt,
-          variantCount,
+          variantCount: isRefinement ? 1 : variantCount,
+          refinementNotes: refinementNotes || undefined,
+          previousMockupUrl: isRefinement ? (rec.mockup_variants?.[selectedVariants[rec.id] ?? 0] || rec.mockup_url) : undefined,
         }),
       });
 
@@ -267,7 +270,7 @@ const Reports = () => {
 
       const result = await resp.json();
       const variantUrls = result.variants || [result.mockupUrl];
-      toast.success(`${variantUrls.length} mockup variant${variantUrls.length > 1 ? "s" : ""} generated!`, { id: toastId });
+      toast.success(isRefinement ? "Mockup refined!" : `${variantUrls.length} mockup variant${variantUrls.length > 1 ? "s" : ""} generated!`, { id: toastId });
 
       // Update local state
       const updatedRecs = audit.recommendations.map((r) =>
@@ -276,6 +279,9 @@ const Reports = () => {
       const updatedAudit = { ...audit, recommendations: updatedRecs };
       setViewingAudit(updatedAudit);
       setAudits((prev) => prev.map((a) => (a.id === audit.id ? updatedAudit : a)));
+      // Clear refinement input
+      setRefinementInputs((prev) => ({ ...prev, [rec.id]: "" }));
+      setShowRefinementInput((prev) => { const n = new Set(prev); n.delete(rec.id); return n; });
     } catch (e: any) {
       toast.error("Mockup generation failed", { id: toastId, description: e.message });
     } finally {
