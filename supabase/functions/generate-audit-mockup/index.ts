@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { auditId, recommendationId, mockupPrompt, variantCount, refinementNotes, previousMockupUrl } = await req.json();
+    const { auditId, recommendationId, mockupPrompt, variantCount, refinementNotes, previousMockupUrl, quality } = await req.json();
     if (!auditId || recommendationId === undefined || !mockupPrompt) {
       return new Response(JSON.stringify({ error: "Missing auditId, recommendationId, or mockupPrompt" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -21,6 +21,8 @@ serve(async (req) => {
     }
 
     const numVariants = Math.min(Math.max(variantCount || 1, 1), 3);
+    const useProModel = quality === "final";
+    const modelId = useProModel ? "google/gemini-3-pro-image-preview" : "google/gemini-2.5-flash-image";
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -79,7 +81,35 @@ serve(async (req) => {
         .ilike("client_name", audit.client_name)
         .eq("device_type", "desktop")
         .order("section_order", { ascending: true });
+
+      // Competitor intel for visual references (#3)
+      contextPromises.competitorIntel = supabase
+        .from("competitive_intel")
+        .select("competitor_url, findings")
+        .ilike("client_name", audit.client_name)
+        .eq("status", "completed")
+        .order("created_at", { ascending: false })
+        .limit(3);
     }
+
+    // Recommendation prompt templates from insights (#4)
+    if (targetRec) {
+      const category = (targetRec.section || "").toLowerCase();
+      contextPromises.recTemplates = supabase
+        .from("recommendation_insights")
+        .select("recommendation_text, template_content, category, frequency_count")
+        .order("frequency_count", { ascending: false })
+        .limit(20);
+    }
+
+    // Starred mockup references — find high-rated mockups from past audits (#1)
+    contextPromises.starredMockups = supabase
+      .from("cro_audits")
+      .select("recommendations")
+      .eq("status", "completed")
+      .neq("id", auditId)
+      .order("created_at", { ascending: false })
+      .limit(20);
 
     const resolved = await Promise.all(
       Object.entries(contextPromises).map(async ([key, promise]) => [key, await promise] as const)
@@ -184,7 +214,50 @@ SECTION CONTEXT:
 - Expected Impact: ${targetRec.expected_impact || ""}`;
     }
 
-    // ── Build refinement context (#3) ──────────────────────────
+    // ── Competitor context ──────────────────────────
+    let competitorContext = "";
+    if (ctx.competitorIntel?.data?.length) {
+      const insights: string[] = [];
+      for (const ci of ctx.competitorIntel.data) {
+        const f = ci.findings as any;
+        if (!f) continue;
+        const patterns = f.design_patterns || f.designPatterns || [];
+        const copy = f.copy_frameworks || f.copyFrameworks || [];
+        if (patterns.length || copy.length) {
+          insights.push(`Competitor ${ci.competitor_url}: Design patterns: ${(patterns as string[]).slice(0, 5).join(", ")}. Copy: ${(copy as string[]).slice(0, 3).join(", ")}`);
+        }
+      }
+      if (insights.length) {
+        competitorContext = "\n\nCOMPETITOR BEST PRACTICES — Reference these patterns from top performers in the same vertical:\n" + insights.join("\n");
+      }
+    }
+
+    // ── Recommendation prompt templates ──────────────────────────
+    let templateContext = "";
+    if (ctx.recTemplates?.data?.length && targetRec) {
+      const recText = (targetRec.recommended_change || "").toLowerCase();
+      const match = ctx.recTemplates.data.find((t: any) =>
+        recText.includes(t.category.toLowerCase()) ||
+        t.recommendation_text.toLowerCase().split(" ").some((word: string) => word.length > 4 && recText.includes(word))
+      );
+      if (match?.template_content) {
+        templateContext = `\n\nPROVEN TEMPLATE (used ${match.frequency_count}x across clients):\n${match.template_content}`;
+      }
+    }
+
+    // ── Starred mockup references ──────────────────────────
+    const starredMockupUrls: string[] = [];
+    if (ctx.starredMockups?.data?.length) {
+      for (const a of ctx.starredMockups.data) {
+        const aRecs = (a.recommendations as any[]) || [];
+        for (const r of aRecs) {
+          if (r.mockup_rating >= 4 && r.mockup_url) {
+            starredMockupUrls.push(r.mockup_url);
+          }
+        }
+        if (starredMockupUrls.length >= 5) break;
+      }
+    }
     let refinementContext = "";
     if (refinementNotes && previousMockupUrl) {
       refinementContext = `\n\nITERATIVE REFINEMENT — A previous mockup was generated and the designer wants changes:
@@ -202,6 +275,8 @@ DESIGN RULES:
 4. Follow MOBILE-FIRST principles: 48px min tap targets, readable text without zooming, proper thumb-zone placement.
 5. Show the AFTER state only — this is what the improved section looks like after implementing the recommendation.
 ${numVariants > 1 ? `6. Create variant #\${VARIANT_NUM} — vary the layout approach while keeping the same recommendation intent.` : ""}
+${starredMockupUrls.length > 0 ? "7. REFERENCE MOCKUPS are provided — study their quality level, composition, and polish. Your output should match or exceed this standard." : ""}
+${competitorContext}${templateContext}
 ${refinementContext}`;
 
     // ── Build user message with visual inputs ──────────────────────────
@@ -250,6 +325,17 @@ ${refinementContext}`;
       });
     }
 
+    // Starred reference mockups as visual quality benchmarks (#1)
+    for (const starUrl of starredMockupUrls.slice(0, 3)) {
+      userContent.push({ type: "image_url", image_url: { url: starUrl } });
+    }
+    if (starredMockupUrls.length > 0) {
+      userContent.push({
+        type: "text",
+        text: `Above are ${starredMockupUrls.length} STARRED reference mockups rated as top quality by the design team. Match this level of polish, composition, and detail.`,
+      });
+    }
+
     // Text context
     userContent.push({
       type: "text",
@@ -259,7 +345,7 @@ DESIGN BRIEF:
 ${mockupPrompt}`,
     });
 
-    console.log(`Generating ${numVariants} mockup variant(s) for audit ${auditId}, rec ${recommendationId}${refinementNotes ? " (refinement)" : ""}. Figma images: ${figmaImageUrls.length}, Section screenshot: ${!!matchedSectionScreenshotUrl}`);
+    console.log(`Generating ${numVariants} ${useProModel ? "FINAL" : "draft"} mockup(s) for audit ${auditId}, rec ${recommendationId}. Model: ${modelId}. Starred refs: ${starredMockupUrls.length}, Figma: ${figmaImageUrls.length}, Competitor: ${!!competitorContext}`);
 
     // ── Generate variants ──────────────────────────
     const variants: { url: string; variantIndex: number }[] = [];
@@ -277,7 +363,7 @@ ${mockupPrompt}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-image",
+          model: modelId,
           messages: [
             { role: "system", content: variantPrompt },
             { role: "user", content: userContent },

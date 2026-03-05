@@ -27,6 +27,7 @@ import {
   Lightbulb,
   Code2,
   Layers,
+  Star,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { BeforeAfterSlider } from "@/components/BeforeAfterSlider";
@@ -53,6 +54,7 @@ interface Recommendation {
   mockup_prompt: string;
   mockup_url?: string;
   mockup_variants?: string[];
+  mockup_rating?: number; // 1-5 star rating for reference library
   section_screenshot_url?: string;
   scroll_percentage?: number;
   cro_rationale: string;
@@ -142,6 +144,7 @@ const Reports = () => {
   const [copiedPortal, setCopiedPortal] = useState<string | null>(null);
   const [refinementInputs, setRefinementInputs] = useState<Record<number, string>>({});
   const [showRefinementInput, setShowRefinementInput] = useState<Set<number>>(new Set());
+  const [mockupQuality, setMockupQuality] = useState<"draft" | "final">("draft");
   const qc = useQueryClient();
 
   const { data: scores } = useQuery({
@@ -260,6 +263,7 @@ const Reports = () => {
           variantCount: isRefinement ? 1 : variantCount,
           refinementNotes: refinementNotes || undefined,
           previousMockupUrl: isRefinement ? (rec.mockup_variants?.[selectedVariants[rec.id] ?? 0] || rec.mockup_url) : undefined,
+          quality: mockupQuality,
         }),
       });
 
@@ -293,7 +297,17 @@ const Reports = () => {
     }
   };
 
-  const handleGenerateOdditScore = async (audit: CroAudit) => {
+  const handleRateMockup = async (audit: CroAudit, rec: Recommendation, rating: number) => {
+    const updatedRecs = audit.recommendations.map((r) =>
+      r.id === rec.id ? { ...r, mockup_rating: rating } : r
+    );
+    const updatedAudit = { ...audit, recommendations: updatedRecs };
+    setViewingAudit(updatedAudit);
+    setAudits((prev) => prev.map((a) => (a.id === audit.id ? updatedAudit : a)));
+    await supabase.from("cro_audits").update({ recommendations: updatedRecs as any }).eq("id", audit.id);
+    toast.success(rating >= 4 ? "⭐ Starred as reference quality!" : `Rated ${rating}/5`);
+  };
+
     setGeneratingScore(audit.id);
     const toastId = `score-${audit.id}`;
     toast.loading("Generating Oddit Score...", { id: toastId, description: "Scoring 8 dimensions with Gemini" });
@@ -673,6 +687,22 @@ const Reports = () => {
                     year: "numeric",
                   })}
                 </p>
+                {/* Quality Toggle */}
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Quality:</span>
+                  <button
+                    onClick={() => setMockupQuality("draft")}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${mockupQuality === "draft" ? "bg-accent/20 text-accent border border-accent/30" : "bg-secondary text-muted-foreground border border-border"}`}
+                  >
+                    ⚡ Draft
+                  </button>
+                  <button
+                    onClick={() => setMockupQuality("final")}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${mockupQuality === "final" ? "bg-primary/20 text-primary border border-primary/30" : "bg-secondary text-muted-foreground border border-border"}`}
+                  >
+                    💎 Final
+                  </button>
+                </div>
                 {/* Batch Generate All Mockups */}
                 {(() => {
                   const missing = viewingAudit.recommendations.filter((r) => !r.mockup_url && r.mockup_prompt).length;
@@ -883,6 +913,19 @@ const Reports = () => {
                                       >
                                         <Sparkles className="h-2.5 w-2.5" /> Refine
                                       </button>
+                                      {/* Star Rating */}
+                                      <div className="flex items-center gap-0.5 ml-1">
+                                        {[1, 2, 3, 4, 5].map((s) => (
+                                          <button
+                                            key={s}
+                                            onClick={() => handleRateMockup(viewingAudit, rec, s)}
+                                            className="p-0 hover:scale-110 transition-transform"
+                                            title={s >= 4 ? "Star as reference quality" : `Rate ${s}/5`}
+                                          >
+                                            <Star className={`h-3 w-3 ${(rec.mockup_rating ?? 0) >= s ? "fill-gold text-gold" : "text-muted-foreground/40"}`} />
+                                          </button>
+                                        ))}
+                                      </div>
                                     </div>
                                     {showRefinementInput.has(rec.id) && (
                                       <div className="flex gap-2 mt-1">
