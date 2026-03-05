@@ -579,7 +579,7 @@ const Reports = () => {
                     })()}
                     {audit.status === "completed" && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleGenerateOdditScore(audit); }}
+                        onClick={(e) => { e.stopPropagation(); handleGenerateScore(audit); }}
                         disabled={generatingScore === audit.id}
                         title="Generate Oddit Score"
                         className="flex items-center gap-1 rounded-lg bg-gold/10 border border-gold/30 px-2 py-1 text-[10px] font-bold text-gold hover:bg-gold/20 transition-colors disabled:opacity-50"
