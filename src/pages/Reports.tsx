@@ -687,6 +687,22 @@ const Reports = () => {
                     year: "numeric",
                   })}
                 </p>
+                {/* Quality Toggle */}
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Quality:</span>
+                  <button
+                    onClick={() => setMockupQuality("draft")}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${mockupQuality === "draft" ? "bg-accent/20 text-accent border border-accent/30" : "bg-secondary text-muted-foreground border border-border"}`}
+                  >
+                    ⚡ Draft
+                  </button>
+                  <button
+                    onClick={() => setMockupQuality("final")}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${mockupQuality === "final" ? "bg-primary/20 text-primary border border-primary/30" : "bg-secondary text-muted-foreground border border-border"}`}
+                  >
+                    💎 Final
+                  </button>
+                </div>
                 {/* Batch Generate All Mockups */}
                 {(() => {
                   const missing = viewingAudit.recommendations.filter((r) => !r.mockup_url && r.mockup_prompt).length;
