@@ -75,6 +75,65 @@ function extractClassPatterns(liquidFiles: Array<{ filename: string; content: st
   return `Common class prefixes: ${topPrefixes.join(", ")}\nSample classes: ${[...allClasses].slice(0, 50).join(", ")}`;
 }
 
+// ── NEW: Build Figma design context from design_data ──────────────────────
+function buildFigmaDesignContext(figmaFiles: any[]): { textContext: string; imageUrls: string[] } {
+  const textParts: string[] = [];
+  const imageUrls: string[] = [];
+
+  for (const file of figmaFiles) {
+    const dd = file.design_data;
+    if (!dd || Object.keys(dd).length === 0) continue;
+
+    textParts.push(`\n--- FIGMA DESIGN: ${file.name} (${file.design_type}) ---`);
+
+    // Color palette
+    if (dd.color_palette?.length) {
+      const colors = dd.color_palette
+        .map((c: any) => `  ${c.name}: ${c.hex} (rgba ${c.r},${c.g},${c.b},${c.a})`)
+        .join("\n");
+      textParts.push(`Color Palette:\n${colors}`);
+    }
+
+    // Typography
+    if (dd.typography?.length) {
+      const typo = dd.typography
+        .map((t: any) => `  ${t.name}: ${t.fontFamily} ${t.fontWeight} ${t.fontSize}px${t.lineHeight ? ` / ${Math.round(t.lineHeight)}px` : ""}${t.letterSpacing ? ` ls:${t.letterSpacing}` : ""}`)
+        .join("\n");
+      textParts.push(`Typography:\n${typo}`);
+    }
+
+    // Styles summary
+    if (dd.styles) {
+      const s = dd.styles;
+      if (s.fills?.length) textParts.push(`Fill styles: ${s.fills.map((f: any) => f.name).join(", ")}`);
+      if (s.effects?.length) textParts.push(`Effect styles: ${s.effects.map((f: any) => f.name).join(", ")}`);
+    }
+
+    // Page/frame structure
+    if (dd.pages?.length) {
+      for (const page of dd.pages) {
+        if (page.frames?.length) {
+          const frameList = page.frames
+            .map((f: any) => `  ${f.name} (${f.width}×${f.height})`)
+            .join("\n");
+          textParts.push(`Page "${page.name}" frames:\n${frameList}`);
+        }
+      }
+    }
+
+    // Collect frame export URLs for multimodal
+    if (dd.frame_exports) {
+      const urls = Object.values(dd.frame_exports) as string[];
+      imageUrls.push(...urls.slice(0, 4)); // Max 4 per file
+    }
+  }
+
+  return {
+    textContext: textParts.join("\n"),
+    imageUrls: imageUrls.slice(0, 10), // Max 10 total images
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -112,7 +171,7 @@ serve(async (req) => {
       recommendationContext = `\n\nCRO AUDIT RECOMMENDATIONS:\n${JSON.stringify(audits[0].recommendations, null, 2).slice(0, 8000)}`;
     }
 
-    // 3. Load Shopify theme files — categorized for maximum context
+    // 3. Load Shopify theme files
     let themeContext = "";
     let cssVariables = "";
     let schemaPatterns = "";
@@ -130,43 +189,29 @@ serve(async (req) => {
           `shopify_theme_files?connection_id=eq.${conns[0].id}&select=filename,content&order=filename&limit=100`);
 
         if (allFiles?.length) {
-          // Categorize files for smart context building
           const layoutFiles = allFiles.filter((f: any) => f.filename.startsWith("layout/"));
           const configFiles = allFiles.filter((f: any) => f.filename.startsWith("config/"));
           const cssFiles = allFiles.filter((f: any) => f.filename.endsWith(".css"));
           const sectionFiles = allFiles.filter((f: any) => f.filename.startsWith("sections/"));
           const snippetFiles = allFiles.filter((f: any) => f.filename.startsWith("snippets/"));
-          const templateFiles = allFiles.filter((f: any) => f.filename.startsWith("templates/"));
 
-          // Extract CSS variables from all CSS files
           const allCSS = cssFiles.map((f: any) => f.content).join("\n");
           cssVariables = extractCSSVariables(allCSS);
-
-          // Extract schema patterns from existing sections
           schemaPatterns = extractSchemaPatterns(sectionFiles);
-
-          // Extract class naming conventions
           classPatterns = extractClassPatterns([...sectionFiles, ...snippetFiles]);
 
-          // Build prioritized theme context
           const contextParts: string[] = [];
 
-          // Layout (full — it's the foundation)
           for (const f of layoutFiles) {
             contextParts.push(`--- ${f.filename} ---\n${f.content.slice(0, 5000)}`);
           }
-
-          // Config files (settings schema tells us available theme settings)
           for (const f of configFiles) {
             contextParts.push(`--- ${f.filename} ---\n${f.content.slice(0, 4000)}`);
           }
-
-          // CSS files (critical for matching design system)
           for (const f of cssFiles) {
             contextParts.push(`--- ${f.filename} ---\n${f.content.slice(0, 4000)}`);
           }
 
-          // Find sections most relevant to the target page
           const pageLower = project.page.toLowerCase();
           const relevantSections = sectionFiles
             .sort((a: any, b: any) => {
@@ -180,7 +225,6 @@ serve(async (req) => {
             contextParts.push(`--- ${f.filename} ---\n${f.content.slice(0, 4000)}`);
           }
 
-          // Key snippets (icons, buttons, product cards)
           const keySnippets = snippetFiles
             .filter((f: any) =>
               /icon|button|card|price|badge|image|media/i.test(f.filename))
@@ -194,15 +238,26 @@ serve(async (req) => {
       }
     }
 
-    // 4. Load Figma design context (if linked)
-    let figmaContext = "";
+    // 4. Load Figma design context (ENHANCED — style DNA + frame exports)
+    let figmaTextContext = "";
+    let figmaImageUrls: string[] = [];
+
     const figmaFiles = await sbFetch(supabaseUrl, serviceRoleKey,
-      `figma_files?client_name=eq.${encodeURIComponent(project.client)}&select=name,figma_url,design_type,tags&order=last_modified.desc&limit=5`);
+      `figma_files?client_name=eq.${encodeURIComponent(project.client)}&select=name,figma_url,design_type,tags,design_data&order=last_modified.desc&limit=10`);
+    
     if (figmaFiles?.length) {
-      const figmaLines = figmaFiles.map((f: any) =>
-        `- ${f.name} (${f.design_type}) ${f.figma_url || ""} tags: ${(f.tags || []).join(", ")}`
-      );
-      figmaContext = `\n\nFIGMA DESIGNS FOR THIS CLIENT:\n${figmaLines.join("\n")}`;
+      const { textContext, imageUrls } = buildFigmaDesignContext(figmaFiles);
+      figmaTextContext = textContext;
+      figmaImageUrls = imageUrls;
+
+      // Fallback text for files without design_data
+      const noDataFiles = figmaFiles.filter((f: any) => !f.design_data || Object.keys(f.design_data).length === 0);
+      if (noDataFiles.length > 0) {
+        const fallbackLines = noDataFiles.map((f: any) =>
+          `- ${f.name} (${f.design_type}) ${f.figma_url || ""} tags: ${(f.tags || []).join(", ")}`
+        );
+        figmaTextContext += `\n\nAdditional Figma files (metadata only):\n${fallbackLines.join("\n")}`;
+      }
     }
 
     // 5. Load previous generated code if this is a refinement
@@ -228,12 +283,14 @@ CRITICAL REQUIREMENTS:
 6. Follow the existing schema structure patterns shown below
 7. Keep code clean, well-commented, and production-ready
 8. Use semantic HTML and accessibility best practices
+9. STUDY THE FIGMA DESIGNS PROVIDED — match the exact colors, typography, spacing, and layout patterns from previous designs for this client. Your output should be visually consistent with the design system established in Figma.
 
 TARGET PAGE/SECTION: "${project.page}"
 
 ${cssVariables ? `THEME CSS VARIABLES (use these, don't create new ones):\n${cssVariables}\n` : ""}
 ${classPatterns ? `THEME CLASS NAMING CONVENTIONS:\n${classPatterns}\n` : ""}
 ${schemaPatterns ? `EXISTING SECTION SCHEMA PATTERNS (follow this structure):\n${schemaPatterns}\n` : ""}
+${figmaTextContext ? `\nFIGMA DESIGN SYSTEM (study these carefully for visual consistency):\n${figmaTextContext}\n` : ""}
 
 Respond with a JSON object (no markdown fences) with these exact keys:
 {
@@ -246,7 +303,6 @@ Respond with a JSON object (no markdown fences) with these exact keys:
     const userPrompt = `Client: ${project.client}
 Page/Section: ${project.page}
 ${recommendationContext}
-${figmaContext}
 
 EXISTING THEME FILES:
 ${themeContext}
@@ -254,8 +310,25 @@ ${previousCode}
 
 ${refinement_feedback
   ? `This is a REFINEMENT request. Fix the issues described in the feedback while keeping the parts that work well. Focus specifically on the feedback.`
-  : `Generate a complete, production-ready Shopify Liquid section implementing CRO improvements for this page. The code should be indistinguishable from what a senior Shopify developer would write — matching the theme's patterns perfectly.`
+  : `Generate a complete, production-ready Shopify Liquid section implementing CRO improvements for this page. The code should be indistinguishable from what a senior Shopify developer would write — matching the theme's patterns perfectly AND reflecting the visual design language from the Figma designs.`
 }`;
+
+    // 7. Build multimodal messages (text + images from Figma frame exports)
+    const userContent: any[] = [];
+    
+    // Add text
+    userContent.push({ type: "text", text: userPrompt });
+    
+    // Add Figma frame images as visual references
+    for (const imageUrl of figmaImageUrls) {
+      userContent.push({
+        type: "image_url",
+        image_url: { url: imageUrl },
+      });
+    }
+
+    // Use multimodal-capable model when we have images
+    const model = figmaImageUrls.length > 0 ? "google/gemini-2.5-flash" : "google/gemini-3-flash-preview";
 
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -264,10 +337,10 @@ ${refinement_feedback
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
+          { role: "user", content: figmaImageUrls.length > 0 ? userContent : userPrompt },
         ],
         tools: [
           {
@@ -323,11 +396,10 @@ ${refinement_feedback
       generated = JSON.parse(cleaned);
     }
 
-    // 7. Store generated code
+    // 8. Store generated code
     const isRefinement = !!refinement_feedback && !!previous_section_id;
     
     if (isRefinement) {
-      // Update existing section
       await sbWrite(supabaseUrl, serviceRoleKey,
         `generated_sections?id=eq.${previous_section_id}`, "PATCH", {
           section_name: generated.section_name || project.page,
@@ -337,7 +409,6 @@ ${refinement_feedback
           status: "refined",
         });
     } else {
-      // Insert new section
       await sbWrite(supabaseUrl, serviceRoleKey, "generated_sections", "POST", {
         pipeline_project_id,
         section_name: generated.section_name || project.page,
@@ -348,7 +419,7 @@ ${refinement_feedback
       });
     }
 
-    // 8. Update pipeline project stages
+    // 9. Update pipeline project stages
     const stages = project.stages || [];
     const updatedStages = stages.map((s: { name: string; status: string }) => {
       if (s.name === "Code Gen") return { ...s, status: "done" };
@@ -363,7 +434,13 @@ ${refinement_feedback
       });
 
     return new Response(
-      JSON.stringify({ success: true, section_name: generated.section_name, refined: isRefinement }),
+      JSON.stringify({
+        success: true,
+        section_name: generated.section_name,
+        refined: isRefinement,
+        figma_images_used: figmaImageUrls.length,
+        model_used: model,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
