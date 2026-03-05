@@ -81,7 +81,35 @@ serve(async (req) => {
         .ilike("client_name", audit.client_name)
         .eq("device_type", "desktop")
         .order("section_order", { ascending: true });
+
+      // Competitor intel for visual references (#3)
+      contextPromises.competitorIntel = supabase
+        .from("competitive_intel")
+        .select("competitor_url, findings")
+        .ilike("client_name", audit.client_name)
+        .eq("status", "completed")
+        .order("created_at", { ascending: false })
+        .limit(3);
     }
+
+    // Recommendation prompt templates from insights (#4)
+    if (targetRec) {
+      const category = (targetRec.section || "").toLowerCase();
+      contextPromises.recTemplates = supabase
+        .from("recommendation_insights")
+        .select("recommendation_text, template_content, category, frequency_count")
+        .order("frequency_count", { ascending: false })
+        .limit(20);
+    }
+
+    // Starred mockup references — find high-rated mockups from past audits (#1)
+    contextPromises.starredMockups = supabase
+      .from("cro_audits")
+      .select("recommendations")
+      .eq("status", "completed")
+      .neq("id", auditId)
+      .order("created_at", { ascending: false })
+      .limit(20);
 
     const resolved = await Promise.all(
       Object.entries(contextPromises).map(async ([key, promise]) => [key, await promise] as const)
