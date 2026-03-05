@@ -140,6 +140,8 @@ const Reports = () => {
   const [generatingScore, setGeneratingScore] = useState<string | null>(null);
   const [sharingPortal, setSharingPortal] = useState<string | null>(null);
   const [copiedPortal, setCopiedPortal] = useState<string | null>(null);
+  const [refinementInputs, setRefinementInputs] = useState<Record<number, string>>({});
+  const [showRefinementInput, setShowRefinementInput] = useState<Set<number>>(new Set());
   const qc = useQueryClient();
 
   const { data: scores } = useQuery({
