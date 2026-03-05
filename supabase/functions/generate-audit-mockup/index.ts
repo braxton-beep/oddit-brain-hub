@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { auditId, recommendationId, mockupPrompt, variantCount, refinementNotes, previousMockupUrl } = await req.json();
+    const { auditId, recommendationId, mockupPrompt, variantCount, refinementNotes, previousMockupUrl, quality } = await req.json();
     if (!auditId || recommendationId === undefined || !mockupPrompt) {
       return new Response(JSON.stringify({ error: "Missing auditId, recommendationId, or mockupPrompt" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
