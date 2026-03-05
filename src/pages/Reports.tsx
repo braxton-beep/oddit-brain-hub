@@ -913,6 +913,19 @@ const Reports = () => {
                                       >
                                         <Sparkles className="h-2.5 w-2.5" /> Refine
                                       </button>
+                                      {/* Star Rating */}
+                                      <div className="flex items-center gap-0.5 ml-1">
+                                        {[1, 2, 3, 4, 5].map((s) => (
+                                          <button
+                                            key={s}
+                                            onClick={() => handleRateMockup(viewingAudit, rec, s)}
+                                            className="p-0 hover:scale-110 transition-transform"
+                                            title={s >= 4 ? "Star as reference quality" : `Rate ${s}/5`}
+                                          >
+                                            <Star className={`h-3 w-3 ${(rec.mockup_rating ?? 0) >= s ? "fill-gold text-gold" : "text-muted-foreground/40"}`} />
+                                          </button>
+                                        ))}
+                                      </div>
                                     </div>
                                     {showRefinementInput.has(rec.id) && (
                                       <div className="flex gap-2 mt-1">
