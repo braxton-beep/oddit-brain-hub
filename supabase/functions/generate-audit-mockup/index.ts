@@ -214,7 +214,50 @@ SECTION CONTEXT:
 - Expected Impact: ${targetRec.expected_impact || ""}`;
     }
 
-    // ── Build refinement context (#3) ──────────────────────────
+    // ── Competitor context ──────────────────────────
+    let competitorContext = "";
+    if (ctx.competitorIntel?.data?.length) {
+      const insights: string[] = [];
+      for (const ci of ctx.competitorIntel.data) {
+        const f = ci.findings as any;
+        if (!f) continue;
+        const patterns = f.design_patterns || f.designPatterns || [];
+        const copy = f.copy_frameworks || f.copyFrameworks || [];
+        if (patterns.length || copy.length) {
+          insights.push(`Competitor ${ci.competitor_url}: Design patterns: ${(patterns as string[]).slice(0, 5).join(", ")}. Copy: ${(copy as string[]).slice(0, 3).join(", ")}`);
+        }
+      }
+      if (insights.length) {
+        competitorContext = "\n\nCOMPETITOR BEST PRACTICES — Reference these patterns from top performers in the same vertical:\n" + insights.join("\n");
+      }
+    }
+
+    // ── Recommendation prompt templates ──────────────────────────
+    let templateContext = "";
+    if (ctx.recTemplates?.data?.length && targetRec) {
+      const recText = (targetRec.recommended_change || "").toLowerCase();
+      const match = ctx.recTemplates.data.find((t: any) =>
+        recText.includes(t.category.toLowerCase()) ||
+        t.recommendation_text.toLowerCase().split(" ").some((word: string) => word.length > 4 && recText.includes(word))
+      );
+      if (match?.template_content) {
+        templateContext = `\n\nPROVEN TEMPLATE (used ${match.frequency_count}x across clients):\n${match.template_content}`;
+      }
+    }
+
+    // ── Starred mockup references ──────────────────────────
+    const starredMockupUrls: string[] = [];
+    if (ctx.starredMockups?.data?.length) {
+      for (const a of ctx.starredMockups.data) {
+        const aRecs = (a.recommendations as any[]) || [];
+        for (const r of aRecs) {
+          if (r.mockup_rating >= 4 && r.mockup_url) {
+            starredMockupUrls.push(r.mockup_url);
+          }
+        }
+        if (starredMockupUrls.length >= 5) break;
+      }
+    }
     let refinementContext = "";
     if (refinementNotes && previousMockupUrl) {
       refinementContext = `\n\nITERATIVE REFINEMENT — A previous mockup was generated and the designer wants changes:
