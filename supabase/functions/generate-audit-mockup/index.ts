@@ -325,6 +325,17 @@ ${refinementContext}`;
       });
     }
 
+    // Starred reference mockups as visual quality benchmarks (#1)
+    for (const starUrl of starredMockupUrls.slice(0, 3)) {
+      userContent.push({ type: "image_url", image_url: { url: starUrl } });
+    }
+    if (starredMockupUrls.length > 0) {
+      userContent.push({
+        type: "text",
+        text: `Above are ${starredMockupUrls.length} STARRED reference mockups rated as top quality by the design team. Match this level of polish, composition, and detail.`,
+      });
+    }
+
     // Text context
     userContent.push({
       type: "text",
@@ -334,7 +345,7 @@ DESIGN BRIEF:
 ${mockupPrompt}`,
     });
 
-    console.log(`Generating ${numVariants} mockup variant(s) for audit ${auditId}, rec ${recommendationId}${refinementNotes ? " (refinement)" : ""}. Figma images: ${figmaImageUrls.length}, Section screenshot: ${!!matchedSectionScreenshotUrl}`);
+    console.log(`Generating ${numVariants} ${useProModel ? "FINAL" : "draft"} mockup(s) for audit ${auditId}, rec ${recommendationId}. Model: ${modelId}. Starred refs: ${starredMockupUrls.length}, Figma: ${figmaImageUrls.length}, Competitor: ${!!competitorContext}`);
 
     // ── Generate variants ──────────────────────────
     const variants: { url: string; variantIndex: number }[] = [];
