@@ -53,6 +53,7 @@ interface Recommendation {
   mockup_prompt: string;
   mockup_url?: string;
   mockup_variants?: string[];
+  mockup_rating?: number; // 1-5 star rating for reference library
   section_screenshot_url?: string;
   scroll_percentage?: number;
   cro_rationale: string;
