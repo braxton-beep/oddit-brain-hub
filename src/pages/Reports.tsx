@@ -262,6 +262,7 @@ const Reports = () => {
           variantCount: isRefinement ? 1 : variantCount,
           refinementNotes: refinementNotes || undefined,
           previousMockupUrl: isRefinement ? (rec.mockup_variants?.[selectedVariants[rec.id] ?? 0] || rec.mockup_url) : undefined,
+          quality: mockupQuality,
         }),
       });
 
