@@ -907,7 +907,7 @@ const Reports = () => {
                                           Apply
                                         </button>
                                       </div>
-                                    )
+                                    )}
                                   )}
                                 </div>
                               ) : (
