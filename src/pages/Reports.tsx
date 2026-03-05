@@ -143,6 +143,7 @@ const Reports = () => {
   const [copiedPortal, setCopiedPortal] = useState<string | null>(null);
   const [refinementInputs, setRefinementInputs] = useState<Record<number, string>>({});
   const [showRefinementInput, setShowRefinementInput] = useState<Set<number>>(new Set());
+  const [mockupQuality, setMockupQuality] = useState<"draft" | "final">("draft");
   const qc = useQueryClient();
 
   const { data: scores } = useQuery({
