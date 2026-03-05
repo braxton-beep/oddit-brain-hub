@@ -296,7 +296,17 @@ const Reports = () => {
     }
   };
 
-  const handleGenerateOdditScore = async (audit: CroAudit) => {
+  const handleRateMockup = async (audit: CroAudit, rec: Recommendation, rating: number) => {
+    const updatedRecs = audit.recommendations.map((r) =>
+      r.id === rec.id ? { ...r, mockup_rating: rating } : r
+    );
+    const updatedAudit = { ...audit, recommendations: updatedRecs };
+    setViewingAudit(updatedAudit);
+    setAudits((prev) => prev.map((a) => (a.id === audit.id ? updatedAudit : a)));
+    await supabase.from("cro_audits").update({ recommendations: updatedRecs as any }).eq("id", audit.id);
+    toast.success(rating >= 4 ? "⭐ Starred as reference quality!" : `Rated ${rating}/5`);
+  };
+
     setGeneratingScore(audit.id);
     const toastId = `score-${audit.id}`;
     toast.loading("Generating Oddit Score...", { id: toastId, description: "Scoring 8 dimensions with Gemini" });
