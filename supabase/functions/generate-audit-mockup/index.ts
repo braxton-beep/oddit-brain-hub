@@ -275,6 +275,8 @@ DESIGN RULES:
 4. Follow MOBILE-FIRST principles: 48px min tap targets, readable text without zooming, proper thumb-zone placement.
 5. Show the AFTER state only — this is what the improved section looks like after implementing the recommendation.
 ${numVariants > 1 ? `6. Create variant #\${VARIANT_NUM} — vary the layout approach while keeping the same recommendation intent.` : ""}
+${starredMockupUrls.length > 0 ? "7. REFERENCE MOCKUPS are provided — study their quality level, composition, and polish. Your output should match or exceed this standard." : ""}
+${competitorContext}${templateContext}
 ${refinementContext}`;
 
     // ── Build user message with visual inputs ──────────────────────────
