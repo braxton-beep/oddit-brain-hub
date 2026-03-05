@@ -854,6 +854,7 @@ const Reports = () => {
                                     className="w-full rounded-lg border border-accent/20 object-cover max-h-52"
                                   />
                                   {rec.mockup_variants && rec.mockup_variants.length > 1 && (
+                                    <>
                                     <div className="flex items-center gap-1.5">
                                       <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider">Variants:</span>
                                       {rec.mockup_variants.map((vUrl, vi) => (
@@ -883,7 +884,6 @@ const Reports = () => {
                                         <Sparkles className="h-2.5 w-2.5" /> Refine
                                       </button>
                                     </div>
-                                    {/* Refinement input */}
                                     {showRefinementInput.has(rec.id) && (
                                       <div className="flex gap-2 mt-1">
                                         <input
@@ -908,6 +908,7 @@ const Reports = () => {
                                         </button>
                                       </div>
                                     )}
+                                    </>
                                   )}
                                 </div>
                               ) : (
