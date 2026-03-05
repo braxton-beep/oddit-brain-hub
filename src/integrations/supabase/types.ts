@@ -309,6 +309,7 @@ export type Database = {
         Row: {
           client_name: string | null
           created_at: string
+          design_data: Json | null
           design_type: string
           enabled: boolean
           figma_file_key: string
@@ -326,6 +327,7 @@ export type Database = {
         Insert: {
           client_name?: string | null
           created_at?: string
+          design_data?: Json | null
           design_type?: string
           enabled?: boolean
           figma_file_key: string
@@ -343,6 +345,7 @@ export type Database = {
         Update: {
           client_name?: string | null
           created_at?: string
+          design_data?: Json | null
           design_type?: string
           enabled?: boolean
           figma_file_key?: string
