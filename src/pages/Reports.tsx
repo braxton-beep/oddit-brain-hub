@@ -27,6 +27,7 @@ import {
   Lightbulb,
   Code2,
   Layers,
+  Star,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { BeforeAfterSlider } from "@/components/BeforeAfterSlider";
