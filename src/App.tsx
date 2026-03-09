@@ -54,6 +54,7 @@ const App = () => (
           <Route path="/cro-agent" element={<CroAgent />} />
           <Route path="/shopify-connect" element={<ShopifyConnect />} />
           <Route path="/wireframes" element={<Wireframes />} />
+          <Route path="/lead-gen" element={<LeadGen />} />
           <Route path="/portal/:token" element={<ClientPortal />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
