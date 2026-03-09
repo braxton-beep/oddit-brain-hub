@@ -22,6 +22,7 @@ import OrderSuccess from "./pages/OrderSuccess";
 import CroAgent from "./pages/CroAgent";
 import ShopifyConnect from "./pages/ShopifyConnect";
 import Wireframes from "./pages/Wireframes";
+import LeadGen from "./pages/LeadGen";
 import NotFound from "./pages/NotFound";
 import { WelcomeTour } from "./components/WelcomeTour";
 
@@ -53,6 +54,7 @@ const App = () => (
           <Route path="/cro-agent" element={<CroAgent />} />
           <Route path="/shopify-connect" element={<ShopifyConnect />} />
           <Route path="/wireframes" element={<Wireframes />} />
+          <Route path="/lead-gen" element={<LeadGen />} />
           <Route path="/portal/:token" element={<ClientPortal />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

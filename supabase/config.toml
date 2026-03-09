@@ -82,3 +82,9 @@ verify_jwt = false
 [functions.generate-wireframe]
 verify_jwt = false
 
+[functions.scan-leads]
+verify_jwt = false
+
+[functions.reply-lead]
+verify_jwt = false
+
