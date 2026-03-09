@@ -684,6 +684,60 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_gen_opportunities: {
+        Row: {
+          category: string
+          created_at: string
+          draft_reply: string
+          id: string
+          platform: string
+          post_author: string
+          post_date: string | null
+          post_id: string
+          post_text: string
+          post_url: string
+          relevance_score: number
+          replied_at: string | null
+          slack_message_ts: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          draft_reply?: string
+          id?: string
+          platform?: string
+          post_author?: string
+          post_date?: string | null
+          post_id: string
+          post_text?: string
+          post_url?: string
+          relevance_score?: number
+          replied_at?: string | null
+          slack_message_ts?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          draft_reply?: string
+          id?: string
+          platform?: string
+          post_author?: string
+          post_date?: string | null
+          post_id?: string
+          post_text?: string
+          post_url?: string
+          relevance_score?: number
+          replied_at?: string | null
+          slack_message_ts?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       oddit_scores: {
         Row: {
           clarity_value_prop: number
