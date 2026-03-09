@@ -21,6 +21,7 @@ import {
   Activity,
   Store,
   Layout,
+  Target,
 } from "lucide-react";
 import { useState } from "react";
 import { useEmailDrafts } from "@/hooks/useDashboardData";
