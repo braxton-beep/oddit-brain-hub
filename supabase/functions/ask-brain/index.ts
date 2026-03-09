@@ -67,8 +67,73 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const sb = createClient(supabaseUrl, supabaseKey);
 
-    // Detect if the query is about a specific call/meeting to decide how much transcript to pull
+    // ── Figma vision: detect design-related queries and fetch frame exports ──
     const queryLower = query.toLowerCase();
+    const figmaKeywords = ["figma", "design", "frame", "mockup", "layout", "hero section",
+      "screenshot", "visual", "look", "ui", "ux", "color", "typography", "brand",
+      "show me the design", "what does it look like", "analyze the design"];
+    const isFigmaQuery = figmaKeywords.some(kw => queryLower.includes(kw));
+
+    let figmaImageUrls: string[] = [];
+    let figmaContext = "";
+
+    if (isFigmaQuery) {
+      // Try to find a client name in the query by matching against known clients
+      const { data: allClients } = await sb.from("clients").select("name");
+      const clientNames = (allClients ?? []).map((c: any) => c.name);
+      const matchedClient = clientNames.find((name: string) =>
+        queryLower.includes(name.toLowerCase())
+      );
+
+      // Fetch figma files with design_data — filter by client if detected
+      let figmaQuery = sb.from("figma_files")
+        .select("name, client_name, design_type, design_data, thumbnail_url, figma_url")
+        .eq("enabled", true);
+
+      if (matchedClient) {
+        figmaQuery = figmaQuery.ilike("client_name", `%${matchedClient}%`);
+      }
+
+      const { data: figmaFiles } = await figmaQuery
+        .order("last_modified", { ascending: false })
+        .limit(5);
+
+      if (figmaFiles && figmaFiles.length > 0) {
+        const fileDescriptions: string[] = [];
+
+        for (const file of figmaFiles) {
+          const dd = file.design_data as any;
+          const frameExports = dd?.frame_exports ?? {};
+          const exportUrls = Object.values(frameExports) as string[];
+
+          // Collect image URLs for multimodal input (max 6 total)
+          for (const url of exportUrls) {
+            if (figmaImageUrls.length < 6 && url) {
+              figmaImageUrls.push(url);
+            }
+          }
+
+          // Build text context about the file
+          const colors = (dd?.color_palette ?? []).map((c: any) => `${c.name}: ${c.hex}`).join(", ");
+          const fonts = (dd?.typography ?? []).map((t: any) => `${t.name}: ${t.fontFamily} ${t.fontWeight} ${t.fontSize}px`).join(", ");
+          const pages = (dd?.pages ?? []).map((p: any) => `${p.name} (${p.frames?.length ?? 0} frames)`).join(", ");
+
+          fileDescriptions.push(
+            `--- FIGMA FILE: "${file.name}" (${file.design_type}) ---\n` +
+            `Client: ${file.client_name || "Unknown"}\n` +
+            `URL: ${file.figma_url || "N/A"}\n` +
+            (pages ? `Pages: ${pages}\n` : "") +
+            (colors ? `Colors: ${colors}\n` : "") +
+            (fonts ? `Typography: ${fonts}\n` : "") +
+            `Frame exports: ${exportUrls.length} images attached for visual analysis`
+          );
+        }
+
+        figmaContext = `\n\nFIGMA DESIGN DATA (${figmaFiles.length} files found${matchedClient ? ` for "${matchedClient}"` : ""}):\n${fileDescriptions.join("\n\n")}`;
+      }
+    }
+
+    // Detect if the query is about a specific call/meeting to decide how much transcript to pull
     const isCallQuery = queryLower.includes("call") || queryLower.includes("meeting") ||
       queryLower.includes("transcript") || queryLower.includes("fireflies") ||
       queryLower.includes("said") || queryLower.includes("discussed") ||
@@ -195,10 +260,13 @@ ${projectBlock}
 ${intBlock}
 ${meetingBlock}
 ${scrapedContext}
+${figmaContext}
 
 Answer questions concisely and specifically using this context when relevant.
 
 When the user shares a URL (tweet, article, etc.), use the SCRAPED WEB CONTENT above to give a precise explanation of what the link contains. Reference specific content from the scraped text.
+
+FIGMA DESIGN ANALYSIS: When images from Figma are attached to this conversation, analyze them visually. Describe layout, colors, typography, hierarchy, and UX patterns you observe. When Figma design metadata (colors, typography) is provided, cross-reference it with the visual. If asked to compare or critique, be specific about what works and what could improve from a CRO perspective.
 
 You are ALSO a knowledgeable general assistant. If the user asks about industry news, AI tools, tweets, tech updates, marketing trends, or anything outside the internal data — answer using your general knowledge. Don't refuse or say "I only have access to internal data." Be helpful on ANY topic.
 
@@ -210,6 +278,22 @@ CRITICAL DATA ACCURACY RULES — YOU MUST FOLLOW THESE:
 
 When asked about calls or meetings, reference the full transcript text to give precise, detailed answers — quote what was actually said when relevant. Keep answers to 2-3 sentences unless more detail is requested.`;
 
+    // Build user message — multimodal if we have Figma images
+    const useVisionModel = figmaImageUrls.length > 0;
+    let userMessage: any = query;
+
+    if (useVisionModel) {
+      // Build multimodal content array with text + images
+      const contentParts: any[] = [{ type: "text", text: query }];
+      for (const imgUrl of figmaImageUrls) {
+        contentParts.push({
+          type: "image_url",
+          image_url: { url: imgUrl },
+        });
+      }
+      userMessage = contentParts;
+    }
+
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
@@ -219,10 +303,10 @@ When asked about calls or meetings, reference the full transcript text to give p
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: useVisionModel ? "google/gemini-2.5-pro" : "google/gemini-3-flash-preview",
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: query },
+            { role: "user", content: userMessage },
           ],
           stream: true,
         }),
