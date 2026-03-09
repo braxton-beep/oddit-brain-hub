@@ -134,7 +134,6 @@ serve(async (req) => {
     }
 
     // Detect if the query is about a specific call/meeting to decide how much transcript to pull
-    const queryLower = query.toLowerCase();
     const isCallQuery = queryLower.includes("call") || queryLower.includes("meeting") ||
       queryLower.includes("transcript") || queryLower.includes("fireflies") ||
       queryLower.includes("said") || queryLower.includes("discussed") ||
