@@ -85,9 +85,9 @@ serve(async (req) => {
         queryLower.includes(name.toLowerCase())
       );
 
-      // Fetch figma files with design_data — filter by client if detected
+      // Fetch figma files — get more than needed so we can rank them
       let figmaQuery = sb.from("figma_files")
-        .select("name, client_name, design_type, design_data, thumbnail_url, figma_url")
+        .select("name, client_name, design_type, design_data, thumbnail_url, figma_url, last_modified")
         .eq("enabled", true);
 
       if (matchedClient) {
@@ -96,18 +96,54 @@ serve(async (req) => {
 
       const { data: figmaFiles } = await figmaQuery
         .order("last_modified", { ascending: false })
-        .limit(5);
+        .limit(20);
 
       if (figmaFiles && figmaFiles.length > 0) {
+        // ── Smart ranking: design_type priority + recency ──
+        const TYPE_PRIORITY: Record<string, number> = {
+          oddit_report: 4,
+          landing_page: 3,
+          new_site_design: 2,
+          free_trial: 1,
+          other: 0,
+          unknown: 0,
+        };
+
+        const rankedFiles = figmaFiles
+          .map((f: any) => ({
+            ...f,
+            _score: (TYPE_PRIORITY[f.design_type] ?? 0) * 100 +
+              (f.last_modified ? Math.max(0, 50 - Math.floor((Date.now() - new Date(f.last_modified).getTime()) / (1000 * 60 * 60 * 24 * 7))) : 0),
+          }))
+          .sort((a: any, b: any) => b._score - a._score)
+          .slice(0, 5);
+
+        // ── Keyword matching for frame selection ──
+        const frameKeywords = queryLower.match(/\b(hero|nav|footer|header|testimonial|social.?proof|product|collection|cart|checkout|banner|mobile|desktop|above.?fold|cta|faq|about|pricing)\b/gi) ?? [];
+
         const fileDescriptions: string[] = [];
 
-        for (const file of figmaFiles) {
+        for (const file of rankedFiles) {
           const dd = file.design_data as any;
           const frameExports = dd?.frame_exports ?? {};
-          const exportUrls = Object.values(frameExports) as string[];
+          const frameEntries = Object.entries(frameExports) as [string, string][];
 
-          // Collect image URLs for multimodal input (max 6 total)
-          for (const url of exportUrls) {
+          // If user mentioned specific sections, prioritize matching frames
+          let selectedFrames: [string, string][];
+          if (frameKeywords.length > 0) {
+            const matched = frameEntries.filter(([name]) =>
+              frameKeywords.some(kw => name.toLowerCase().includes(kw.toLowerCase()))
+            );
+            const unmatched = frameEntries.filter(([name]) =>
+              !frameKeywords.some(kw => name.toLowerCase().includes(kw.toLowerCase()))
+            );
+            selectedFrames = [...matched, ...unmatched];
+          } else {
+            selectedFrames = frameEntries;
+          }
+
+          // Collect image URLs for multimodal input (max 6 total across all files)
+          for (const [, url] of selectedFrames) {
             if (figmaImageUrls.length < 6 && url) {
               figmaImageUrls.push(url);
             }
@@ -119,17 +155,17 @@ serve(async (req) => {
           const pages = (dd?.pages ?? []).map((p: any) => `${p.name} (${p.frames?.length ?? 0} frames)`).join(", ");
 
           fileDescriptions.push(
-            `--- FIGMA FILE: "${file.name}" (${file.design_type}) ---\n` +
+            `--- FIGMA FILE: "${file.name}" (${file.design_type}, score: ${file._score}) ---\n` +
             `Client: ${file.client_name || "Unknown"}\n` +
             `URL: ${file.figma_url || "N/A"}\n` +
             (pages ? `Pages: ${pages}\n` : "") +
             (colors ? `Colors: ${colors}\n` : "") +
             (fonts ? `Typography: ${fonts}\n` : "") +
-            `Frame exports: ${exportUrls.length} images attached for visual analysis`
+            `Frame exports: ${selectedFrames.length} available, ${figmaImageUrls.length} attached for visual analysis`
           );
         }
 
-        figmaContext = `\n\nFIGMA DESIGN DATA (${figmaFiles.length} files found${matchedClient ? ` for "${matchedClient}"` : ""}):\n${fileDescriptions.join("\n\n")}`;
+        figmaContext = `\n\nFIGMA DESIGN DATA (${figmaFiles.length} files found${matchedClient ? ` for "${matchedClient}"` : ""}, showing top ${rankedFiles.length} by relevance):\n${fileDescriptions.join("\n\n")}`;
       }
     }
 
