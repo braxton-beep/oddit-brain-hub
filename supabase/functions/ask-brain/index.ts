@@ -260,10 +260,13 @@ ${projectBlock}
 ${intBlock}
 ${meetingBlock}
 ${scrapedContext}
+${figmaContext}
 
 Answer questions concisely and specifically using this context when relevant.
 
 When the user shares a URL (tweet, article, etc.), use the SCRAPED WEB CONTENT above to give a precise explanation of what the link contains. Reference specific content from the scraped text.
+
+FIGMA DESIGN ANALYSIS: When images from Figma are attached to this conversation, analyze them visually. Describe layout, colors, typography, hierarchy, and UX patterns you observe. When Figma design metadata (colors, typography) is provided, cross-reference it with the visual. If asked to compare or critique, be specific about what works and what could improve from a CRO perspective.
 
 You are ALSO a knowledgeable general assistant. If the user asks about industry news, AI tools, tweets, tech updates, marketing trends, or anything outside the internal data — answer using your general knowledge. Don't refuse or say "I only have access to internal data." Be helpful on ANY topic.
 
@@ -275,6 +278,22 @@ CRITICAL DATA ACCURACY RULES — YOU MUST FOLLOW THESE:
 
 When asked about calls or meetings, reference the full transcript text to give precise, detailed answers — quote what was actually said when relevant. Keep answers to 2-3 sentences unless more detail is requested.`;
 
+    // Build user message — multimodal if we have Figma images
+    const useVisionModel = figmaImageUrls.length > 0;
+    let userMessage: any = query;
+
+    if (useVisionModel) {
+      // Build multimodal content array with text + images
+      const contentParts: any[] = [{ type: "text", text: query }];
+      for (const imgUrl of figmaImageUrls) {
+        contentParts.push({
+          type: "image_url",
+          image_url: { url: imgUrl },
+        });
+      }
+      userMessage = contentParts;
+    }
+
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
@@ -284,10 +303,10 @@ When asked about calls or meetings, reference the full transcript text to give p
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: useVisionModel ? "google/gemini-2.5-pro" : "google/gemini-3-flash-preview",
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: query },
+            { role: "user", content: userMessage },
           ],
           stream: true,
         }),
