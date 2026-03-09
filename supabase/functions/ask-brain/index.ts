@@ -67,6 +67,72 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const sb = createClient(supabaseUrl, supabaseKey);
 
+    // ── Figma vision: detect design-related queries and fetch frame exports ──
+    const queryLower = query.toLowerCase();
+    const figmaKeywords = ["figma", "design", "frame", "mockup", "layout", "hero section",
+      "screenshot", "visual", "look", "ui", "ux", "color", "typography", "brand",
+      "show me the design", "what does it look like", "analyze the design"];
+    const isFigmaQuery = figmaKeywords.some(kw => queryLower.includes(kw));
+
+    let figmaImageUrls: string[] = [];
+    let figmaContext = "";
+
+    if (isFigmaQuery) {
+      // Try to find a client name in the query by matching against known clients
+      const { data: allClients } = await sb.from("clients").select("name");
+      const clientNames = (allClients ?? []).map((c: any) => c.name);
+      const matchedClient = clientNames.find((name: string) =>
+        queryLower.includes(name.toLowerCase())
+      );
+
+      // Fetch figma files with design_data — filter by client if detected
+      let figmaQuery = sb.from("figma_files")
+        .select("name, client_name, design_type, design_data, thumbnail_url, figma_url")
+        .eq("enabled", true);
+
+      if (matchedClient) {
+        figmaQuery = figmaQuery.ilike("client_name", `%${matchedClient}%`);
+      }
+
+      const { data: figmaFiles } = await figmaQuery
+        .order("last_modified", { ascending: false })
+        .limit(5);
+
+      if (figmaFiles && figmaFiles.length > 0) {
+        const fileDescriptions: string[] = [];
+
+        for (const file of figmaFiles) {
+          const dd = file.design_data as any;
+          const frameExports = dd?.frame_exports ?? {};
+          const exportUrls = Object.values(frameExports) as string[];
+
+          // Collect image URLs for multimodal input (max 6 total)
+          for (const url of exportUrls) {
+            if (figmaImageUrls.length < 6 && url) {
+              figmaImageUrls.push(url);
+            }
+          }
+
+          // Build text context about the file
+          const colors = (dd?.color_palette ?? []).map((c: any) => `${c.name}: ${c.hex}`).join(", ");
+          const fonts = (dd?.typography ?? []).map((t: any) => `${t.name}: ${t.fontFamily} ${t.fontWeight} ${t.fontSize}px`).join(", ");
+          const pages = (dd?.pages ?? []).map((p: any) => `${p.name} (${p.frames?.length ?? 0} frames)`).join(", ");
+
+          fileDescriptions.push(
+            `--- FIGMA FILE: "${file.name}" (${file.design_type}) ---\n` +
+            `Client: ${file.client_name || "Unknown"}\n` +
+            `URL: ${file.figma_url || "N/A"}\n` +
+            (pages ? `Pages: ${pages}\n` : "") +
+            (colors ? `Colors: ${colors}\n` : "") +
+            (fonts ? `Typography: ${fonts}\n` : "") +
+            `Frame exports: ${exportUrls.length} images attached for visual analysis`
+          );
+        }
+
+        figmaContext = `\n\nFIGMA DESIGN DATA (${figmaFiles.length} files found${matchedClient ? ` for "${matchedClient}"` : ""}):\n${fileDescriptions.join("\n\n")}`;
+      }
+    }
+
     // Detect if the query is about a specific call/meeting to decide how much transcript to pull
     const queryLower = query.toLowerCase();
     const isCallQuery = queryLower.includes("call") || queryLower.includes("meeting") ||
