@@ -209,6 +209,55 @@ serve(async (req) => {
       }
     }
 
+    // ── Trigger Figma automation (fire-and-forget) ────────────────────────────
+    // Only fires if FIGMA_AUTOMATION_URL is configured and sections were detected.
+    const figmaAutomationUrl = Deno.env.get("FIGMA_AUTOMATION_URL");
+    if (figmaAutomationUrl && allSections.length > 0) {
+      try {
+        // Look up the setup_run for tier + shop_url
+        let tier = "Pro";
+        let shopUrl = "";
+        if (setup_run_id) {
+          const { data: run } = await sb
+            .from("setup_runs")
+            .select("tier, shop_url")
+            .eq("id", setup_run_id)
+            .single();
+          if (run) {
+            tier = run.tier.charAt(0).toUpperCase() + run.tier.slice(1); // "pro" → "Pro"
+            shopUrl = run.shop_url ?? "";
+          }
+        }
+
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const callbackUrl = `${supabaseUrl}/functions/v1/figma-setup-callback`;
+        const automationSecret = Deno.env.get("FIGMA_AUTOMATION_SECRET") ?? "";
+
+        // Fire-and-forget — don't await, don't block the response
+        fetch(`${figmaAutomationUrl}/trigger`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(automationSecret ? { "x-webhook-secret": automationSecret } : {}),
+          },
+          body: JSON.stringify({
+            clientName: client_name,
+            tier,
+            shopUrl,
+            supabaseRunId: setup_run_id ?? null,
+            callbackUrl,
+          }),
+        }).catch((err) =>
+          console.warn("[detect-sections] Figma automation trigger failed (non-fatal):", err)
+        );
+
+        console.log(`[detect-sections] Figma automation triggered for ${client_name} (${tier})`);
+      } catch (triggerErr) {
+        // Non-fatal — don't fail the whole detect-sections call
+        console.warn("[detect-sections] Could not trigger Figma automation:", triggerErr);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -216,6 +265,7 @@ serve(async (req) => {
         sections_detected: allSections.length,
         sections: allSections,
         screenshot_urls: screenshotUrls,
+        figma_automation_triggered: !!(figmaAutomationUrl && allSections.length > 0),
         errors: errors.length > 0 ? errors : undefined,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -1,0 +1,25 @@
+{
+  "name": "figma-automation",
+  "version": "1.0.0",
+  "description": "Playwright-based Figma automation for Oddit report setup",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test:auth": "node src/scripts/test-auth.js",
+    "test:duplicate": "node src/scripts/test-duplicate.js"
+  },
+  "dependencies": {
+    "playwright": "^1.42.0",
+    "express": "^4.18.3",
+    "dotenv": "^16.4.5",
+    "winston": "^3.12.0",
+    "p-queue": "^8.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
