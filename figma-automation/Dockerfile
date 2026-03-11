@@ -6,9 +6,6 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install
 
-# Install Playwright browsers
-RUN npx playwright install chromium --with-deps
-
 COPY src/ ./src/
 
 # Data dir for cookies + debug screenshots
