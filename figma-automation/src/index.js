@@ -9,7 +9,7 @@
 require('dotenv').config();
 
 const express = require('express');
-const { default: PQueue } = require('p-queue');
+const PQueue = require('p-queue');
 const { runFigmaSetup } = require('./figma-runner');
 const { clearCookies } = require('./figma-auth');
 const logger = require('./logger');
