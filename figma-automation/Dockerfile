@@ -42,14 +42,14 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY package.json ./
+COPY figma-automation/package.json ./
 RUN npm install
 
 # Use system Chromium instead of downloading via Playwright
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
-COPY src/ ./src/
+COPY figma-automation/src/ ./src/
 
 RUN mkdir -p data
 
