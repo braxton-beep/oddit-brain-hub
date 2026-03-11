@@ -5,16 +5,13 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "test:auth": "node src/scripts/test-auth.js",
-    "test:duplicate": "node src/scripts/test-duplicate.js"
+    "dev": "nodemon src/index.js"
   },
   "dependencies": {
     "playwright": "^1.42.0",
     "express": "^4.18.3",
     "dotenv": "^16.4.5",
-    "winston": "^3.12.0",
-    "p-queue": "^6.6.2"
+    "winston": "^3.12.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

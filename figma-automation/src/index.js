@@ -9,7 +9,6 @@
 require('dotenv').config();
 
 const express = require('express');
-const PQueue = require('p-queue');
 const { runFigmaSetup } = require('./figma-runner');
 const { clearCookies } = require('./figma-auth');
 const logger = require('./logger');
@@ -20,8 +19,16 @@ app.use(express.json());
 const PORT = process.env.PORT || 3001;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
-// Serialize jobs — only one Figma browser session at a time
-const queue = new PQueue({ concurrency: 1 });
+// ── Simple serial job queue (no deps) ────────────────────────────────────────
+let _queueChain = Promise.resolve();
+let _queueSize = 0;
+
+function enqueue(fn) {
+  _queueSize++;
+  _queueChain = _queueChain.then(() => {
+    return fn().finally(() => { _queueSize--; });
+  });
+}
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
 
@@ -37,15 +44,12 @@ function requireSecret(req, res, next) {
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', queue: queue.size, pending: queue.pending });
+  res.json({ status: 'ok', queued: _queueSize });
 });
 
 /**
  * POST /trigger
  * Body: { clientName, tier, shopUrl, supabaseRunId? }
- *
- * Called by Supabase edge function after section detection completes (step 3).
- * Runs asynchronously — returns 202 immediately, then POSTs result to Supabase.
  */
 app.post('/trigger', requireSecret, async (req, res) => {
   const { clientName, tier, shopUrl, supabaseRunId, callbackUrl } = req.body;
@@ -58,32 +62,21 @@ app.post('/trigger', requireSecret, async (req, res) => {
     return res.status(400).json({ error: 'tier must be "Pro" or "Essential"' });
   }
 
-  logger.info('Job queued', { clientName, tier, queueSize: queue.size });
-  res.status(202).json({ status: 'queued', queueSize: queue.size });
+  logger.info('Job queued', { clientName, tier, queueSize: _queueSize });
+  res.status(202).json({ status: 'queued', queueSize: _queueSize });
 
-  // Run async
-  queue.add(async () => {
+  enqueue(async () => {
     logger.info('Job starting', { clientName, tier });
     try {
       const result = await runFigmaSetup({ clientName, tier, shopUrl });
       logger.info('Job complete', result);
-
-      // Report back to Supabase / caller if a callback URL was provided
       if (callbackUrl) {
-        await notifyCallback(callbackUrl, {
-          status: 'success',
-          supabaseRunId,
-          ...result
-        });
+        await notifyCallback(callbackUrl, { status: 'success', supabaseRunId, ...result });
       }
     } catch (err) {
       logger.error('Job failed', { clientName, tier, error: err.message });
       if (callbackUrl) {
-        await notifyCallback(callbackUrl, {
-          status: 'error',
-          supabaseRunId,
-          error: err.message
-        });
+        await notifyCallback(callbackUrl, { status: 'error', supabaseRunId, error: err.message });
       }
     }
   });
@@ -91,7 +84,6 @@ app.post('/trigger', requireSecret, async (req, res) => {
 
 /**
  * POST /clear-cookies
- * Forces re-authentication on next job (useful when Figma session expires)
  */
 app.post('/clear-cookies', requireSecret, (req, res) => {
   clearCookies();
@@ -102,7 +94,7 @@ app.post('/clear-cookies', requireSecret, (req, res) => {
 
 async function notifyCallback(url, payload) {
   try {
-    const res = await fetch(url, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -110,7 +102,7 @@ async function notifyCallback(url, payload) {
       },
       body: JSON.stringify(payload)
     });
-    logger.info('Callback delivered', { url, status: res.status });
+    logger.info('Callback delivered', { url, status: response.status });
   } catch (err) {
     logger.error('Callback failed', { url, error: err.message });
   }
