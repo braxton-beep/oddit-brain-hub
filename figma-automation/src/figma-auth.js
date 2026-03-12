@@ -93,7 +93,7 @@ async function login(context, page) {
   }
 
   logger.info('Logging in to Figma', { email });
-  await page.goto('https://www.figma.com/login', { waitUntil: 'networkidle' });
+  await page.goto('https://www.figma.com/login', { waitUntil: 'domcontentloaded' });
 
   // Fill email
   await page.locator('input[name="email"], input[type="email"]').fill(email);

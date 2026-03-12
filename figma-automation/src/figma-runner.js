@@ -87,7 +87,7 @@ async function runFigmaSetup({ clientName, tier, shopUrl }) {
     // ── Step 2: Open template + duplicate ──────────────────────────────────
     const tmplUrl = templateUrl(tier);
     logger.info('Navigating to template', { url: tmplUrl });
-    await page.goto(tmplUrl, { waitUntil: 'networkidle', timeout: 60000 });
+    await page.goto(tmplUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Figma may show a loading screen — wait for the canvas toolbar
     await waitFor(page, '[data-testid="toolbar"], [class*="toolbar"]', 'Figma toolbar');
@@ -103,7 +103,7 @@ async function runFigmaSetup({ clientName, tier, shopUrl }) {
 
     // ── Step 3: Find duplicate in Drafts + rename ───────────────────────────
     logger.info('Navigating to Drafts to find duplicate');
-    await page.goto('https://www.figma.com/files/drafts', { waitUntil: 'networkidle' });
+    await page.goto('https://www.figma.com/files/drafts', { waitUntil: 'domcontentloaded' });
 
     // Most-recently-modified file is the duplicate — it should be the first card
     const firstFile = page.locator('[class*="file_card"], [data-testid="file-card"]').first();
