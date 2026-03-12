@@ -90,7 +90,13 @@ async function runFigmaSetup({ clientName, tier, shopUrl }) {
     await page.goto(tmplUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Figma may show a loading screen — wait for the canvas toolbar
-    await waitFor(page, '[data-testid="toolbar"], [class*="toolbar"]', 'Figma toolbar');
+    // Try multiple toolbar selectors; Figma changes class names frequently
+    await page.waitForFunction(
+      () => document.querySelector('[data-testid="toolbar"], [class*="toolbar"], [class*="Toolbar"]') !== null,
+      { timeout: 60000 }
+    );
+    // Extra wait for Figma JS to fully initialize after DOM is ready
+    await page.waitForTimeout(5000);
 
     logger.info('Duplicating template to Drafts');
     await openMainMenu(page);
@@ -229,14 +235,35 @@ async function runFigmaSetup({ clientName, tier, shopUrl }) {
 // ── Utility: open Figma's main hamburger menu ────────────────────────────────
 
 async function openMainMenu(page) {
-  // Figma's main menu — the "F" logo / hamburger in the top-left
-  const menuBtn = page.locator(
-    '[data-testid="main-menu-btn"], [aria-label="Main menu"], [class*="main_menu"] button'
-  ).first();
-  await menuBtn.waitFor({ state: 'visible', timeout: 10000 });
-  await menuBtn.click();
-  // Brief pause for sub-menu to render
-  await page.waitForTimeout(500);
+  // Figma's main menu — try multiple selectors to handle UI changes
+  // Give the canvas extra time to fully render before looking for the button
+  await page.waitForTimeout(3000);
+
+  const selectors = [
+    '[data-testid="main-menu-btn"]',
+    '[aria-label="Main menu"]',
+    '[class*="main_menu"] button',
+    '[class*="toolbar"] button:first-child',
+    'button[class*="figma_logo"]',
+    // Figma 2024+ — the logo button in top-left of toolbar
+    'div[class*="leftToolbar"] button:first-child',
+    'div[class*="left_toolbar"] button:first-child',
+    'div[class*="toolbarView"] button:first-child',
+  ];
+
+  for (const selector of selectors) {
+    const el = page.locator(selector).first();
+    const visible = await el.isVisible({ timeout: 2000 }).catch(() => false);
+    if (visible) {
+      await el.click();
+      await page.waitForTimeout(500);
+      return;
+    }
+  }
+
+  // Last resort: take a screenshot to debug what's on screen
+  await page.screenshot({ path: `./data/menu-debug-${Date.now()}.png` }).catch(() => {});
+  throw new Error('Could not find Figma main menu button — UI may have changed. Check debug screenshot.');
 }
 
 module.exports = { runFigmaSetup };
