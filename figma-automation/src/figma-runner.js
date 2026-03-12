@@ -97,17 +97,32 @@ async function runFigmaSetup({ clientName, tier, shopUrl }) {
     // ── Step 3: Find the template file card and duplicate it ───────────────
     logger.info('Looking for template file card in search results', { templateFileId });
 
-    // Find by href containing the template file ID, or by name
-    let templateCard = page.locator(`a[href*="${templateFileId}"]`).first();
-    let cardVisible = await templateCard.isVisible({ timeout: 5000 }).catch(() => false);
+    // Use text content to find the card — most reliable across Figma UI changes
+    // The template is named "Customer Name // Oddit Report Design Template"
+    const TEMPLATE_NAME = 'Oddit Report Design Template';
 
-    if (!cardVisible) {
-      // Fallback: find by name text
-      templateCard = page.locator('[class*="file_card"]:has-text("Oddit Report Design Template"), [data-testid="file-card"]:has-text("Oddit Report Design Template")').first();
-      cardVisible = await templateCard.isVisible({ timeout: 5000 }).catch(() => false);
+    // Try several approaches to find a right-clickable container for the file card
+    const cardSelectors = [
+      `a[href*="${templateFileId}"]`,
+      `[href*="${templateFileId}"]`,
+      `figure:has-text("${TEMPLATE_NAME}")`,
+      `article:has-text("${TEMPLATE_NAME}")`,
+      `li:has-text("${TEMPLATE_NAME}")`,
+      `div:has-text("${TEMPLATE_NAME}"):not(:has(div:has-text("${TEMPLATE_NAME}")))`, // leaf container
+    ];
+
+    let templateCard = null;
+    for (const sel of cardSelectors) {
+      const el = page.locator(sel).first();
+      const vis = await el.isVisible({ timeout: 2000 }).catch(() => false);
+      if (vis) {
+        templateCard = el;
+        logger.info('Found template card', { selector: sel });
+        break;
+      }
     }
 
-    if (!cardVisible) {
+    if (!templateCard) {
       await page.screenshot({ path: `./data/template-not-found-${Date.now()}.png` }).catch(() => {});
       throw new Error(`Template file card not found in search results. Check debug screenshot.`);
     }
