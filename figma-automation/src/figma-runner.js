@@ -79,6 +79,19 @@ async function runFigmaSetup({ clientName, tier, shopUrl }) {
     await searchBar.click();
     await searchBar.fill('Oddit Report Design Template');
     await page.waitForTimeout(2000);
+
+    // Click "See all results" to get to full results page with right-clickable file cards
+    const seeAllBtn = page.locator('a:has-text("See all results"), button:has-text("See all results")').first();
+    const seeAllVisible = await seeAllBtn.isVisible({ timeout: 3000 }).catch(() => false);
+    if (seeAllVisible) {
+      await seeAllBtn.click();
+      await page.waitForTimeout(2000);
+    } else {
+      // Press Enter to submit the search
+      await searchBar.press('Enter');
+      await page.waitForTimeout(2000);
+    }
+
     await page.screenshot({ path: `./data/search-results-${Date.now()}.png` }).catch(() => {});
 
     // ── Step 3: Find the template file card and duplicate it ───────────────
