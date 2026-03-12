@@ -62,57 +62,47 @@ async function runFigmaSetup({ clientName, tier, shopUrl }) {
     // ── Step 1: Authenticate ────────────────────────────────────────────────
     await ensureAuthenticated(context, page);
 
-    // ── Step 2: Navigate to the project containing the template ────────────
+    // ── Step 2: Search for the template file ───────────────────────────────
     const projectId = PROJECT_IDS[tier];
     const templateFileId = TEMPLATES[tier];
 
-    logger.info('Navigating to project files page', { projectId });
-    await page.goto(`https://www.figma.com/files/project/${projectId}`, {
+    logger.info('Searching for template file', { templateFileId });
+    await page.goto('https://www.figma.com/files/recents-and-sharing', {
       waitUntil: 'domcontentloaded',
       timeout: 30000,
     });
+    await page.waitForTimeout(2000);
 
-    // Wait for file cards to render
-    await page.waitForTimeout(3000);
-
-    // Take a debug screenshot to see what's on the page
-    await page.screenshot({ path: `./data/project-page-${Date.now()}.png` }).catch(() => {});
+    // Use the search bar to find the template
+    const searchBar = page.locator('[placeholder*="Search"], input[type="search"], [class*="search"] input').first();
+    await searchBar.waitFor({ state: 'visible', timeout: 10000 });
+    await searchBar.click();
+    await searchBar.fill('Oddit Report Design Template');
+    await page.waitForTimeout(2000);
+    await page.screenshot({ path: `./data/search-results-${Date.now()}.png` }).catch(() => {});
 
     // ── Step 3: Find the template file card and duplicate it ───────────────
-    logger.info('Looking for template file card', { templateFileId });
+    logger.info('Looking for template file card in search results', { templateFileId });
 
-    // Try to find the file card by href containing the template file ID
-    const templateCard = page.locator(`a[href*="${templateFileId}"]`).first();
-    const cardVisible = await templateCard.isVisible({ timeout: 10000 }).catch(() => false);
+    // Find by href containing the template file ID, or by name
+    let templateCard = page.locator(`a[href*="${templateFileId}"]`).first();
+    let cardVisible = await templateCard.isVisible({ timeout: 5000 }).catch(() => false);
 
     if (!cardVisible) {
-      // Take screenshot and throw helpful error
+      // Fallback: find by name text
+      templateCard = page.locator('[class*="file_card"]:has-text("Oddit Report Design Template"), [data-testid="file-card"]:has-text("Oddit Report Design Template")').first();
+      cardVisible = await templateCard.isVisible({ timeout: 5000 }).catch(() => false);
+    }
+
+    if (!cardVisible) {
       await page.screenshot({ path: `./data/template-not-found-${Date.now()}.png` }).catch(() => {});
-      throw new Error(`Template file card not found in project ${projectId}. Check debug screenshot.`);
+      throw new Error(`Template file card not found in search results. Check debug screenshot.`);
     }
 
-    // Hover over the card to reveal the options menu
+    // Right-click the card to get context menu
     await templateCard.hover();
-    await page.waitForTimeout(500);
-
-    // Click the "..." options button on the file card
-    const optionsBtn = page.locator(`a[href*="${templateFileId}"] ~ * [aria-label*="more" i], a[href*="${templateFileId}"] ~ * button`).first();
-    const optionsBtnAlt = page.locator('[class*="file_card"]:has(a[href*="' + templateFileId + '"]) button').first();
-
-    let menuOpened = false;
-    for (const btn of [optionsBtn, optionsBtnAlt]) {
-      const visible = await btn.isVisible({ timeout: 2000 }).catch(() => false);
-      if (visible) {
-        await btn.click();
-        menuOpened = true;
-        break;
-      }
-    }
-
-    if (!menuOpened) {
-      // Try right-clicking the card directly
-      await templateCard.click({ button: 'right' });
-    }
+    await page.waitForTimeout(300);
+    await templateCard.click({ button: 'right' });
 
     await page.waitForTimeout(500);
     await page.screenshot({ path: `./data/after-menu-${Date.now()}.png` }).catch(() => {});
