@@ -8,6 +8,8 @@
 
 require('dotenv').config();
 
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const { runFigmaSetup } = require('./figma-runner');
 const { clearCookies } = require('./figma-auth');
@@ -80,6 +82,20 @@ app.post('/trigger', requireSecret, async (req, res) => {
       }
     }
   });
+});
+
+/**
+ * GET /latest-screenshot — serve the most recent debug screenshot
+ */
+app.get('/latest-screenshot', requireSecret, (req, res) => {
+  const dataDir = path.resolve('./data');
+  if (!fs.existsSync(dataDir)) return res.status(404).json({ error: 'No data directory' });
+  const files = fs.readdirSync(dataDir)
+    .filter(f => f.endsWith('.png'))
+    .map(f => ({ name: f, time: fs.statSync(path.join(dataDir, f)).mtime.getTime() }))
+    .sort((a, b) => b.time - a.time);
+  if (!files.length) return res.status(404).json({ error: 'No screenshots found' });
+  res.sendFile(path.join(dataDir, files[0].name));
 });
 
 /**
