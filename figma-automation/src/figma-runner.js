@@ -97,40 +97,40 @@ async function runFigmaSetup({ clientName, tier, shopUrl }) {
     // ── Step 3: Find the template file card and duplicate it ───────────────
     logger.info('Looking for template file card in search results', { templateFileId });
 
-    // Use text content to find the card — most reliable across Figma UI changes
-    // The template is named "Customer Name // Oddit Report Design Template"
     const TEMPLATE_NAME = 'Oddit Report Design Template';
 
-    // Try several approaches to find a right-clickable container for the file card
-    const cardSelectors = [
-      `a[href*="${templateFileId}"]`,
-      `[href*="${templateFileId}"]`,
-      `figure:has-text("${TEMPLATE_NAME}")`,
-      `article:has-text("${TEMPLATE_NAME}")`,
-      `li:has-text("${TEMPLATE_NAME}")`,
-      `div:has-text("${TEMPLATE_NAME}"):not(:has(div:has-text("${TEMPLATE_NAME}")))`, // leaf container
-    ];
-
-    let templateCard = null;
-    for (const sel of cardSelectors) {
-      const el = page.locator(sel).first();
-      const vis = await el.isVisible({ timeout: 2000 }).catch(() => false);
-      if (vis) {
-        templateCard = el;
-        logger.info('Found template card', { selector: sel });
-        break;
+    // Use JS evaluation to find the element containing the template name
+    // and get its position — bypasses all selector/class-name issues
+    const cardBounds = await page.evaluate((name) => {
+      // Walk all elements, find one whose textContent includes the name
+      const all = document.querySelectorAll('*');
+      for (const el of all) {
+        if (
+          el.childElementCount === 0 || // leaf node
+          (el.childElementCount <= 3 && el.textContent.includes(name))
+        ) {
+          if (el.textContent.trim().includes(name)) {
+            const rect = el.getBoundingClientRect();
+            if (rect.width > 50 && rect.height > 10) {
+              return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, tag: el.tagName, text: el.textContent.trim().slice(0, 80) };
+            }
+          }
+        }
       }
-    }
+      return null;
+    }, TEMPLATE_NAME);
 
-    if (!templateCard) {
+    logger.info('Card bounds result', { cardBounds });
+
+    if (!cardBounds) {
       await page.screenshot({ path: `./data/template-not-found-${Date.now()}.png` }).catch(() => {});
-      throw new Error(`Template file card not found in search results. Check debug screenshot.`);
+      throw new Error(`Template file card not found via JS evaluation. Check debug screenshot.`);
     }
 
-    // Right-click the card to get context menu
-    await templateCard.hover();
+    // Right-click at the center of the card
+    await page.mouse.move(cardBounds.x, cardBounds.y);
     await page.waitForTimeout(300);
-    await templateCard.click({ button: 'right' });
+    await page.mouse.click(cardBounds.x, cardBounds.y, { button: 'right' });
 
     await page.waitForTimeout(500);
     await page.screenshot({ path: `./data/after-menu-${Date.now()}.png` }).catch(() => {});
