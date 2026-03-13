@@ -101,24 +101,32 @@ async function runFigmaSetup({ clientName, tier, shopUrl }) {
 
     // Use JS evaluation to find the element containing the template name
     // and get its position — bypasses all selector/class-name issues
-    const cardBounds = await page.evaluate((name) => {
-      // Walk all elements, find one whose textContent includes the name
-      const all = document.querySelectorAll('*');
+    const cardBounds = await page.evaluate(({ name, fileId }) => {
+      // First try: find by href containing the file ID (most precise)
+      const byHref = document.querySelector(`a[href*="${fileId}"]`);
+      if (byHref) {
+        const rect = byHref.getBoundingClientRect();
+        if (rect.width > 0) return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, method: 'href' };
+      }
+
+      // Second try: find the element whose DIRECT text (not descendants) contains the full name
+      const FULL_NAME = 'Customer Name // Oddit Report Design Template';
+      const all = Array.from(document.querySelectorAll('*'));
       for (const el of all) {
-        if (
-          el.childElementCount === 0 || // leaf node
-          (el.childElementCount <= 3 && el.textContent.includes(name))
-        ) {
-          if (el.textContent.trim().includes(name)) {
-            const rect = el.getBoundingClientRect();
-            if (rect.width > 50 && rect.height > 10) {
-              return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, tag: el.tagName, text: el.textContent.trim().slice(0, 80) };
-            }
+        // Only look at elements whose own text (not children) matches
+        const ownText = Array.from(el.childNodes)
+          .filter(n => n.nodeType === 3)
+          .map(n => n.textContent)
+          .join('').trim();
+        if (ownText.includes(name) || ownText.includes(FULL_NAME)) {
+          const rect = el.getBoundingClientRect();
+          if (rect.width > 50 && rect.height > 5) {
+            return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, method: 'ownText', text: ownText.slice(0, 80) };
           }
         }
       }
       return null;
-    }, TEMPLATE_NAME);
+    }, { name: TEMPLATE_NAME, fileId: templateFileId });
 
     logger.info('Card bounds result', { cardBounds });
 
