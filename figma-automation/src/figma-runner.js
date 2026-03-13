@@ -101,32 +101,41 @@ async function runFigmaSetup({ clientName, tier, shopUrl }) {
 
     // Use JS evaluation to find the element containing the template name
     // and get its position — bypasses all selector/class-name issues
-    const cardBounds = await page.evaluate(({ name, fileId }) => {
-      // First try: find by href containing the file ID (most precise)
-      const byHref = document.querySelector(`a[href*="${fileId}"]`);
-      if (byHref) {
-        const rect = byHref.getBoundingClientRect();
-        if (rect.width > 0) return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, method: 'href' };
+    // Dump all hrefs on the page for debugging
+    const allHrefs = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('a[href]')).map(a => a.getAttribute('href')).filter(h => h && h.length > 5).slice(0, 30)
+    );
+    logger.info('Page hrefs sample', { hrefs: allHrefs });
+
+    const cardBounds = await page.evaluate(({ fileId }) => {
+      // Try every anchor tag for one containing the file ID
+      const anchors = Array.from(document.querySelectorAll('a[href]'));
+      for (const a of anchors) {
+        if (a.href.includes(fileId) || (a.getAttribute('href') || '').includes(fileId)) {
+          const rect = a.getBoundingClientRect();
+          if (rect.width > 10) return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, method: 'href', href: a.href };
+        }
       }
 
-      // Second try: find the element whose DIRECT text (not descendants) contains the full name
-      const FULL_NAME = 'Customer Name // Oddit Report Design Template';
-      const all = Array.from(document.querySelectorAll('*'));
-      for (const el of all) {
-        // Only look at elements whose own text (not children) matches
+      // Fallback: find a reasonably-sized element whose visible text contains the template name
+      const FULL_NAME = 'Oddit Report Design Template';
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+      let node;
+      while ((node = walker.nextNode())) {
+        const el = node;
+        const rect = el.getBoundingClientRect();
+        // Must look like a file card (visible, reasonable size, not huge)
+        if (rect.width < 50 || rect.width > 500 || rect.height < 20 || rect.height > 400) continue;
         const ownText = Array.from(el.childNodes)
           .filter(n => n.nodeType === 3)
-          .map(n => n.textContent)
-          .join('').trim();
-        if (ownText.includes(name) || ownText.includes(FULL_NAME)) {
-          const rect = el.getBoundingClientRect();
-          if (rect.width > 50 && rect.height > 5) {
-            return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, method: 'ownText', text: ownText.slice(0, 80) };
-          }
+          .map(n => n.textContent.trim())
+          .join(' ').trim();
+        if (ownText.includes(FULL_NAME)) {
+          return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, method: 'ownText', text: ownText.slice(0, 80), w: rect.width, h: rect.height };
         }
       }
       return null;
-    }, { name: TEMPLATE_NAME, fileId: templateFileId });
+    }, { fileId: templateFileId });
 
     logger.info('Card bounds result', { cardBounds });
 
@@ -143,8 +152,9 @@ async function runFigmaSetup({ clientName, tier, shopUrl }) {
     await page.waitForTimeout(500);
     await page.screenshot({ path: `./data/after-menu-${Date.now()}.png` }).catch(() => {});
 
-    // Click Duplicate in the context menu
-    const duplicateOption = page.locator('li:has-text("Duplicate"), [role="menuitem"]:has-text("Duplicate")').first();
+    // Click "Duplicate to drafts" in the context menu
+    await page.screenshot({ path: `./data/after-rightclick-${Date.now()}.png` }).catch(() => {});
+    const duplicateOption = page.locator('li:has-text("Duplicate to drafts"), [role="menuitem"]:has-text("Duplicate to drafts"), li:has-text("Duplicate"), [role="menuitem"]:has-text("Duplicate")').first();
     await duplicateOption.waitFor({ state: 'visible', timeout: 5000 });
     await duplicateOption.click();
     logger.info('Duplicate clicked');
