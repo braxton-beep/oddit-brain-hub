@@ -79,25 +79,49 @@ serve(async (req) => {
     let screenshotUrl = "";
     if (screenshotBase64) {
       try {
-        // Remove data URL prefix if present
-        const base64Data = screenshotBase64.replace(/^data:image\/\w+;base64,/, "");
-        const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-
-        const { error: uploadError } = await supabase.storage
-          .from("audit-assets")
-          .upload(`screenshots/${auditId}.png`, binaryData, {
-            contentType: "image/png",
-            upsert: true,
-          });
-
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage
+        // Firecrawl may return a URL or base64 data
+        if (screenshotBase64.startsWith("http://") || screenshotBase64.startsWith("https://")) {
+          // It's a URL — download it then upload to storage
+          const imgResp = await fetch(screenshotBase64);
+          if (imgResp.ok) {
+            const imgBuffer = new Uint8Array(await imgResp.arrayBuffer());
+            const { error: uploadError } = await supabase.storage
+              .from("audit-assets")
+              .upload(`screenshots/${auditId}.png`, imgBuffer, {
+                contentType: "image/png",
+                upsert: true,
+              });
+            if (!uploadError) {
+              const { data: urlData } = supabase.storage
+                .from("audit-assets")
+                .getPublicUrl(`screenshots/${auditId}.png`);
+              screenshotUrl = urlData.publicUrl;
+            }
+          } else {
+            // Fall back to using the URL directly
+            screenshotUrl = screenshotBase64;
+          }
+        } else {
+          // Base64 data — decode and upload
+          const base64Data = screenshotBase64.replace(/^data:image\/\w+;base64,/, "");
+          const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+          const { error: uploadError } = await supabase.storage
             .from("audit-assets")
-            .getPublicUrl(`screenshots/${auditId}.png`);
-          screenshotUrl = urlData.publicUrl;
+            .upload(`screenshots/${auditId}.png`, binaryData, {
+              contentType: "image/png",
+              upsert: true,
+            });
+          if (!uploadError) {
+            const { data: urlData } = supabase.storage
+              .from("audit-assets")
+              .getPublicUrl(`screenshots/${auditId}.png`);
+            screenshotUrl = urlData.publicUrl;
+          }
         }
       } catch (e) {
         console.error("Screenshot upload error:", e);
+        // If everything fails but we have a URL, use it directly
+        if (screenshotBase64.startsWith("http")) screenshotUrl = screenshotBase64;
       }
     }
 
