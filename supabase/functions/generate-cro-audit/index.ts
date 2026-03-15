@@ -269,7 +269,7 @@ For each of the 10 recommendations, think through:
           },
           {
             role: "user",
-            content: `Analyze this DTC/e-commerce website and produce 10 specific, copy-ready CRO recommendations. Remember: write actual headlines, reference real brands, specify mobile behavior, and make every mockup_prompt a complete design brief.\n\nURL: ${formattedUrl}\n\nPage content (use this to reference ACTUAL text, images, and layout on the site — be specific):\n${truncatedMarkdown}${figmaContext}`,
+            content: `Analyze this DTC/e-commerce website and produce 10 specific, copy-ready CRO recommendations. Remember: write actual headlines, reference real brands, specify mobile behavior, and make every mockup_prompt a complete design brief.\n\nURL: ${formattedUrl}\n\nPage content (use this to reference ACTUAL text, images, and layout on the site — be specific):\n${truncatedMarkdown}${figmaContext}${crossClientContext}${starredContext}`,
           },
         ],
         tools: [
