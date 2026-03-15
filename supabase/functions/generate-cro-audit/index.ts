@@ -488,12 +488,21 @@ For each of the 10 recommendations, think through:
           }
 
           const data = await resp.json();
-          const base64 = data.data?.screenshot || data.screenshot || "";
-          if (!base64) return { recId: rec.id, url: null };
+          const screenshotData = data.data?.screenshot || data.screenshot || "";
+          if (!screenshotData) return { recId: rec.id, url: null };
 
-          const cleanBase64 = base64.replace(/^data:image\/\w+;base64,/, "");
-          const binary = Uint8Array.from(atob(cleanBase64), (c) => c.charCodeAt(0));
           const filePath = `screenshots/${auditId}/rec-${rec.id}.png`;
+          let binary: Uint8Array;
+
+          if (screenshotData.startsWith("http://") || screenshotData.startsWith("https://")) {
+            // It's a URL — download then upload
+            const imgResp = await fetch(screenshotData);
+            if (!imgResp.ok) return { recId: rec.id, url: screenshotData };
+            binary = new Uint8Array(await imgResp.arrayBuffer());
+          } else {
+            const cleanBase64 = screenshotData.replace(/^data:image\/\w+;base64,/, "");
+            binary = Uint8Array.from(atob(cleanBase64), (c) => c.charCodeAt(0));
+          }
 
           const { error: upErr } = await supabase.storage
             .from("audit-assets")
