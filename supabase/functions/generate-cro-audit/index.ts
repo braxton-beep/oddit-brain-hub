@@ -213,9 +213,23 @@ serve(async (req) => {
       }
     }
 
-    // Step 2: Analyze with Gemini
-    console.log("Analyzing with AI...");
+    // Step 2: Analyze with Gemini (multimodal when Figma images available)
+    console.log(`Analyzing with AI... (${figmaImageUrls.length} Figma frame images for visual context)`);
     const truncatedMarkdown = markdown.slice(0, 15000); // Keep within context limits
+    const useVisionModel = figmaImageUrls.length > 0;
+
+    // Build user message — multimodal if we have Figma frame exports
+    const userText = `Analyze this DTC/e-commerce website and produce 10 specific, copy-ready CRO recommendations. Remember: write actual headlines, reference real brands, specify mobile behavior, and make every mockup_prompt a complete design brief.\n\nURL: ${formattedUrl}\n\nPage content (use this to reference ACTUAL text, images, and layout on the site — be specific):\n${truncatedMarkdown}${figmaContext}${crossClientContext}${starredContext}`;
+
+    let userContent: any = userText;
+    if (useVisionModel) {
+      const parts: any[] = [{ type: "text", text: userText }];
+      for (const imgUrl of figmaImageUrls) {
+        parts.push({ type: "image_url", image_url: { url: imgUrl } });
+      }
+      parts.push({ type: "text", text: `Above are ${figmaImageUrls.length} frame exports from this client's past Figma designs. Study their visual language, layout patterns, colors, and typography when writing recommendations. Your mockup_prompts should build on these established design patterns.` });
+      userContent = parts;
+    }
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -224,7 +238,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: useVisionModel ? "google/gemini-2.5-flash" : "google/gemini-3-flash-preview",
         messages: [
           {
             role: "system",
@@ -245,6 +259,8 @@ serve(async (req) => {
 6. **Quantify impact with specifics.** Don't say "increase conversions." Say "+12-18% add-to-cart rate based on Baymard Institute mobile CTA placement studies" or "reducing form fields from 6→3 typically yields +25-40% completion (Formstack 2023 benchmark)."
 
 7. **No generic advice.** "Add social proof" is banned. Instead: "Insert a horizontal scrolling strip of 5 UGC photos with star overlay + review count badge, positioned 120px below the hero fold. Reference: Skims uses this pattern — their PDP social proof strip correlates with 2.3x higher ATC rate vs pages without."
+
+8. **Reference the Design DNA.** When Figma design data and frame exports are provided, your recommendations MUST reference the client's existing brand colors, typography, and layout patterns. The mockup_prompt should specify exact color hex values and font families from the brand's design system — not generic values.
 
 ## RECOMMENDATION STRUCTURE
 
@@ -269,7 +285,7 @@ For each of the 10 recommendations, think through:
           },
           {
             role: "user",
-            content: `Analyze this DTC/e-commerce website and produce 10 specific, copy-ready CRO recommendations. Remember: write actual headlines, reference real brands, specify mobile behavior, and make every mockup_prompt a complete design brief.\n\nURL: ${formattedUrl}\n\nPage content (use this to reference ACTUAL text, images, and layout on the site — be specific):\n${truncatedMarkdown}${figmaContext}${crossClientContext}${starredContext}`,
+            content: userContent,
           },
         ],
         tools: [
