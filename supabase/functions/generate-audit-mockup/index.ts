@@ -151,20 +151,25 @@ serve(async (req) => {
         const dd = f.design_data as any;
         if (!dd) continue;
 
-        if (dd.styles?.colors) {
-          for (const c of dd.styles.colors) {
-            allColors.push(`${c.name}: ${c.hex || c.rgba}`);
-          }
+        // Support both property naming conventions (color_palette vs styles.colors)
+        const colors = dd.color_palette || dd.styles?.colors || [];
+        for (const c of colors) {
+          allColors.push(`${c.name}: ${c.hex || c.rgba}`);
         }
-        if (dd.styles?.typography) {
-          for (const t of dd.styles.typography) {
-            allTypography.push(`${t.name}: ${t.fontFamily} ${t.fontWeight} ${t.fontSize}px`);
-          }
+        const typography = dd.typography || dd.styles?.typography || [];
+        for (const t of typography) {
+          allTypography.push(`${t.name}: ${t.fontFamily} ${t.fontWeight} ${t.fontSize}px`);
         }
-        // Collect frame export URLs for visual reference
-        if (dd.frameExports?.length) {
-          for (const fe of dd.frameExports.slice(0, 3)) {
+        // Collect frame export URLs for visual reference (support both formats)
+        const frameExports = dd.frame_exports || dd.frameExports || {};
+        if (Array.isArray(frameExports)) {
+          for (const fe of frameExports.slice(0, 3)) {
             if (fe.url) figmaImageUrls.push(fe.url);
+          }
+        } else if (typeof frameExports === "object") {
+          const urls = Object.values(frameExports) as string[];
+          for (const url of urls.slice(0, 3)) {
+            if (url) figmaImageUrls.push(url);
           }
         }
       }

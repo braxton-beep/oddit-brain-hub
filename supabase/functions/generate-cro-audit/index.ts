@@ -107,27 +107,129 @@ serve(async (req) => {
       .update({ status: "analyzing", screenshot_url: screenshotUrl })
       .eq("id", auditId);
 
-    // Fetch past Figma designs for this client to enrich AI context
+    // Fetch past Figma designs WITH full Design DNA for this client
     let figmaContext = "";
+    const figmaImageUrls: string[] = [];
     if (clientName) {
       const { data: figmaFiles } = await supabase
         .from("figma_files")
-        .select("name, design_type, figma_url, client_name, thumbnail_url, last_modified")
+        .select("name, design_type, figma_url, client_name, thumbnail_url, last_modified, design_data")
         .ilike("client_name", clientName)
         .eq("enabled", true)
         .order("last_modified", { ascending: false })
-        .limit(20);
+        .limit(15);
 
       if (figmaFiles?.length) {
-        figmaContext = "\n\nPAST FIGMA DESIGNS FOR THIS CLIENT (reference these for design continuity and to avoid repeating solved issues):\n" +
-          figmaFiles.map((f: any) => `  • [${f.design_type}] "${f.name}" — ${f.figma_url || "no link"} (last modified: ${f.last_modified || "unknown"})`).join("\n");
-        console.log(`Found ${figmaFiles.length} Figma files for client "${clientName}"`);
+        const fileParts: string[] = [];
+        const allColors: string[] = [];
+        const allTypography: string[] = [];
+
+        for (const f of figmaFiles) {
+          const dd = f.design_data as any;
+          let fileDesc = `  • [${f.design_type}] "${f.name}" — ${f.figma_url || "no link"} (last modified: ${f.last_modified || "unknown"})`;
+
+          if (dd && Object.keys(dd).length > 0) {
+            // Extract colors
+            const colors = dd.color_palette || dd.styles?.colors || [];
+            for (const c of colors) {
+              allColors.push(`${c.name}: ${c.hex || c.rgba || ""}`);
+            }
+
+            // Extract typography
+            const typo = dd.typography || dd.styles?.typography || [];
+            for (const t of typo) {
+              allTypography.push(`${t.name}: ${t.fontFamily} ${t.fontWeight} ${t.fontSize}px`);
+            }
+
+            // Collect frame exports for multimodal
+            const frameExports = dd.frame_exports || dd.frameExports || {};
+            const urls = typeof frameExports === "object" ? Object.values(frameExports) : [];
+            for (const url of urls.slice(0, 3)) {
+              if (url && figmaImageUrls.length < 8) figmaImageUrls.push(url as string);
+            }
+
+            // Page/frame structure
+            if (dd.pages?.length) {
+              const frameNames = dd.pages.flatMap((p: any) => (p.frames || []).map((fr: any) => fr.name)).slice(0, 10);
+              if (frameNames.length) fileDesc += `\n    Frames: ${frameNames.join(", ")}`;
+            }
+          }
+
+          fileParts.push(fileDesc);
+        }
+
+        figmaContext = "\n\nDESIGN DNA FROM PAST FIGMA FILES — Use this to write recommendations that reference the client's actual design system:\n" +
+          fileParts.join("\n");
+
+        if (allColors.length) {
+          const uniqueColors = [...new Set(allColors)].slice(0, 20);
+          figmaContext += `\n\n  Brand Colors: ${uniqueColors.join(", ")}`;
+        }
+        if (allTypography.length) {
+          const uniqueTypo = [...new Set(allTypography)].slice(0, 10);
+          figmaContext += `\n  Brand Typography: ${uniqueTypo.join(", ")}`;
+        }
+        if (figmaImageUrls.length) {
+          figmaContext += `\n  [${figmaImageUrls.length} frame exports attached as visual references]`;
+        }
+
+        console.log(`Found ${figmaFiles.length} Figma files for client "${clientName}", ${figmaImageUrls.length} frame images`);
       }
     }
 
-    // Step 2: Analyze with Gemini
-    console.log("Analyzing with AI...");
+    // Fetch cross-client recommendation patterns (learn from thousands of past audits)
+    let crossClientContext = "";
+    const { data: topPatterns } = await supabase
+      .from("recommendation_insights")
+      .select("recommendation_text, category, frequency_count, template_content")
+      .order("frequency_count", { ascending: false })
+      .limit(15);
+
+    if (topPatterns?.length) {
+      crossClientContext = "\n\nPROVEN CRO PATTERNS FROM 11,000+ PAST AUDITS (reference these battle-tested recommendations):\n" +
+        topPatterns.map((p: any) => `  • [${p.category}] (used ${p.frequency_count}x): ${p.recommendation_text}${p.template_content ? `\n    Template: ${p.template_content.slice(0, 200)}` : ""}`).join("\n");
+    }
+
+    // Fetch top-rated mockups from ANY client as quality benchmarks
+    let starredContext = "";
+    const { data: recentAudits } = await supabase
+      .from("cro_audits")
+      .select("recommendations")
+      .eq("status", "completed")
+      .order("created_at", { ascending: false })
+      .limit(30);
+
+    if (recentAudits?.length) {
+      const starredExamples: string[] = [];
+      for (const a of recentAudits) {
+        for (const r of ((a.recommendations as any[]) || [])) {
+          if (r.mockup_rating >= 4 && r.recommended_change && starredExamples.length < 5) {
+            starredExamples.push(`  • [${r.section}] ${r.recommended_change.slice(0, 200)}`);
+          }
+        }
+      }
+      if (starredExamples.length) {
+        starredContext = "\n\nTOP-RATED RECOMMENDATIONS FROM PAST CLIENTS (these received 4+ star ratings from the design team):\n" + starredExamples.join("\n");
+      }
+    }
+
+    // Step 2: Analyze with Gemini (multimodal when Figma images available)
+    console.log(`Analyzing with AI... (${figmaImageUrls.length} Figma frame images for visual context)`);
     const truncatedMarkdown = markdown.slice(0, 15000); // Keep within context limits
+    const useVisionModel = figmaImageUrls.length > 0;
+
+    // Build user message — multimodal if we have Figma frame exports
+    const userText = `Analyze this DTC/e-commerce website and produce 10 specific, copy-ready CRO recommendations. Remember: write actual headlines, reference real brands, specify mobile behavior, and make every mockup_prompt a complete design brief.\n\nURL: ${formattedUrl}\n\nPage content (use this to reference ACTUAL text, images, and layout on the site — be specific):\n${truncatedMarkdown}${figmaContext}${crossClientContext}${starredContext}`;
+
+    let userContent: any = userText;
+    if (useVisionModel) {
+      const parts: any[] = [{ type: "text", text: userText }];
+      for (const imgUrl of figmaImageUrls) {
+        parts.push({ type: "image_url", image_url: { url: imgUrl } });
+      }
+      parts.push({ type: "text", text: `Above are ${figmaImageUrls.length} frame exports from this client's past Figma designs. Study their visual language, layout patterns, colors, and typography when writing recommendations. Your mockup_prompts should build on these established design patterns.` });
+      userContent = parts;
+    }
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -136,7 +238,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: useVisionModel ? "google/gemini-2.5-flash" : "google/gemini-3-flash-preview",
         messages: [
           {
             role: "system",
@@ -157,6 +259,8 @@ serve(async (req) => {
 6. **Quantify impact with specifics.** Don't say "increase conversions." Say "+12-18% add-to-cart rate based on Baymard Institute mobile CTA placement studies" or "reducing form fields from 6→3 typically yields +25-40% completion (Formstack 2023 benchmark)."
 
 7. **No generic advice.** "Add social proof" is banned. Instead: "Insert a horizontal scrolling strip of 5 UGC photos with star overlay + review count badge, positioned 120px below the hero fold. Reference: Skims uses this pattern — their PDP social proof strip correlates with 2.3x higher ATC rate vs pages without."
+
+8. **Reference the Design DNA.** When Figma design data and frame exports are provided, your recommendations MUST reference the client's existing brand colors, typography, and layout patterns. The mockup_prompt should specify exact color hex values and font families from the brand's design system — not generic values.
 
 ## RECOMMENDATION STRUCTURE
 
@@ -181,7 +285,7 @@ For each of the 10 recommendations, think through:
           },
           {
             role: "user",
-            content: `Analyze this DTC/e-commerce website and produce 10 specific, copy-ready CRO recommendations. Remember: write actual headlines, reference real brands, specify mobile behavior, and make every mockup_prompt a complete design brief.\n\nURL: ${formattedUrl}\n\nPage content (use this to reference ACTUAL text, images, and layout on the site — be specific):\n${truncatedMarkdown}${figmaContext}`,
+            content: userContent,
           },
         ],
         tools: [
