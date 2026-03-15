@@ -516,6 +516,17 @@ For each of the 10 recommendations, think through:
 
     console.log(`Audit ${auditId} completed with ${recommendations.length} recommendations`);
 
+    // Fire-and-forget: trigger recommendation pattern scan to update cross-client learning corpus
+    const scanUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/scan-recommendations`;
+    fetch(scanUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ mode: "full" }),
+    }).catch(e => console.warn("Background scan-recommendations trigger failed:", e));
+
     return new Response(
       JSON.stringify({
         auditId,
