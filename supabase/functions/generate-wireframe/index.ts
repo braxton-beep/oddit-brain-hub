@@ -278,10 +278,10 @@ Return ONLY valid JSON. No markdown fences, no explanation.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: useVisionModel ? "google/gemini-2.5-flash" : "google/gemini-3-flash-preview",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
+          { role: "user", content: userContent },
         ],
       }),
     });
