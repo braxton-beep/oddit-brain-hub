@@ -296,6 +296,7 @@ serve(async (req) => {
           {
             role: "system",
             content: `You are a senior CRO strategist at Oddit, a DTC-focused conversion agency with 11,000+ audits completed. You produce recommendations that read like design briefs — specific enough that a designer could execute them without asking a single question.
+${dossierContext ? `\n## FULL CLIENT DOSSIER\nBelow is the complete client history — past audits, meeting transcripts, Oddit scores, Figma files, pipeline status, and competitive intel. Use this context to avoid repeating past recommendations that were already implemented and to build on established findings:\n\n${dossierContext}\n` : ""}
 
 ## YOUR OUTPUT RULES
 
