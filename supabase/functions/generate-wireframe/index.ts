@@ -298,7 +298,7 @@ ${site_url ? `WEBSITE: ${site_url}` : ""}
 ${asana_notes ? `\nBRIEF/NOTES FROM TEAM:\n${asana_notes}` : ""}
 ${scrapedContent ? `\nEXISTING SITE CONTENT (scraped):\n${scrapedContent.slice(0, 8000)}` : ""}
 ${Object.keys(brandContext).length > 0 ? `\nBRAND CONTEXT:\n${JSON.stringify(brandContext, null, 2).slice(0, 3000)}` : ""}
-${designDNAContext}${brandAssetContext}${transcriptContext}${pastAuditContext}${crossClientContext}
+${designDNAContext}${brandAssetContext}${transcriptContext}${pastAuditContext}${crossClientContext}${industryDesignContext}
 
 Return ONLY valid JSON. No markdown fences, no explanation.`;
 
