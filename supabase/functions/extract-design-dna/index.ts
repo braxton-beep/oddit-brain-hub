@@ -263,6 +263,7 @@ async function extractDesignData(
   }
 
   // Summary
+  designData._extracted = true;
   designData._extraction_summary = {
     total_colors: allColors.length,
     total_fonts: allFonts.length,
