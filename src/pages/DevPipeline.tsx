@@ -89,13 +89,14 @@ async function fetchProjects(): Promise<PipelineProject[]> {
 }
 
 async function createProject(payload: { client: string; page: string }) {
-  const { error } = await supabase.from("pipeline_projects").insert({
+  const { data, error } = await supabase.from("pipeline_projects").insert({
     client: payload.client,
     page: payload.page,
     stages: DEFAULT_STAGES as unknown as import("@/integrations/supabase/types").Json,
     last_update: "Just now",
-  });
+  }).select("id").single();
   if (error) throw error;
+  return data;
 }
 
 async function updateProjectStages(id: string, stages: PipelineStage[]) {
@@ -355,10 +356,24 @@ const DevPipeline = () => {
 
   const addMutation = useMutation({
     mutationFn: createProject,
-    onSuccess: () => {
+    onSuccess: async (data) => {
       qc.invalidateQueries({ queryKey: ["pipeline_projects"] });
       setShowAdd(false);
-      toast.success("Project added to pipeline");
+      toast.success("Project added — running Figma Pull & Section Split…");
+
+      // Fire-and-forget: trigger auto-setup for first two stages
+      try {
+        const { data: result, error } = await supabase.functions.invoke("pipeline-auto-setup", {
+          body: { pipeline_project_id: data.id },
+        });
+        if (error) throw error;
+        if (result?.error) throw new Error(result.error);
+        qc.invalidateQueries({ queryKey: ["pipeline_projects"] });
+        toast.success("Figma Pull & Section Split completed — ready for Code Gen");
+      } catch (err: any) {
+        qc.invalidateQueries({ queryKey: ["pipeline_projects"] });
+        toast.info("Auto-setup finished with notes — check stage statuses");
+      }
     },
     onError: () => toast.error("Failed to add project"),
   });
