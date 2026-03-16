@@ -116,6 +116,21 @@ Draft a structured follow-up report with these sections. Return ONLY valid JSON 
       })
       .eq("id", draft.id);
 
+    // Fire-and-forget: trigger pre-meeting dossier post to Slack
+    fetch(`${supabaseUrl}/functions/v1/slack-events`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        type: "internal_dossier_post",
+        client_name: clientName,
+        transcript_title: title,
+        call_date: null, // posted immediately since timing unknown
+      }),
+    }).catch(e => console.warn("Dossier post trigger failed:", e));
+
     return new Response(
       JSON.stringify({ success: true, draft_id: draft.id, client_name: clientName }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
