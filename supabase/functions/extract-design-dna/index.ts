@@ -127,7 +127,7 @@ async function extractDesignData(
   if (!fileRes.ok) {
     const text = await fileRes.text();
     if (fileRes.status === 400 && text.includes("not supported")) {
-      return { design_data: { _unsupported_file_type: true }, errors: [] };
+      return { design_data: { _unsupported_file_type: true, _extracted: true }, errors: [] };
     }
     errors.push(`File fetch: ${fileRes.status} - ${text.slice(0, 200)}`);
     return { design_data: designData, errors };
