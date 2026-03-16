@@ -398,6 +398,8 @@ export type Database = {
           created_at: string
           date: string | null
           duration: number | null
+          embedding: string | null
+          embedding_updated_at: string | null
           fireflies_id: string
           id: string
           organizer_email: string | null
@@ -414,6 +416,8 @@ export type Database = {
           created_at?: string
           date?: string | null
           duration?: number | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
           fireflies_id: string
           id?: string
           organizer_email?: string | null
@@ -430,6 +434,8 @@ export type Database = {
           created_at?: string
           date?: string | null
           duration?: number | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
           fireflies_id?: string
           id?: string
           organizer_email?: string | null
