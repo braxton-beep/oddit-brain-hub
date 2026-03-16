@@ -98,3 +98,9 @@ verify_jwt = false
 verify_jwt = false
 
 
+[functions.assemble-dossier]
+verify_jwt = false
+
+[functions.batch-extract-design-dna]
+verify_jwt = false
+

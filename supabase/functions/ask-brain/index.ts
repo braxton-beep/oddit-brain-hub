@@ -7,6 +7,122 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ── Embed query via Voyage AI and semantic search, with keyword fallback ──
+async function gatherContext(
+  sb: any,
+  query: string,
+  isCallQuery: boolean
+): Promise<{
+  recentTranscripts: any[];
+  totalTranscripts: number;
+  searchMode: string;
+}> {
+  const { count: totalTranscripts } = await sb
+    .from("fireflies_transcripts")
+    .select("*", { count: "exact", head: true });
+
+  // 1) Try semantic search via Voyage AI embedding
+  const VOYAGE_API_KEY = Deno.env.get("VOYAGE_API_KEY");
+  if (VOYAGE_API_KEY && isCallQuery) {
+    try {
+      console.log("Embedding query via Voyage AI for semantic search...");
+      const embRes = await fetch("https://api.voyageai.com/v1/embeddings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${VOYAGE_API_KEY}`,
+        },
+        body: JSON.stringify({ model: "voyage-3-lite", input: query }),
+      });
+
+      if (embRes.ok) {
+        const embData = await embRes.json();
+        const queryEmbedding = embData?.data?.[0]?.embedding;
+
+        if (queryEmbedding?.length) {
+          // Call the RPC function for cosine similarity search
+          const { data: semanticResults, error: rpcError } = await sb.rpc(
+            "search_transcripts_semantic",
+            {
+              query_embedding: queryEmbedding,
+              match_count: 15,
+              similarity_threshold: 0.25,
+            }
+          );
+
+          if (!rpcError && semanticResults?.length > 0) {
+            console.log(`Semantic search returned ${semanticResults.length} results`);
+            return {
+              recentTranscripts: semanticResults,
+              totalTranscripts: totalTranscripts ?? 0,
+              searchMode: `semantic (top ${semanticResults.length}, similarity ${semanticResults[0]?.similarity?.toFixed(3) ?? "?"})`,
+            };
+          }
+          console.log("Semantic search returned 0 results, falling back to keyword");
+        }
+      } else {
+        console.error("Voyage API error:", embRes.status, await embRes.text());
+      }
+    } catch (err) {
+      console.error("Semantic search failed, falling back:", err);
+    }
+  }
+
+  // 2) Keyword fallback
+  const queryLower = query.toLowerCase();
+  const stopWords = new Set([
+    "the","a","an","and","or","but","in","on","at","to","for","of","with",
+    "is","was","were","are","be","been","have","has","had","do","did","does",
+    "when","what","who","how","where","why","which","that","this","these","those",
+    "last","recent","latest","most","call","meeting","transcript","client","about",
+    "from","our","their","there","we","they","he","she","it","i","you","my",
+    "conversation","discussed","mentioned","said","talked","spoke","chat",
+  ]);
+  const queryKeywords = queryLower
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !stopWords.has(w));
+
+  if (queryKeywords.length > 0 && isCallQuery) {
+    const orConditions = queryKeywords
+      .flatMap((kw) => [
+        `title.ilike.%${kw}%`,
+        `organizer_email.ilike.%${kw}%`,
+        `summary.ilike.%${kw}%`,
+        `transcript_text.ilike.%${kw}%`,
+      ])
+      .join(",");
+
+    const { data: relevantTranscripts } = await sb
+      .from("fireflies_transcripts")
+      .select("title, date, summary, action_items, organizer_email, participants, duration, transcript_text")
+      .or(orConditions)
+      .order("date", { ascending: false })
+      .limit(50);
+
+    if (relevantTranscripts?.length > 0) {
+      return {
+        recentTranscripts: relevantTranscripts,
+        totalTranscripts: totalTranscripts ?? 0,
+        searchMode: "keyword-matched",
+      };
+    }
+  }
+
+  // 3) Fall back to most recent
+  const { data: fallback } = await sb
+    .from("fireflies_transcripts")
+    .select("title, date, summary, action_items, organizer_email, participants, duration, transcript_text")
+    .order("date", { ascending: false })
+    .limit(isCallQuery ? 20 : 5);
+
+  return {
+    recentTranscripts: fallback ?? [],
+    totalTranscripts: totalTranscripts ?? 0,
+    searchMode: "most recent",
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -78,14 +194,12 @@ serve(async (req) => {
     let figmaContext = "";
 
     if (isFigmaQuery) {
-      // Try to find a client name in the query by matching against known clients
       const { data: allClients } = await sb.from("clients").select("name");
       const clientNames = (allClients ?? []).map((c: any) => c.name);
       const matchedClient = clientNames.find((name: string) =>
         queryLower.includes(name.toLowerCase())
       );
 
-      // Fetch figma files — get more than needed so we can rank them
       let figmaQuery = sb.from("figma_files")
         .select("name, client_name, design_type, design_data, thumbnail_url, figma_url, last_modified")
         .eq("enabled", true);
@@ -99,14 +213,8 @@ serve(async (req) => {
         .limit(20);
 
       if (figmaFiles && figmaFiles.length > 0) {
-        // ── Smart ranking: design_type priority + recency ──
         const TYPE_PRIORITY: Record<string, number> = {
-          oddit_report: 4,
-          landing_page: 3,
-          new_site_design: 2,
-          free_trial: 1,
-          other: 0,
-          unknown: 0,
+          oddit_report: 4, landing_page: 3, new_site_design: 2, free_trial: 1, other: 0, unknown: 0,
         };
 
         const rankedFiles = figmaFiles
@@ -118,7 +226,6 @@ serve(async (req) => {
           .sort((a: any, b: any) => b._score - a._score)
           .slice(0, 5);
 
-        // ── Keyword matching for frame selection ──
         const frameKeywords = queryLower.match(/\b(hero|nav|footer|header|testimonial|social.?proof|product|collection|cart|checkout|banner|mobile|desktop|above.?fold|cta|faq|about|pricing)\b/gi) ?? [];
 
         const fileDescriptions: string[] = [];
@@ -128,7 +235,6 @@ serve(async (req) => {
           const frameExports = dd?.frame_exports ?? {};
           const frameEntries = Object.entries(frameExports) as [string, string][];
 
-          // If user mentioned specific sections, prioritize matching frames
           let selectedFrames: [string, string][];
           if (frameKeywords.length > 0) {
             const matched = frameEntries.filter(([name]) =>
@@ -142,14 +248,12 @@ serve(async (req) => {
             selectedFrames = frameEntries;
           }
 
-          // Collect image URLs for multimodal input (max 6 total across all files)
           for (const [, url] of selectedFrames) {
             if (figmaImageUrls.length < 6 && url) {
               figmaImageUrls.push(url);
             }
           }
 
-          // Build text context about the file
           const colors = (dd?.color_palette ?? []).map((c: any) => `${c.name}: ${c.hex}`).join(", ");
           const fonts = (dd?.typography ?? []).map((t: any) => `${t.name}: ${t.fontFamily} ${t.fontWeight} ${t.fontSize}px`).join(", ");
           const pages = (dd?.pages ?? []).map((p: any) => `${p.name} (${p.frames?.length ?? 0} frames)`).join(", ");
@@ -169,80 +273,25 @@ serve(async (req) => {
       }
     }
 
-    // Detect if the query is about a specific call/meeting to decide how much transcript to pull
+    // Detect if the query is about a specific call/meeting
     const isCallQuery = queryLower.includes("call") || queryLower.includes("meeting") ||
       queryLower.includes("transcript") || queryLower.includes("fireflies") ||
       queryLower.includes("said") || queryLower.includes("discussed") ||
       queryLower.includes("mentioned") || queryLower.includes("conversation") ||
       queryLower.includes("client");
 
-    // Extract potential client/company name keywords from the query for targeted search
-    // Remove common stop words to find meaningful search terms
-    const stopWords = new Set([
-      "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with",
-      "is", "was", "were", "are", "be", "been", "have", "has", "had", "do", "did", "does",
-      "when", "what", "who", "how", "where", "why", "which", "that", "this", "these", "those",
-      "last", "recent", "latest", "most", "call", "meeting", "transcript", "client", "about",
-      "from", "our", "their", "there", "we", "they", "he", "she", "it", "i", "you", "my",
-      "conversation", "discussed", "mentioned", "said", "talked", "spoke", "chat"
-    ]);
-    const queryKeywords = queryLower
-      .replace(/[^a-z0-9\s]/g, " ")
-      .split(/\s+/)
-      .filter(w => w.length > 2 && !stopWords.has(w));
-
-    // Build transcript query — if we have meaningful keywords, search by relevance first
-    let transcriptQuery = sb.from("fireflies_transcripts")
-      .select("title, date, summary, action_items, organizer_email, participants, duration, transcript_text");
-
-    if (queryKeywords.length > 0 && isCallQuery) {
-      // Search titles and participants for keywords to find relevant transcripts
-      const keywordFilters = queryKeywords
-        .map(kw => `title.ilike.%${kw}%,participants.cs.{${kw}}`)
-        .join(",");
-      
-      // Use OR filter: match keyword in title, organizer email, summary, or transcript text
-      const orConditions = queryKeywords
-        .flatMap(kw => [
-          `title.ilike.%${kw}%`,
-          `organizer_email.ilike.%${kw}%`,
-          `summary.ilike.%${kw}%`,
-          `transcript_text.ilike.%${kw}%`,
-        ])
-        .join(",");
-
-      const { data: relevantTranscripts } = await transcriptQuery
-        .or(orConditions)
-        .order("date", { ascending: false })
-        .limit(50);
-
-      // If keyword search finds results, use those; otherwise fall back to recent
-      var transcriptsToUse = relevantTranscripts && relevantTranscripts.length > 0
-        ? relevantTranscripts
-        : null;
-    }
+    // ── Gather transcript context (semantic → keyword → recent) ──
+    const { recentTranscripts, totalTranscripts, searchMode } = await gatherContext(sb, query, isCallQuery);
 
     const [
       { data: knowledgeSources },
       { data: projects },
       { data: credentials },
-      { data: fallbackTranscripts },
-      { count: totalTranscripts },
     ] = await Promise.all([
       sb.from("knowledge_sources").select("*").order("name"),
       sb.from("projects").select("*").order("created_at", { ascending: false }),
       sb.from("integration_credentials").select("integration_id").order("integration_id"),
-      // Only fetch recent transcripts if we didn't already find relevant ones
-      (!transcriptsToUse)
-        ? sb.from("fireflies_transcripts")
-            .select("title, date, summary, action_items, organizer_email, participants, duration, transcript_text")
-            .order("date", { ascending: false })
-            .limit(isCallQuery ? 20 : 5)
-        : Promise.resolve({ data: [] }),
-      sb.from("fireflies_transcripts").select("*", { count: "exact", head: true }),
     ]);
-
-    const recentTranscripts = transcriptsToUse ?? fallbackTranscripts;
 
     // Build knowledge context
     const ksLines = (knowledgeSources ?? []).map(
@@ -252,7 +301,6 @@ serve(async (req) => {
       ? `Knowledge sources indexed:\n${ksLines.join("\n")}`
       : "No knowledge sources have been indexed yet.";
 
-    // Build projects context
     const projLines = (projects ?? []).map(
       (p: any) => `- ${p.name} (${p.progress}% complete, ${p.priority} priority, owner: ${p.owner})`
     );
@@ -260,13 +308,12 @@ serve(async (req) => {
       ? `Active projects:\n${projLines.join("\n")}`
       : "No active projects.";
 
-    // Connected integrations
     const connectedIntegrations = [...new Set((credentials ?? []).map((c: any) => c.integration_id))];
     const intBlock = connectedIntegrations.length > 0
       ? `Connected integrations: ${connectedIntegrations.join(", ")}`
       : "No integrations connected yet.";
 
-    // Fireflies meeting data — include full transcript text when available
+    // Fireflies meeting data
     let meetingBlock = "";
     if (recentTranscripts && recentTranscripts.length > 0) {
       const meetingLines = recentTranscripts.map((t: any) => {
@@ -275,14 +322,13 @@ serve(async (req) => {
         const participants = t.participants?.join(", ") || "Unknown";
         const summary = t.summary || "No summary available";
         const actions = t.action_items ? `\n  Action items: ${t.action_items}` : "";
-        // Include full transcript text if present — this is the primary knowledge source
+        const sim = t.similarity ? ` [similarity: ${t.similarity.toFixed(3)}]` : "";
         const fullTranscript = t.transcript_text
           ? `\n  FULL TRANSCRIPT:\n${t.transcript_text}`
           : "";
-        return `--- MEETING: "${t.title}" (${date}, ${dur}) ---\nParticipants: ${participants}\nSummary: ${summary}${actions}${fullTranscript}`;
+        return `--- MEETING: "${t.title}" (${date}, ${dur})${sim} ---\nParticipants: ${participants}\nSummary: ${summary}${actions}${fullTranscript}`;
       });
-      const searchMode = transcriptsToUse ? "keyword-matched" : "most recent";
-      meetingBlock = `\nFireflies Meeting Data (${totalTranscripts ?? 0} total transcripts — showing ${recentTranscripts.length} ${searchMode}):\n\nIMPORTANT: Each meeting block below is SELF-CONTAINED. Participants, dates, and details from one meeting DO NOT apply to any other meeting.\n\n${meetingLines.join("\n\n")}`;
+      meetingBlock = `\nFireflies Meeting Data (${totalTranscripts} total transcripts — showing ${recentTranscripts.length} ${searchMode}):\n\nIMPORTANT: Each meeting block below is SELF-CONTAINED. Participants, dates, and details from one meeting DO NOT apply to any other meeting.\n\n${meetingLines.join("\n\n")}`;
     } else {
       meetingBlock = "\nNo Fireflies meeting transcripts have been synced yet.";
     }
@@ -319,7 +365,6 @@ When asked about calls or meetings, reference the full transcript text to give p
     let userMessage: any = query;
 
     if (useVisionModel) {
-      // Build multimodal content array with text + images
       const contentParts: any[] = [{ type: "text", text: query }];
       for (const imgUrl of figmaImageUrls) {
         contentParts.push({
