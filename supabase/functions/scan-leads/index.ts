@@ -365,32 +365,42 @@ Rules:
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `👉 <${Deno.env.get("SUPABASE_URL")?.replace(".supabase.co", "") || "https://oddit-brain-hub.lovable.app"}/lead-gen|Review all opportunities in dashboard>`,
+          text: `👉 <https://oddit-brain-hub.lovable.app/lead-gen|Review all opportunities in dashboard>`,
         },
       });
 
-      try {
-        const slackRes = await fetch("https://slack.com/api/chat.postMessage", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            channel: "#leads",
-            text: `🎯 ${inserted?.length ?? 0} new lead opportunities found!`,
-            blocks,
-            username: "Oddit Lead Scout",
-            icon_emoji: ":dart:",
-          }),
-        });
+      // Try multiple channels in order of preference
+      const channels = ["#oddit-brain-ai", "#leads", "#general"];
+      let slackSent = false;
 
-        const slackData = await slackRes.json();
-        if (!slackData.ok) {
-          console.error("Slack error:", slackData.error);
+      for (const channel of channels) {
+        if (slackSent) break;
+        try {
+          const slackRes = await fetch("https://slack.com/api/chat.postMessage", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              channel,
+              text: `🎯 ${inserted?.length ?? 0} new lead opportunities found!`,
+              blocks,
+              username: "Oddit Lead Scout",
+              icon_emoji: ":dart:",
+            }),
+          });
+
+          const slackData = await slackRes.json();
+          if (slackData.ok) {
+            console.log(`Slack notification sent to ${channel}`);
+            slackSent = true;
+          } else {
+            console.warn(`Slack channel ${channel} failed: ${slackData.error}`);
+          }
+        } catch (e) {
+          console.error(`Slack notification error (${channel}):`, e);
         }
-      } catch (e) {
-        console.error("Slack notification error:", e);
       }
     }
 
