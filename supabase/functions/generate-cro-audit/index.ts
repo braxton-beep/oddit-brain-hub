@@ -31,6 +31,30 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // ── Assemble full client dossier for context ──
+    let dossierContext = "";
+    if (clientName) {
+      try {
+        const dossierResp = await fetch(`${SUPABASE_URL}/functions/v1/assemble-dossier`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ client_name: clientName }),
+        });
+        if (dossierResp.ok) {
+          const { narrativeSummary } = await dossierResp.json();
+          if (narrativeSummary) {
+            dossierContext = narrativeSummary;
+            console.log("Dossier assembled, length:", dossierContext.length);
+          }
+        }
+      } catch (e) {
+        console.warn("Dossier assembly failed (non-fatal):", e);
+      }
+    }
+
     // Format URL
     let formattedUrl = url.trim();
     if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
