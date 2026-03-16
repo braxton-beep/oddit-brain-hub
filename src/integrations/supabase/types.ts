@@ -879,30 +879,42 @@ export type Database = {
         Row: {
           category: string
           client_examples: Json | null
+          converted_count: number
           created_at: string
+          effectiveness_score: number
           frequency_count: number
           id: string
+          implemented_count: number
           recommendation_text: string
+          skipped_count: number
           template_content: string | null
           updated_at: string
         }
         Insert: {
           category?: string
           client_examples?: Json | null
+          converted_count?: number
           created_at?: string
+          effectiveness_score?: number
           frequency_count?: number
           id?: string
+          implemented_count?: number
           recommendation_text: string
+          skipped_count?: number
           template_content?: string | null
           updated_at?: string
         }
         Update: {
           category?: string
           client_examples?: Json | null
+          converted_count?: number
           created_at?: string
+          effectiveness_score?: number
           frequency_count?: number
           id?: string
+          implemented_count?: number
           recommendation_text?: string
+          skipped_count?: number
           template_content?: string | null
           updated_at?: string
         }
