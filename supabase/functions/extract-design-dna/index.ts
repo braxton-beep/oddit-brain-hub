@@ -176,30 +176,35 @@ async function extractDesignData(
   const spacingValues: number[] = [];
   const cornerRadii: number[] = [];
 
-  if (allNodeIds.length > 0) {
-    // Query in batches of 15 to stay within URL limits
-    const batchSize = 15;
-    for (let i = 0; i < allNodeIds.length; i += batchSize) {
-      const batch = allNodeIds.slice(i, i + batchSize);
-      const idsParam = batch.join(",");
-      console.log(`Querying ${batch.length} nodes for deep properties (batch ${Math.floor(i/batchSize)+1})`);
-      
+  // Query nodes ONE AT A TIME to avoid massive responses
+  const startTime = Date.now();
+  const MAX_TIME_MS = 20000; // 20s budget for node queries
+
+  for (const nodeId of allNodeIds.slice(0, 10)) {
+    if (Date.now() - startTime > MAX_TIME_MS) {
+      console.log(`Time budget exceeded after ${allNodeIds.indexOf(nodeId)} nodes`);
+      break;
+    }
+
+    try {
       const nodesRes = await fetch(
-        `${FIGMA_API_BASE}/files/${fileKey}/nodes?ids=${idsParam}`,
+        `${FIGMA_API_BASE}/files/${fileKey}/nodes?ids=${nodeId}&depth=4`,
         { headers }
       );
 
       if (nodesRes.ok) {
         const nodesData = await nodesRes.json();
-        for (const [_nodeId, nodeInfo] of Object.entries(nodesData.nodes ?? {})) {
+        for (const [_nid, nodeInfo] of Object.entries(nodesData.nodes ?? {})) {
           const doc = (nodeInfo as any)?.document;
           if (!doc) continue;
-          // Walk the full subtree of each node — this has ALL fill/stroke/style data
-          walkDetailedNode(doc, colors, fonts, textSamples, components, spacingValues, cornerRadii);
+          walkDetailedNode(doc, colors, fonts, textSamples, components, spacingValues, cornerRadii, 0);
         }
+        console.log(`Node ${nodeId}: ${colors.size} colors, ${fonts.size} fonts so far`);
       } else {
-        errors.push(`Nodes query batch ${Math.floor(i/batchSize)+1}: ${nodesRes.status}`);
+        errors.push(`Node ${nodeId}: ${nodesRes.status}`);
       }
+    } catch (err) {
+      errors.push(`Node ${nodeId}: ${err instanceof Error ? err.message : "unknown"}`);
     }
   }
 
