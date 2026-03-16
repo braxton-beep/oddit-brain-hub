@@ -11,9 +11,11 @@ import {
   RefreshCw,
   Plus,
   Trash2,
+  KeyRound,
+  AlertCircle,
 } from "lucide-react";
 
-/* ─── types (manual until codegen catches up) ──────────────────────────────── */
+/* ─── types ────────────────────────────────────────────────────────────────── */
 interface ShopifyConnection {
   id: string;
   client_id: string | null;
@@ -64,12 +66,64 @@ function useThemeFiles(connectionId: string | null) {
   });
 }
 
+/* ─── sub-components ───────────────────────────────────────────────────────── */
+function TokenForm({
+  connectionId,
+  onSaved,
+}: {
+  connectionId: string;
+  onSaved: () => void;
+}) {
+  const [token, setToken] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!token.trim()) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("shopify_connections" as any)
+        .update({ access_token: token.trim(), status: "connected" } as any)
+        .eq("id", connectionId);
+      if (error) throw error;
+      toast.success("Access token saved");
+      setToken("");
+      onSaved();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save token");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <input
+        type="password"
+        value={token}
+        onChange={(e) => setToken(e.target.value)}
+        placeholder="shpat_xxxx…"
+        className="flex-1 px-3 py-1.5 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground/50 text-xs focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition"
+      />
+      <button
+        onClick={handleSave}
+        disabled={saving || !token.trim()}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 transition"
+      >
+        {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <KeyRound className="h-3 w-3" />}
+        Save Token
+      </button>
+    </div>
+  );
+}
+
 /* ─── page ─────────────────────────────────────────────────────────────────── */
 export default function ShopifyConnect() {
   const qc = useQueryClient();
   const { data: connections = [], isLoading } = useConnections();
   const [selected, setSelected] = useState<string | null>(null);
   const { data: files = [], isLoading: filesLoading } = useThemeFiles(selected);
+  const [editingTokenId, setEditingTokenId] = useState<string | null>(null);
 
   /* ── connect form state ──────────────────────────────────────────────────── */
   const [form, setForm] = useState({ shop_domain: "", access_token: "" });
@@ -77,41 +131,49 @@ export default function ShopifyConnect() {
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.shop_domain.trim() || !form.access_token.trim()) return;
+    if (!form.shop_domain.trim()) return;
 
     setConnecting(true);
     try {
       const domain = form.shop_domain.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
-
-      // Fetch active theme from Shopify
-      const themeRes = await fetch(
-        `https://${domain}/admin/api/2024-01/themes.json`,
-        {
-          headers: {
-            "X-Shopify-Access-Token": form.access_token.trim(),
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const hasToken = !!form.access_token.trim();
 
       let themeId: string | null = null;
-      if (themeRes.ok) {
-        const { themes } = await themeRes.json();
-        const active = themes?.find((t: any) => t.role === "main");
-        themeId = active?.id ? String(active.id) : null;
+
+      if (hasToken) {
+        // Fetch active theme from Shopify
+        const themeRes = await fetch(
+          `https://${domain}/admin/api/2024-01/themes.json`,
+          {
+            headers: {
+              "X-Shopify-Access-Token": form.access_token.trim(),
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (themeRes.ok) {
+          const { themes } = await themeRes.json();
+          const active = themes?.find((t: any) => t.role === "main");
+          themeId = active?.id ? String(active.id) : null;
+        }
       }
 
       const { error } = await supabase.from("shopify_connections" as any).insert({
         shop_domain: domain,
-        access_token: form.access_token.trim(),
-        scopes: "read_themes",
+        access_token: hasToken ? form.access_token.trim() : "",
+        scopes: hasToken ? "read_themes" : "",
         theme_id: themeId,
-        status: themeId ? "connected" : "connected_no_theme",
+        status: hasToken ? (themeId ? "connected" : "connected_no_theme") : "pending_token",
       } as any);
 
       if (error) throw error;
 
-      toast.success(`Connected to ${domain}${themeId ? ` (theme ${themeId})` : ""}`);
+      toast.success(
+        hasToken
+          ? `Connected to ${domain}${themeId ? ` (theme ${themeId})` : ""}`
+          : `Added ${domain} — add an access token to pull theme files`
+      );
       setForm({ shop_domain: "", access_token: "" });
       qc.invalidateQueries({ queryKey: ["shopify_connections"] });
     } catch (err: any) {
@@ -146,6 +208,8 @@ export default function ShopifyConnect() {
     toast.success("Connection removed");
   };
 
+  const hasToken = (conn: ShopifyConnection) => !!conn.access_token;
+
   return (
     <DashboardLayout>
       <div className="space-y-8 max-w-4xl">
@@ -169,7 +233,7 @@ export default function ShopifyConnect() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">
-                Shop domain
+                Shop domain <span className="text-destructive">*</span>
               </label>
               <input
                 type="text"
@@ -182,14 +246,14 @@ export default function ShopifyConnect() {
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">
-                Admin API access token
+                Admin API access token{" "}
+                <span className="text-muted-foreground/60">(optional — add later)</span>
               </label>
               <input
                 type="password"
                 value={form.access_token}
                 onChange={(e) => setForm((f) => ({ ...f, access_token: e.target.value }))}
                 placeholder="shpat_xxxx…"
-                required
                 className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground/50 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition"
               />
             </div>
@@ -230,30 +294,48 @@ export default function ShopifyConnect() {
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  {hasToken(conn) ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 text-amber-500" />
+                  )}
                   <span className="font-medium text-sm text-foreground">{conn.shop_domain}</span>
                   {conn.theme_id && (
-                    <span className="text-xs text-muted-foreground">
-                      Theme #{conn.theme_id}
-                    </span>
+                    <span className="text-xs text-muted-foreground">Theme #{conn.theme_id}</span>
+                  )}
+                  {!hasToken(conn) && (
+                    <span className="text-xs text-amber-500 font-medium">No token</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      pullMutation.mutate(conn.id);
-                    }}
-                    disabled={pullMutation.isPending}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent/10 text-accent-foreground hover:bg-accent/20 transition disabled:opacity-40"
-                  >
-                    {pullMutation.isPending ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-3 w-3" />
-                    )}
-                    Pull Theme Files
-                  </button>
+                  {!hasToken(conn) ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingTokenId(editingTokenId === conn.id ? null : conn.id);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition"
+                    >
+                      <KeyRound className="h-3 w-3" />
+                      Add Token
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        pullMutation.mutate(conn.id);
+                      }}
+                      disabled={pullMutation.isPending}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent/10 text-accent-foreground hover:bg-accent/20 transition disabled:opacity-40"
+                    >
+                      {pullMutation.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                      Pull Theme Files
+                    </button>
+                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -268,6 +350,17 @@ export default function ShopifyConnect() {
               <p className="text-xs text-muted-foreground mt-1">
                 Connected {new Date(conn.connected_at).toLocaleDateString()}
               </p>
+
+              {/* Inline token form */}
+              {editingTokenId === conn.id && (
+                <TokenForm
+                  connectionId={conn.id}
+                  onSaved={() => {
+                    setEditingTokenId(null);
+                    qc.invalidateQueries({ queryKey: ["shopify_connections"] });
+                  }}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -288,7 +381,7 @@ export default function ShopifyConnect() {
 
             {!filesLoading && files.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                No files yet. Click "Pull Theme Files" above.
+                No files yet. {hasToken(connections.find((c) => c.id === selected)!) ? 'Click "Pull Theme Files" above.' : 'Add an access token first, then pull theme files.'}
               </p>
             )}
 
