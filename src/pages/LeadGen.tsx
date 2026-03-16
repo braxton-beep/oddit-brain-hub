@@ -59,9 +59,10 @@ function useLeadStats() {
       const total = data?.length ?? 0;
       const pending = data?.filter((d) => d.status === "pending").length ?? 0;
       const replied = data?.filter((d) => d.status === "replied").length ?? 0;
-      const byPlatform = { x: 0, threads: 0 };
+      const byPlatform = { x: 0, threads: 0, reddit: 0 };
       for (const d of data ?? []) {
         if (d.platform === "x") byPlatform.x++;
+        else if (d.platform === "reddit") byPlatform.reddit++;
         else byPlatform.threads++;
       }
       return { total, pending, replied, byPlatform };
