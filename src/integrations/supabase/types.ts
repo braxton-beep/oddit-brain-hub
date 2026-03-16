@@ -1323,7 +1323,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      search_transcripts_semantic: {
+        Args: {
+          match_count?: number
+          query_embedding: string
+          similarity_threshold?: number
+        }
+        Returns: {
+          action_items: string
+          date: string
+          duration: number
+          id: string
+          organizer_email: string
+          participants: string[]
+          similarity: number
+          summary: string
+          title: string
+          transcript_text: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
