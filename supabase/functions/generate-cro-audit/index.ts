@@ -225,12 +225,12 @@ serve(async (req) => {
       }
     }
 
-    // Fetch cross-client recommendation patterns (learn from thousands of past audits)
+    // Fetch cross-client recommendation patterns, weighted by effectiveness
     let crossClientContext = "";
     const { data: topPatterns } = await supabase
       .from("recommendation_insights")
-      .select("recommendation_text, category, frequency_count, template_content")
-      .order("frequency_count", { ascending: false })
+      .select("recommendation_text, category, frequency_count, template_content, effectiveness_score, converted_count, implemented_count, skipped_count")
+      .order("effectiveness_score", { ascending: false })
       .limit(15);
 
     if (topPatterns?.length) {
