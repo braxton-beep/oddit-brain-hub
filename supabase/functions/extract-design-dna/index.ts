@@ -324,7 +324,7 @@ serve(async (req) => {
     const needsExtraction = (files ?? []).filter((f: any) => {
       if (forceReExtract) return true;
       if (!f.design_data) return true;
-      return !f.design_data.color_palette || f.design_data.color_palette.length === 0;
+      return !f.design_data._extracted;
     });
 
     const batch = needsExtraction.slice(0, batchSize);
