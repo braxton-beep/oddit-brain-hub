@@ -337,7 +337,7 @@ Rules:
       ];
 
       for (const op of topOps) {
-        const platformEmoji = op.platform === "x" ? "𝕏" : "🧵";
+        const platformEmoji = op.platform === "x" ? "𝕏" : op.platform === "reddit" ? "🤖" : "🧵";
         const categoryLabel = op.category.replace(/_/g, " ");
         blocks.push({
           type: "section",
