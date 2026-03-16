@@ -36,9 +36,14 @@ function scoreRelevance(text: string, metrics: any): number {
   let score = 0;
   const lower = text.toLowerCase();
   // Keyword relevance
-  const highValue = ["shopify", "ecommerce", "e-commerce", "landing page", "conversion", "cro", "ux", "store"];
+  const highValue = ["shopify", "ecommerce", "e-commerce", "landing page", "conversion", "cro", "ux", "store", "checkout", "add to cart", "product page"];
   for (const kw of highValue) {
     if (lower.includes(kw)) score += 10;
+  }
+  // Reddit-specific high-value signals
+  const redditSignals = ["r/shopify", "r/ecommerce", "r/web_design", "r/smallbusiness", "r/entrepreneur", "r/dropshipping"];
+  for (const kw of redditSignals) {
+    if (lower.includes(kw)) score += 5;
   }
   // Engagement signals
   if (metrics) {
@@ -49,7 +54,9 @@ function scoreRelevance(text: string, metrics: any): number {
   // Question = higher intent
   if (text.includes("?")) score += 5;
   // URL in post = they have a site
-  if (lower.includes("http") || lower.includes(".com") || lower.includes(".co")) score += 10;
+  if (lower.includes("http") || lower.includes(".com") || lower.includes(".co") || lower.includes(".store") || lower.includes(".shop")) score += 10;
+  // Urgency signals
+  if (lower.includes("help") || lower.includes("urgent") || lower.includes("please") || lower.includes("struggling")) score += 5;
   return Math.min(score, 100);
 }
 
