@@ -208,6 +208,48 @@ serve(async (req) => {
         ctx.topPatterns.data.map((p: any) => `  • [${p.category}] (${p.frequency_count}x): ${p.recommendation_text}`).join("\n");
     }
 
+    // ── Industry design profiles (same client + same industry) ──
+    let industryDesignContext = "";
+    if (ctx.clientLookup?.data?.length) {
+      const clientIndustry = ctx.clientLookup.data[0].industry;
+      if (clientIndustry) {
+        // Find figma files from same-industry clients that have a design_language_profile
+        const { data: industryFiles } = await sb
+          .from("figma_files")
+          .select("name, client_name, design_data, design_type")
+          .eq("enabled", true)
+          .not("design_data->design_language_profile", "is", null)
+          .order("last_modified", { ascending: false })
+          .limit(20);
+
+        if (industryFiles?.length) {
+          // Filter to same industry by cross-referencing client names
+          const { data: industryClients } = await sb
+            .from("clients")
+            .select("name")
+            .eq("industry", clientIndustry);
+          
+          const industryClientNames = new Set((industryClients || []).map((c: any) => c.name.toLowerCase()));
+          
+          // Prioritize: same client first, then same industry
+          const profiles = industryFiles
+            .filter((f: any) => {
+              const cn = (f.client_name || "").toLowerCase();
+              return cn.includes(client_name.toLowerCase()) || industryClientNames.has(cn);
+            })
+            .slice(0, 3);
+
+          if (profiles.length) {
+            industryDesignContext = "\n\nDESIGN LANGUAGE PROFILES (from this client and similar brands in the same industry — use as style references):\n" +
+              profiles.map((f: any) => {
+                const profile = (f.design_data as any)?.design_language_profile;
+                return `  • "${f.name}" (${f.client_name}, ${f.design_type}):\n    ${JSON.stringify(profile).slice(0, 800)}`;
+              }).join("\n");
+          }
+        }
+      }
+    }
+
     // Generate the wireframe content brief via AI
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
