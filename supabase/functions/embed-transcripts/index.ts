@@ -7,6 +7,8 @@ const corsHeaders = {
 }
 
 const BATCH_SIZE = 50
+const DELAY_MS = 350 // ~170 RPM, well under standard limits
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -78,6 +80,9 @@ serve(async (req) => {
 
       if (updateError) { results.errors.push(`Update failed ${transcript.id}: ${updateError.message}`); results.failed++ }
       else results.processed++
+
+      // Rate limit: small delay between requests
+      await sleep(DELAY_MS)
 
     } catch (err) {
       results.errors.push(`Exception ${transcript.id}: ${(err as Error).message}`)
