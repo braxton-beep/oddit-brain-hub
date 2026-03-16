@@ -104,3 +104,6 @@ verify_jwt = false
 [functions.batch-extract-design-dna]
 verify_jwt = false
 
+[functions.update-recommendation-outcome]
+verify_jwt = false
+

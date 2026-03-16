@@ -31,6 +31,30 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // ── Assemble full client dossier for context ──
+    let dossierContext = "";
+    if (clientName) {
+      try {
+        const dossierResp = await fetch(`${SUPABASE_URL}/functions/v1/assemble-dossier`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ client_name: clientName }),
+        });
+        if (dossierResp.ok) {
+          const { narrativeSummary } = await dossierResp.json();
+          if (narrativeSummary) {
+            dossierContext = narrativeSummary;
+            console.log("Dossier assembled, length:", dossierContext.length);
+          }
+        }
+      } catch (e) {
+        console.warn("Dossier assembly failed (non-fatal):", e);
+      }
+    }
+
     // Format URL
     let formattedUrl = url.trim();
     if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
@@ -201,17 +225,22 @@ serve(async (req) => {
       }
     }
 
-    // Fetch cross-client recommendation patterns (learn from thousands of past audits)
+    // Fetch cross-client recommendation patterns, weighted by effectiveness
     let crossClientContext = "";
     const { data: topPatterns } = await supabase
       .from("recommendation_insights")
-      .select("recommendation_text, category, frequency_count, template_content")
-      .order("frequency_count", { ascending: false })
+      .select("recommendation_text, category, frequency_count, template_content, effectiveness_score, converted_count, implemented_count, skipped_count")
+      .order("effectiveness_score", { ascending: false })
       .limit(15);
 
     if (topPatterns?.length) {
-      crossClientContext = "\n\nPROVEN CRO PATTERNS FROM 11,000+ PAST AUDITS (reference these battle-tested recommendations):\n" +
-        topPatterns.map((p: any) => `  • [${p.category}] (used ${p.frequency_count}x): ${p.recommendation_text}${p.template_content ? `\n    Template: ${p.template_content.slice(0, 200)}` : ""}`).join("\n");
+      crossClientContext = "\n\nPROVEN CRO PATTERNS FROM 11,000+ PAST AUDITS (prioritized by effectiveness score — higher = more often converted):\n" +
+        topPatterns.map((p: any) => {
+          const stats = p.converted_count || p.implemented_count || p.skipped_count
+            ? ` | converted: ${p.converted_count}, implemented: ${p.implemented_count}, skipped: ${p.skipped_count}, effectiveness: ${p.effectiveness_score}`
+            : "";
+          return `  • [${p.category}] (used ${p.frequency_count}x${stats}): ${p.recommendation_text}${p.template_content ? `\n    Template: ${p.template_content.slice(0, 200)}` : ""}`;
+        }).join("\n");
     }
 
     // Fetch top-rated mockups from ANY client as quality benchmarks
@@ -267,6 +296,7 @@ serve(async (req) => {
           {
             role: "system",
             content: `You are a senior CRO strategist at Oddit, a DTC-focused conversion agency with 11,000+ audits completed. You produce recommendations that read like design briefs — specific enough that a designer could execute them without asking a single question.
+${dossierContext ? `\n## FULL CLIENT DOSSIER\nBelow is the complete client history — past audits, meeting transcripts, Oddit scores, Figma files, pipeline status, and competitive intel. Use this context to avoid repeating past recommendations that were already implemented and to build on established findings:\n\n${dossierContext}\n` : ""}
 
 ## YOUR OUTPUT RULES
 

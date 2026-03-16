@@ -224,6 +224,12 @@ serve(async (req) => {
     if (body.type === "event_callback") {
       const event = body.event;
 
+      // ── Handle new transcript creation → auto-post dossier ──
+      if (event.type === "insert" && event.table === "fireflies_transcripts") {
+        // This path handles DB webhook triggers if configured
+        // But more commonly we handle this via the fireflies-webhook function
+      }
+
       // Only respond to app_mention events; ignore bot messages to prevent loops
       if (event.type !== "app_mention" || event.bot_id) {
         return new Response("ok", { status: 200 });
@@ -236,7 +242,6 @@ serve(async (req) => {
       }
 
       // Acknowledge immediately (Slack requires < 3s response)
-      // Process in background via waitUntil-style pattern
       const responsePromise = (async () => {
         try {
           // Post a thinking indicator
@@ -309,7 +314,6 @@ RULES:
       })();
 
       // Don't await — respond to Slack immediately
-      // Use EdgeRuntime.waitUntil if available, otherwise just fire and forget
       try {
         // @ts-ignore — Deno Deploy / Supabase edge runtime specific
         if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
@@ -319,6 +323,78 @@ RULES:
       } catch {
         // Fire and forget if waitUntil isn't available
       }
+
+      return new Response("ok", { status: 200 });
+    }
+
+    // ── Handle internal dossier-post trigger (called by fireflies-webhook) ──
+    if (body.type === "internal_dossier_post") {
+      const { client_name, transcript_title, call_date } = body;
+      if (!client_name) return new Response("ok", { status: 200 });
+
+      const dossierPromise = (async () => {
+        try {
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+          // Call assemble-dossier
+          const dossierResp = await fetch(`${supabaseUrl}/functions/v1/assemble-dossier`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${serviceKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ client_name }),
+          });
+
+          if (!dossierResp.ok) {
+            console.error("Dossier assembly failed:", dossierResp.status);
+            return;
+          }
+
+          const { narrativeSummary, dossier } = await dossierResp.json();
+          if (!narrativeSummary) return;
+
+          // Format as clean Slack message
+          const counts = dossier?.meta?.counts || {};
+          const header = `📋 *Pre-Meeting Dossier: ${client_name}*`;
+          const meetingInfo = transcript_title ? `\n📞 _Upcoming: ${transcript_title}${call_date ? ` (${new Date(call_date).toLocaleDateString()})` : ""}_` : "";
+          
+          const statsLine = [
+            counts.audits ? `${counts.audits} audits` : null,
+            counts.transcripts ? `${counts.transcripts} calls` : null,
+            counts.figmaFiles ? `${counts.figmaFiles} Figma files` : null,
+            counts.odditScores ? `${counts.odditScores} Oddit scores` : null,
+            counts.pipelineProjects ? `${counts.pipelineProjects} pipeline items` : null,
+          ].filter(Boolean).join(" • ");
+
+          const slackMessage = `${header}${meetingInfo}\n\n📊 _${statsLine}_\n\n${narrativeSummary.slice(0, 3000)}`;
+
+          // Find #oddit-brain-ai channel
+          const channelResp = await fetch(`${SLACK_API}/conversations.list`, {
+            headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}` },
+          });
+          const channelData = await channelResp.json();
+          const brainChannel = channelData.channels?.find((c: any) => c.name === "oddit-brain-ai");
+          
+          if (brainChannel) {
+            await postSlackMessage(SLACK_BOT_TOKEN, brainChannel.id, slackMessage);
+            console.log(`Posted dossier for ${client_name} to #oddit-brain-ai`);
+          } else {
+            console.warn("Could not find #oddit-brain-ai channel");
+          }
+        } catch (err) {
+          console.error("Dossier post error:", err);
+        }
+      })();
+
+      try {
+        // @ts-ignore
+        if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+          // @ts-ignore
+          EdgeRuntime.waitUntil(dossierPromise);
+        }
+      } catch { /* fire and forget */ }
 
       return new Response("ok", { status: 200 });
     }
