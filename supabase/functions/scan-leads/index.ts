@@ -124,18 +124,35 @@ serve(async (req) => {
       console.log("TWITTER_BEARER_TOKEN not set, skipping X scan");
     }
 
-    // ── Step 2: Scan Threads via Firecrawl ──
+    // ── Step 2: Scan Threads + Reddit via Firecrawl ──
     if (FIRECRAWL_API_KEY) {
-      console.log("Scanning Threads via Firecrawl...");
+      // Threads queries - target actual posts, not profiles
       const threadsQueries = [
-        "site:threads.net conversion rate",
-        "site:threads.net shopify store feedback",
-        "site:threads.net rate my site",
-        "site:threads.net landing page",
+        "site:threads.net \"conversion rate\" OR \"not converting\" OR \"no sales\"",
+        "site:threads.net \"rate my site\" OR \"rate my store\" OR \"roast my\"",
+        "site:threads.net \"just launched\" shopify OR ecommerce OR \"my store\"",
+        "site:threads.net \"landing page\" feedback OR review OR help",
+        "site:threads.net \"bounce rate\" OR \"why no one buys\" OR \"low traffic\"",
       ];
 
-      for (const query of threadsQueries) {
+      // Reddit queries - rich source of CRO/UX leads
+      const redditQueries = [
+        "site:reddit.com \"rate my shopify\" OR \"rate my store\" OR \"rate my site\"",
+        "site:reddit.com \"low conversion rate\" OR \"store not converting\" OR \"no sales shopify\"",
+        "site:reddit.com \"landing page feedback\" OR \"landing page review\" OR \"roast my landing page\"",
+        "site:reddit.com \"just launched my store\" OR \"new shopify store\" OR \"launched my website\"",
+        "site:reddit.com \"CRO help\" OR \"conversion optimization\" OR \"UX audit\" ecommerce",
+        "site:reddit.com \"bounce rate too high\" OR \"why is no one buying\" OR \"shopify help\"",
+      ];
+
+      const firecrawlQueries = [
+        ...threadsQueries.map((q) => ({ query: q, platform: "threads" as const })),
+        ...redditQueries.map((q) => ({ query: q, platform: "reddit" as const })),
+      ];
+
+      for (const { query, platform } of firecrawlQueries) {
         try {
+          console.log(`Scanning ${platform}: ${query.slice(0, 60)}...`);
           const res = await fetch("https://api.firecrawl.dev/v1/search", {
             method: "POST",
             headers: {
@@ -145,24 +162,40 @@ serve(async (req) => {
             body: JSON.stringify({
               query,
               limit: 10,
-              tbs: "qdr:d", // Last 24 hours
+              tbs: "qdr:w", // Last week for more results
             }),
           });
 
           if (!res.ok) {
-            console.error(`Firecrawl search failed: ${res.status}`);
+            const errText = await res.text();
+            console.error(`Firecrawl search failed (${platform}): ${res.status} ${errText}`);
             continue;
           }
 
           const data = await res.json();
+          const expectedDomain = platform === "threads" ? "threads.net" : "reddit.com";
+
           for (const result of data.data ?? []) {
-            if (!result.url?.includes("threads.net")) continue;
+            if (!result.url?.includes(expectedDomain)) continue;
+            // Skip profile pages and subreddit homepages
+            if (platform === "threads" && !result.url.includes("/post/")) {
+              // Still allow if there's substantial text in description
+              if (!result.description || result.description.length < 50) continue;
+            }
+            if (platform === "reddit" && result.url.match(/reddit\.com\/r\/[^/]+\/?$/)) continue;
+
             const text = result.description || result.title || "";
+            if (text.length < 20) continue; // Skip empty/tiny results
+
+            const author = platform === "threads"
+              ? `@${result.url.split("threads.net/@")[1]?.split("/")[0] ?? "unknown"}`
+              : result.url.match(/reddit\.com\/r\/([^/]+)/)?.[1] ?? "unknown";
+
             allPosts.push({
-              platform: "threads",
+              platform,
               post_id: result.url,
               post_url: result.url,
-              post_author: result.url.split("threads.net/")[1]?.split("/")[0] ?? "unknown",
+              post_author: author,
               post_text: text.slice(0, 1000),
               post_date: new Date().toISOString(),
               category: classifyCategory(text),
@@ -170,11 +203,11 @@ serve(async (req) => {
             });
           }
         } catch (e) {
-          console.error("Threads scan error:", e);
+          console.error(`${platform} scan error:`, e);
         }
       }
     } else {
-      console.log("FIRECRAWL_API_KEY not set, skipping Threads scan");
+      console.log("FIRECRAWL_API_KEY not set, skipping Threads/Reddit scan");
     }
 
     // ── Step 3: Dedupe against existing ──
@@ -304,7 +337,7 @@ Rules:
       ];
 
       for (const op of topOps) {
-        const platformEmoji = op.platform === "x" ? "𝕏" : "🧵";
+        const platformEmoji = op.platform === "x" ? "𝕏" : op.platform === "reddit" ? "🤖" : "🧵";
         const categoryLabel = op.category.replace(/_/g, " ");
         blocks.push({
           type: "section",
@@ -362,6 +395,7 @@ Rules:
         platforms: {
           x: allPosts.filter((p) => p.platform === "x").length,
           threads: allPosts.filter((p) => p.platform === "threads").length,
+          reddit: allPosts.filter((p) => p.platform === "reddit").length,
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

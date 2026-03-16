@@ -1,0 +1,1 @@
+DELETE FROM lead_gen_opportunities;

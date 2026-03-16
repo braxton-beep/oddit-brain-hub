@@ -59,9 +59,10 @@ function useLeadStats() {
       const total = data?.length ?? 0;
       const pending = data?.filter((d) => d.status === "pending").length ?? 0;
       const replied = data?.filter((d) => d.status === "replied").length ?? 0;
-      const byPlatform = { x: 0, threads: 0 };
+      const byPlatform = { x: 0, threads: 0, reddit: 0 };
       for (const d of data ?? []) {
         if (d.platform === "x") byPlatform.x++;
+        else if (d.platform === "reddit") byPlatform.reddit++;
         else byPlatform.threads++;
       }
       return { total, pending, replied, byPlatform };
@@ -127,7 +128,7 @@ function OpportunityCard({ opp, onAction }: { opp: any; onAction: (id: string, a
               {stat.label}
             </Badge>
             <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
-              {opp.platform === "x" ? "𝕏" : "🧵"} {opp.platform}
+              {opp.platform === "x" ? "𝕏" : opp.platform === "reddit" ? "🤖" : "🧵"} {opp.platform}
             </Badge>
             <span className="text-xs text-muted-foreground">Score: {opp.relevance_score}</span>
           </div>
@@ -257,7 +258,7 @@ export default function LeadGen() {
           <Card className="p-4 bg-card border-border">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">By Platform</p>
             <p className="text-sm text-foreground">
-              𝕏 {stats?.byPlatform?.x ?? 0} · 🧵 {stats?.byPlatform?.threads ?? 0}
+              𝕏 {stats?.byPlatform?.x ?? 0} · 🧵 {stats?.byPlatform?.threads ?? 0} · 🤖 {stats?.byPlatform?.reddit ?? 0}
             </p>
           </Card>
         </div>
