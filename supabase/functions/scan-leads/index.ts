@@ -395,6 +395,7 @@ Rules:
         platforms: {
           x: allPosts.filter((p) => p.platform === "x").length,
           threads: allPosts.filter((p) => p.platform === "threads").length,
+          reddit: allPosts.filter((p) => p.platform === "reddit").length,
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
