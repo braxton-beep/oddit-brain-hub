@@ -88,3 +88,6 @@ verify_jwt = false
 [functions.reply-lead]
 verify_jwt = false
 
+[functions.pipeline-auto-setup]
+verify_jwt = false
+
