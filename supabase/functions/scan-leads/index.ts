@@ -18,10 +18,10 @@ const SEARCH_QUERIES = [
 ];
 
 const CATEGORIES: Record<string, string[]> = {
-  cro_pain: ["low conversion", "conversion rate", "not converting", "bounce rate", "no sales", "why no one buys"],
-  store_launch: ["just launched", "new store", "launched my", "new shopify", "check out my store"],
-  feedback_request: ["rate my", "roast my", "feedback", "review my", "what do you think"],
-  competitor_mention: ["cro agency", "conversion optimization", "ux audit", "site audit"],
+  cro_pain: ["low conversion", "conversion rate", "not converting", "bounce rate", "no sales", "why no one buys", "no one is buying", "zero sales", "no conversions"],
+  store_launch: ["just launched", "new store", "launched my", "new shopify", "check out my store", "just opened", "grand opening", "finally live"],
+  feedback_request: ["rate my", "roast my", "feedback", "review my", "what do you think", "honest opinion", "critique my", "thoughts on my"],
+  competitor_mention: ["cro agency", "conversion optimization", "ux audit", "site audit", "hire someone", "looking for agency"],
 };
 
 function classifyCategory(text: string): string {
@@ -36,9 +36,14 @@ function scoreRelevance(text: string, metrics: any): number {
   let score = 0;
   const lower = text.toLowerCase();
   // Keyword relevance
-  const highValue = ["shopify", "ecommerce", "e-commerce", "landing page", "conversion", "cro", "ux", "store"];
+  const highValue = ["shopify", "ecommerce", "e-commerce", "landing page", "conversion", "cro", "ux", "store", "checkout", "add to cart", "product page"];
   for (const kw of highValue) {
     if (lower.includes(kw)) score += 10;
+  }
+  // Reddit-specific high-value signals
+  const redditSignals = ["r/shopify", "r/ecommerce", "r/web_design", "r/smallbusiness", "r/entrepreneur", "r/dropshipping"];
+  for (const kw of redditSignals) {
+    if (lower.includes(kw)) score += 5;
   }
   // Engagement signals
   if (metrics) {
@@ -49,7 +54,9 @@ function scoreRelevance(text: string, metrics: any): number {
   // Question = higher intent
   if (text.includes("?")) score += 5;
   // URL in post = they have a site
-  if (lower.includes("http") || lower.includes(".com") || lower.includes(".co")) score += 10;
+  if (lower.includes("http") || lower.includes(".com") || lower.includes(".co") || lower.includes(".store") || lower.includes(".shop")) score += 10;
+  // Urgency signals
+  if (lower.includes("help") || lower.includes("urgent") || lower.includes("please") || lower.includes("struggling")) score += 5;
   return Math.min(score, 100);
 }
 
@@ -276,11 +283,13 @@ Rules:
 - Be genuinely helpful first — share a specific insight or tip related to their post
 - Don't be salesy. Never say "DM me" or "check us out" — if the value is good enough, they'll look at the profile
 - Sound like a knowledgeable friend, not a brand account
-- Keep it under 240 characters for X, under 400 for Threads
+- Keep it under 240 characters for X, under 400 for Threads, under 500 for Reddit
+- For Reddit: be more detailed and substantive — Redditors appreciate depth and specifics
 - If they shared a URL, reference something specific about their site
 - Match the energy of the original post (casual → casual, frustrated → empathetic)
 - End with a question or actionable next step when natural
-- Never use hashtags in replies`,
+- Never use hashtags in replies
+- For Reddit, don't use @mentions — just reply naturally`,
                 },
                 {
                   role: "user",
@@ -358,32 +367,42 @@ Rules:
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `👉 <${Deno.env.get("SUPABASE_URL")?.replace(".supabase.co", "") || "https://oddit-brain-hub.lovable.app"}/lead-gen|Review all opportunities in dashboard>`,
+          text: `👉 <https://oddit-brain-hub.lovable.app/lead-gen|Review all opportunities in dashboard>`,
         },
       });
 
-      try {
-        const slackRes = await fetch("https://slack.com/api/chat.postMessage", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            channel: "#leads",
-            text: `🎯 ${inserted?.length ?? 0} new lead opportunities found!`,
-            blocks,
-            username: "Oddit Lead Scout",
-            icon_emoji: ":dart:",
-          }),
-        });
+      // Try multiple channels in order of preference
+      const channels = ["#oddit-brain-ai", "#leads", "#general"];
+      let slackSent = false;
 
-        const slackData = await slackRes.json();
-        if (!slackData.ok) {
-          console.error("Slack error:", slackData.error);
+      for (const channel of channels) {
+        if (slackSent) break;
+        try {
+          const slackRes = await fetch("https://slack.com/api/chat.postMessage", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              channel,
+              text: `🎯 ${inserted?.length ?? 0} new lead opportunities found!`,
+              blocks,
+              username: "Oddit Lead Scout",
+              icon_emoji: ":dart:",
+            }),
+          });
+
+          const slackData = await slackRes.json();
+          if (slackData.ok) {
+            console.log(`Slack notification sent to ${channel}`);
+            slackSent = true;
+          } else {
+            console.warn(`Slack channel ${channel} failed: ${slackData.error}`);
+          }
+        } catch (e) {
+          console.error(`Slack notification error (${channel}):`, e);
         }
-      } catch (e) {
-        console.error("Slack notification error:", e);
       }
     }
 
