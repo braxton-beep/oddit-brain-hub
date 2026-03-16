@@ -127,7 +127,7 @@ async function extractDesignData(
   if (!fileRes.ok) {
     const text = await fileRes.text();
     if (fileRes.status === 400 && text.includes("not supported")) {
-      return { design_data: { _unsupported_file_type: true }, errors: [] };
+      return { design_data: { _unsupported_file_type: true, _extracted: true }, errors: [] };
     }
     errors.push(`File fetch: ${fileRes.status} - ${text.slice(0, 200)}`);
     return { design_data: designData, errors };
@@ -263,6 +263,7 @@ async function extractDesignData(
   }
 
   // Summary
+  designData._extracted = true;
   designData._extraction_summary = {
     total_colors: allColors.length,
     total_fonts: allFonts.length,
@@ -323,7 +324,7 @@ serve(async (req) => {
     const needsExtraction = (files ?? []).filter((f: any) => {
       if (forceReExtract) return true;
       if (!f.design_data) return true;
-      return !f.design_data.color_palette || f.design_data.color_palette.length === 0;
+      return !f.design_data._extracted;
     });
 
     const batch = needsExtraction.slice(0, batchSize);
