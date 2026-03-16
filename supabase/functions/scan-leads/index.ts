@@ -18,10 +18,10 @@ const SEARCH_QUERIES = [
 ];
 
 const CATEGORIES: Record<string, string[]> = {
-  cro_pain: ["low conversion", "conversion rate", "not converting", "bounce rate", "no sales", "why no one buys"],
-  store_launch: ["just launched", "new store", "launched my", "new shopify", "check out my store"],
-  feedback_request: ["rate my", "roast my", "feedback", "review my", "what do you think"],
-  competitor_mention: ["cro agency", "conversion optimization", "ux audit", "site audit"],
+  cro_pain: ["low conversion", "conversion rate", "not converting", "bounce rate", "no sales", "why no one buys", "no one is buying", "zero sales", "no conversions"],
+  store_launch: ["just launched", "new store", "launched my", "new shopify", "check out my store", "just opened", "grand opening", "finally live"],
+  feedback_request: ["rate my", "roast my", "feedback", "review my", "what do you think", "honest opinion", "critique my", "thoughts on my"],
+  competitor_mention: ["cro agency", "conversion optimization", "ux audit", "site audit", "hire someone", "looking for agency"],
 };
 
 function classifyCategory(text: string): string {
