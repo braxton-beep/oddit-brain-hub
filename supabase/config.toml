@@ -94,4 +94,7 @@ verify_jwt = false
 [functions.extract-design-dna]
 verify_jwt = false
 
+[functions.embed-transcripts]
+verify_jwt = false
+
 
