@@ -9,7 +9,166 @@ const corsHeaders = {
 
 const FIGMA_API_BASE = "https://api.figma.com/v1";
 
-// ── Extract design data for a single file ──────────────────────────────────
+// ── Color helpers ───────────────────────────────────────────────────────
+function rgbaToHex(r: number, g: number, b: number): string {
+  const toHex = (v: number) => Math.round(v * 255).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function colorKey(r: number, g: number, b: number): string {
+  return `${Math.round(r * 255)}-${Math.round(g * 255)}-${Math.round(b * 255)}`;
+}
+
+// ── Deep node walker ────────────────────────────────────────────────────
+// Walks the entire node tree and collects real design data from actual nodes
+function walkNodes(
+  node: any,
+  collectors: {
+    colors: Map<string, { hex: string; r: number; g: number; b: number; count: number; contexts: string[] }>;
+    fonts: Map<string, { fontFamily: string; fontWeight: number; fontSize: number; count: number; contexts: string[] }>;
+    textSamples: { text: string; fontFamily: string; fontSize: number; fontWeight: number; nodeName: string }[];
+    components: Map<string, { name: string; type: string; count: number }>;
+    spacingValues: number[];
+    cornerRadii: number[];
+    frameLayouts: { name: string; layoutMode: string; spacing: number; padding: number[]; width: number; height: number }[];
+  },
+  depth = 0,
+  maxDepth = 8
+) {
+  if (!node || depth > maxDepth) return;
+
+  // Extract fills (colors actually used)
+  if (node.fills && Array.isArray(node.fills)) {
+    for (const fill of node.fills) {
+      if (fill.visible === false) continue;
+      if (fill.type === "SOLID" && fill.color) {
+        const { r, g, b } = fill.color;
+        const key = colorKey(r, g, b);
+        const existing = collectors.colors.get(key);
+        const context = node.name || "unnamed";
+        if (existing) {
+          existing.count++;
+          if (existing.contexts.length < 5 && !existing.contexts.includes(context)) {
+            existing.contexts.push(context);
+          }
+        } else {
+          collectors.colors.set(key, {
+            hex: rgbaToHex(r, g, b),
+            r: Math.round(r * 255),
+            g: Math.round(g * 255),
+            b: Math.round(b * 255),
+            count: 1,
+            contexts: [context],
+          });
+        }
+      }
+    }
+  }
+
+  // Extract strokes
+  if (node.strokes && Array.isArray(node.strokes)) {
+    for (const stroke of node.strokes) {
+      if (stroke.visible === false) continue;
+      if (stroke.type === "SOLID" && stroke.color) {
+        const { r, g, b } = stroke.color;
+        const key = `stroke-${colorKey(r, g, b)}`;
+        const existing = collectors.colors.get(key);
+        if (existing) {
+          existing.count++;
+        } else {
+          collectors.colors.set(key, {
+            hex: rgbaToHex(r, g, b),
+            r: Math.round(r * 255),
+            g: Math.round(g * 255),
+            b: Math.round(b * 255),
+            count: 1,
+            contexts: [`stroke: ${node.name || "unnamed"}`],
+          });
+        }
+      }
+    }
+  }
+
+  // Extract typography from actual text nodes
+  if (node.type === "TEXT" && node.style) {
+    const s = node.style;
+    const fontKey = `${s.fontFamily}-${s.fontWeight}-${s.fontSize}`;
+    const existing = collectors.fonts.get(fontKey);
+    const context = node.name || "unnamed";
+    if (existing) {
+      existing.count++;
+      if (existing.contexts.length < 5 && !existing.contexts.includes(context)) {
+        existing.contexts.push(context);
+      }
+    } else {
+      collectors.fonts.set(fontKey, {
+        fontFamily: s.fontFamily,
+        fontWeight: s.fontWeight,
+        fontSize: s.fontSize,
+        count: 1,
+        contexts: [context],
+      });
+    }
+
+    // Collect text samples for tone/copy analysis
+    if (node.characters && node.characters.length > 3 && collectors.textSamples.length < 40) {
+      collectors.textSamples.push({
+        text: node.characters.slice(0, 200),
+        fontFamily: s.fontFamily,
+        fontSize: s.fontSize,
+        fontWeight: s.fontWeight,
+        nodeName: node.name || "unnamed",
+      });
+    }
+  }
+
+  // Extract component usage
+  if (node.type === "COMPONENT" || node.type === "COMPONENT_SET" || node.type === "INSTANCE") {
+    const compName = node.name || "unnamed";
+    const existing = collectors.components.get(compName);
+    if (existing) {
+      existing.count++;
+    } else {
+      collectors.components.set(compName, { name: compName, type: node.type, count: 1 });
+    }
+  }
+
+  // Extract layout/spacing from auto-layout frames
+  if (node.type === "FRAME" && node.layoutMode) {
+    collectors.frameLayouts.push({
+      name: node.name || "unnamed",
+      layoutMode: node.layoutMode,
+      spacing: node.itemSpacing ?? 0,
+      padding: [
+        node.paddingTop ?? 0,
+        node.paddingRight ?? 0,
+        node.paddingBottom ?? 0,
+        node.paddingLeft ?? 0,
+      ],
+      width: node.absoluteBoundingBox?.width ?? 0,
+      height: node.absoluteBoundingBox?.height ?? 0,
+    });
+    if (node.itemSpacing) collectors.spacingValues.push(node.itemSpacing);
+    if (node.paddingTop) collectors.spacingValues.push(node.paddingTop);
+    if (node.paddingBottom) collectors.spacingValues.push(node.paddingBottom);
+    if (node.paddingLeft) collectors.spacingValues.push(node.paddingLeft);
+    if (node.paddingRight) collectors.spacingValues.push(node.paddingRight);
+  }
+
+  // Extract corner radii
+  if (node.cornerRadius && node.cornerRadius > 0) {
+    collectors.cornerRadii.push(node.cornerRadius);
+  }
+
+  // Recurse into children
+  if (node.children && Array.isArray(node.children)) {
+    for (const child of node.children) {
+      walkNodes(child, collectors, depth + 1, maxDepth);
+    }
+  }
+}
+
+// ── Extract design data for a single file ───────────────────────────────
 async function extractDesignData(
   fileKey: string,
   token: string,
@@ -19,15 +178,14 @@ async function extractDesignData(
   const errors: string[] = [];
   const designData: Record<string, any> = {};
 
-  // 1. Get file structure + styles
+  // 1. Get FULL file structure (deep) with geometry
   const fileRes = await fetch(
-    `${FIGMA_API_BASE}/files/${fileKey}?depth=2&geometry=paths`,
+    `${FIGMA_API_BASE}/files/${fileKey}?geometry=paths`,
     { headers: { "X-Figma-Token": token } }
   );
 
   if (!fileRes.ok) {
     const text = await fileRes.text();
-    // Figma Slides / FigJam files return 400 "File type not supported"
     if (fileRes.status === 400 && text.includes("not supported")) {
       designData._unsupported_file_type = true;
       return { design_data: designData, errors: [] };
@@ -38,30 +196,84 @@ async function extractDesignData(
 
   const fileData = await fileRes.json();
 
-  // 2. Extract published styles
-  const styles = fileData.styles ?? {};
-  const styleEntries: Record<string, any[]> = {
-    fills: [], text: [], effects: [], grids: [],
+  // 2. Deep-walk the ENTIRE node tree
+  const collectors = {
+    colors: new Map<string, { hex: string; r: number; g: number; b: number; count: number; contexts: string[] }>(),
+    fonts: new Map<string, { fontFamily: string; fontWeight: number; fontSize: number; count: number; contexts: string[] }>(),
+    textSamples: [] as any[],
+    components: new Map<string, { name: string; type: string; count: number }>(),
+    spacingValues: [] as number[],
+    cornerRadii: [] as number[],
+    frameLayouts: [] as any[],
   };
 
-  for (const [nodeId, styleMeta] of Object.entries(styles)) {
-    const meta = styleMeta as any;
-    const category = meta.style_type?.toLowerCase() ?? "other";
-    if (category === "fill") styleEntries.fills.push({ nodeId, name: meta.name, description: meta.description });
-    else if (category === "text") styleEntries.text.push({ nodeId, name: meta.name, description: meta.description });
-    else if (category === "effect") styleEntries.effects.push({ nodeId, name: meta.name, description: meta.description });
-    else if (category === "grid") styleEntries.grids.push({ nodeId, name: meta.name, description: meta.description });
+  for (const page of fileData.document?.children ?? []) {
+    walkNodes(page, collectors, 0, 8);
   }
 
-  designData.styles = styleEntries;
+  // 3. Process collected data into structured output
 
-  // 3. Extract top-level page/frame structure
+  // Color palette — sorted by usage frequency, deduplicated
+  const allColors = Array.from(collectors.colors.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 30);
+  designData.color_palette = allColors;
+
+  // Typography — sorted by usage, deduped
+  const allFonts = Array.from(collectors.fonts.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20);
+  designData.typography = allFonts;
+
+  // Unique font families used
+  const fontFamilies = [...new Set(allFonts.map((f) => f.fontFamily))];
+  designData.font_families = fontFamilies;
+
+  // Font size scale
+  const fontSizes = [...new Set(allFonts.map((f) => f.fontSize))].sort((a, b) => a - b);
+  designData.font_size_scale = fontSizes;
+
+  // Text samples for tone analysis
+  designData.text_samples = collectors.textSamples;
+
+  // Component library
+  const components = Array.from(collectors.components.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 30);
+  designData.components = components;
+
+  // Spacing system — find the most common spacing values
+  const spacingCounts = new Map<number, number>();
+  for (const s of collectors.spacingValues) {
+    spacingCounts.set(s, (spacingCounts.get(s) ?? 0) + 1);
+  }
+  const spacingScale = Array.from(spacingCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([value, count]) => ({ value, count }));
+  designData.spacing_scale = spacingScale;
+
+  // Corner radius patterns
+  const radiusCounts = new Map<number, number>();
+  for (const r of collectors.cornerRadii) {
+    radiusCounts.set(r, (radiusCounts.get(r) ?? 0) + 1);
+  }
+  const radiusScale = Array.from(radiusCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([value, count]) => ({ value, count }));
+  designData.corner_radii = radiusScale;
+
+  // Layout patterns (auto-layout frames)
+  designData.layout_patterns = collectors.frameLayouts.slice(0, 20);
+
+  // 4. Page/frame structure
   const pages: any[] = [];
   const topFrameIds: string[] = [];
 
   for (const page of fileData.document?.children ?? []) {
     const frames: any[] = [];
-    for (const child of (page.children ?? []).slice(0, 20)) {
+    for (const child of (page.children ?? []).slice(0, 30)) {
       if (child.type === "FRAME" || child.type === "COMPONENT" || child.type === "COMPONENT_SET") {
         frames.push({
           id: child.id,
@@ -70,19 +282,18 @@ async function extractDesignData(
           width: child.absoluteBoundingBox?.width,
           height: child.absoluteBoundingBox?.height,
         });
-        if (topFrameIds.length < 6) topFrameIds.push(child.id);
+        if (topFrameIds.length < 8) topFrameIds.push(child.id);
       }
     }
-    pages.push({ name: page.name, frames });
+    pages.push({ name: page.name, frameCount: frames.length, frames });
   }
-
   designData.pages = pages;
 
-  // 4. Export key frames as PNGs → storage
+  // 5. Export key frames as PNGs → storage
   if (topFrameIds.length > 0) {
     const idsParam = topFrameIds.join(",");
     const imgRes = await fetch(
-      `${FIGMA_API_BASE}/images/${fileKey}?ids=${idsParam}&format=png&scale=1`,
+      `${FIGMA_API_BASE}/images/${fileKey}?ids=${idsParam}&format=png&scale=2`,
       { headers: { "X-Figma-Token": token } }
     );
 
@@ -110,79 +321,49 @@ async function extractDesignData(
           if (uploadError) {
             errors.push(`Upload ${storagePath}: ${uploadError.message}`);
           } else {
-            const publicUrl = `${supabaseUrl}/storage/v1/object/public/figma-exports/${storagePath}`;
-            frameExports[nodeId] = publicUrl;
+            frameExports[nodeId] = `${supabaseUrl}/storage/v1/object/public/figma-exports/${storagePath}`;
           }
         } catch (dlErr) {
           errors.push(`Download frame ${nodeId}: ${dlErr instanceof Error ? dlErr.message : "unknown"}`);
         }
       }
-
       designData.frame_exports = frameExports;
     } else {
       errors.push(`Frame export for ${fileKey}: ${imgRes.status}`);
     }
   }
 
-  // 5. Extract actual color values + typography from style nodes
-  const styleNodeIds = [
-    ...styleEntries.fills.map((s) => s.nodeId),
-    ...styleEntries.text.map((s) => s.nodeId),
-  ].slice(0, 30);
+  // 6. Published styles (bonus — on top of deep extraction)
+  const styles = fileData.styles ?? {};
+  const publishedStyles: Record<string, any[]> = { fills: [], text: [], effects: [], grids: [] };
 
-  if (styleNodeIds.length > 0) {
-    const nodesParam = styleNodeIds.join(",");
-    const nodesRes = await fetch(
-      `${FIGMA_API_BASE}/files/${fileKey}/nodes?ids=${nodesParam}`,
-      { headers: { "X-Figma-Token": token } }
-    );
-
-    if (nodesRes.ok) {
-      const nodesData = await nodesRes.json();
-      const colorPalette: any[] = [];
-      const typography: any[] = [];
-
-      for (const [_nodeId, nodeInfo] of Object.entries(nodesData.nodes ?? {})) {
-        const node = (nodeInfo as any)?.document;
-        if (!node) continue;
-
-        if (node.fills) {
-          for (const fill of node.fills) {
-            if (fill.type === "SOLID" && fill.color) {
-              const { r, g, b, a } = fill.color;
-              colorPalette.push({
-                name: node.name,
-                r: Math.round(r * 255),
-                g: Math.round(g * 255),
-                b: Math.round(b * 255),
-                a: a ?? 1,
-                hex: `#${Math.round(r * 255).toString(16).padStart(2, "0")}${Math.round(g * 255).toString(16).padStart(2, "0")}${Math.round(b * 255).toString(16).padStart(2, "0")}`,
-              });
-            }
-          }
-        }
-
-        if (node.style) {
-          typography.push({
-            name: node.name,
-            fontFamily: node.style.fontFamily,
-            fontWeight: node.style.fontWeight,
-            fontSize: node.style.fontSize,
-            lineHeight: node.style.lineHeightPx,
-            letterSpacing: node.style.letterSpacing,
-          });
-        }
-      }
-
-      if (colorPalette.length > 0) designData.color_palette = colorPalette;
-      if (typography.length > 0) designData.typography = typography;
-    }
+  for (const [nodeId, styleMeta] of Object.entries(styles)) {
+    const meta = styleMeta as any;
+    const category = meta.style_type?.toLowerCase() ?? "other";
+    const entry = { nodeId, name: meta.name, description: meta.description };
+    if (category === "fill") publishedStyles.fills.push(entry);
+    else if (category === "text") publishedStyles.text.push(entry);
+    else if (category === "effect") publishedStyles.effects.push(entry);
+    else if (category === "grid") publishedStyles.grids.push(entry);
   }
+  designData.published_styles = publishedStyles;
+
+  // 7. Summary stats
+  designData._extraction_summary = {
+    total_colors: allColors.length,
+    total_fonts: allFonts.length,
+    font_families: fontFamilies.length,
+    components_found: components.length,
+    text_samples: collectors.textSamples.length,
+    frames_exported: Object.keys(designData.frame_exports ?? {}).length,
+    pages: pages.length,
+    extracted_at: new Date().toISOString(),
+  };
 
   return { design_data: designData, errors };
 }
 
-// ── Main handler ────────────────────────────────────────────────────────────
+// ── Main handler ────────────────────────────────────────────────────────
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -193,16 +374,17 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const sb = createClient(supabaseUrl, supabaseKey);
 
-    // Parse params
-    let batchSize = 5;
+    let batchSize = 3;
     let designTypes = ["oddit_report", "landing_page", "new_site_design"];
     let fileIds: string[] | null = null;
+    let forceReExtract = false;
 
     try {
       const body = await req.json();
-      if (body?.batch_size) batchSize = Math.min(body.batch_size, 10);
+      if (body?.batch_size) batchSize = Math.min(body.batch_size, 5);
       if (body?.design_types) designTypes = body.design_types;
       if (body?.file_ids) fileIds = body.file_ids;
+      if (body?.force) forceReExtract = true;
     } catch { /* no body = defaults */ }
 
     // Resolve Figma token
@@ -225,7 +407,7 @@ serve(async (req) => {
       );
     }
 
-    // Get files that need extraction
+    // Get files needing extraction
     let query = sb
       .from("figma_files")
       .select("id, figma_file_key, name, design_type, design_data")
@@ -239,27 +421,28 @@ serve(async (req) => {
 
     const { data: files, error: queryError } = await query
       .order("last_modified", { ascending: false })
-      .limit(100);
+      .limit(200);
 
     if (queryError) throw queryError;
 
-    // Filter to only files with empty design_data
+    // Filter: needs extraction if no color_palette or forced
     const needsExtraction = (files ?? []).filter((f: any) => {
+      if (forceReExtract) return true;
       if (!f.design_data) return true;
-      const keys = Object.keys(f.design_data);
-      return keys.length === 0;
+      const dd = f.design_data;
+      // Re-extract if no deep data (color_palette is the marker)
+      return !dd.color_palette || dd.color_palette.length === 0;
     });
 
-    // Process batch
     const batch = needsExtraction.slice(0, batchSize);
     const results: any[] = [];
     const allErrors: string[] = [];
 
-    console.log(`Processing ${batch.length} of ${needsExtraction.length} files needing extraction`);
+    console.log(`Deep extracting ${batch.length} of ${needsExtraction.length} files`);
 
     for (const file of batch) {
-      console.log(`Extracting: ${file.name} (${file.figma_file_key})`);
-      
+      console.log(`Deep extracting: ${file.name} (${file.figma_file_key})`);
+
       const { design_data, errors } = await extractDesignData(
         file.figma_file_key,
         FIGMA_ACCESS_TOKEN,
@@ -269,13 +452,8 @@ serve(async (req) => {
 
       allErrors.push(...errors);
 
-      // Count what we got
-      const frameCount = Object.keys(design_data.frame_exports ?? {}).length;
-      const colorCount = (design_data.color_palette ?? []).length;
-      const typoCount = (design_data.typography ?? []).length;
-      const pageCount = (design_data.pages ?? []).length;
+      const summary = design_data._extraction_summary ?? {};
 
-      // Update the file
       const { error: updateError } = await sb
         .from("figma_files")
         .update({ design_data })
@@ -288,10 +466,7 @@ serve(async (req) => {
       results.push({
         name: file.name,
         file_key: file.figma_file_key,
-        frames_exported: frameCount,
-        colors: colorCount,
-        typography: typoCount,
-        pages: pageCount,
+        ...summary,
         success: !updateError,
       });
     }
