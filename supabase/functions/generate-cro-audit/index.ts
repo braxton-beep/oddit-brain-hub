@@ -234,8 +234,13 @@ serve(async (req) => {
       .limit(15);
 
     if (topPatterns?.length) {
-      crossClientContext = "\n\nPROVEN CRO PATTERNS FROM 11,000+ PAST AUDITS (reference these battle-tested recommendations):\n" +
-        topPatterns.map((p: any) => `  • [${p.category}] (used ${p.frequency_count}x): ${p.recommendation_text}${p.template_content ? `\n    Template: ${p.template_content.slice(0, 200)}` : ""}`).join("\n");
+      crossClientContext = "\n\nPROVEN CRO PATTERNS FROM 11,000+ PAST AUDITS (prioritized by effectiveness score — higher = more often converted):\n" +
+        topPatterns.map((p: any) => {
+          const stats = p.converted_count || p.implemented_count || p.skipped_count
+            ? ` | converted: ${p.converted_count}, implemented: ${p.implemented_count}, skipped: ${p.skipped_count}, effectiveness: ${p.effectiveness_score}`
+            : "";
+          return `  • [${p.category}] (used ${p.frequency_count}x${stats}): ${p.recommendation_text}${p.template_content ? `\n    Template: ${p.template_content.slice(0, 200)}` : ""}`;
+        }).join("\n");
     }
 
     // Fetch top-rated mockups from ANY client as quality benchmarks
