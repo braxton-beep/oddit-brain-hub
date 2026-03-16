@@ -78,7 +78,7 @@ serve(async (req) => {
       }
     }
 
-    // ── Parallel context fetches: Figma DNA, brand assets, transcripts, past audits, cross-client patterns ──
+    // ── Parallel context fetches: Figma DNA, brand assets, transcripts, past audits, cross-client patterns, industry design profiles ──
     const contextPromises: Record<string, Promise<any>> = {};
 
     if (client_name) {
