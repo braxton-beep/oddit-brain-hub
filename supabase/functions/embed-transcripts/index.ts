@@ -34,9 +34,9 @@ serve(async (req) => {
     })
   }
 
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
-  if (!LOVABLE_API_KEY) {
-    return new Response(JSON.stringify({ error: 'LOVABLE_API_KEY not configured' }), {
+  const VOYAGE_API_KEY = Deno.env.get('VOYAGE_API_KEY')
+  if (!VOYAGE_API_KEY) {
+    return new Response(JSON.stringify({ error: 'VOYAGE_API_KEY not configured' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
@@ -54,13 +54,13 @@ serve(async (req) => {
 
       if (!textToEmbed.trim()) { results.failed++; continue }
 
-      const embeddingRes = await fetch('https://ai.gateway.lovable.dev/openai/v1/embeddings', {
+      const embeddingRes = await fetch('https://api.voyageai.com/v1/embeddings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Authorization': `Bearer ${VOYAGE_API_KEY}`,
         },
-        body: JSON.stringify({ model: 'text-embedding-3-small', input: textToEmbed }),
+        body: JSON.stringify({ model: 'voyage-3-lite', input: textToEmbed }),
       })
 
       if (!embeddingRes.ok) {
