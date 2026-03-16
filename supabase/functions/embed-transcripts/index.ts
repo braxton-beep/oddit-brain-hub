@@ -81,6 +81,9 @@ serve(async (req) => {
       if (updateError) { results.errors.push(`Update failed ${transcript.id}: ${updateError.message}`); results.failed++ }
       else results.processed++
 
+      // Rate limit: small delay between requests
+      await sleep(DELAY_MS)
+
     } catch (err) {
       results.errors.push(`Exception ${transcript.id}: ${(err as Error).message}`)
       results.failed++
