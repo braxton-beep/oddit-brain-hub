@@ -27,6 +27,11 @@ async function extractDesignData(
 
   if (!fileRes.ok) {
     const text = await fileRes.text();
+    // Figma Slides / FigJam files return 400 "File type not supported"
+    if (fileRes.status === 400 && text.includes("not supported")) {
+      designData._unsupported_file_type = true;
+      return { design_data: designData, errors: [] };
+    }
     errors.push(`File ${fileKey} fetch: ${fileRes.status} - ${text.slice(0, 200)}`);
     return { design_data: designData, errors };
   }
