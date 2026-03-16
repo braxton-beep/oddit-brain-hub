@@ -258,7 +258,7 @@ export default function LeadGen() {
           <Card className="p-4 bg-card border-border">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">By Platform</p>
             <p className="text-sm text-foreground">
-              𝕏 {stats?.byPlatform?.x ?? 0} · 🧵 {stats?.byPlatform?.threads ?? 0}
+              𝕏 {stats?.byPlatform?.x ?? 0} · 🧵 {stats?.byPlatform?.threads ?? 0} · 🤖 {stats?.byPlatform?.reddit ?? 0}
             </p>
           </Card>
         </div>
