@@ -128,7 +128,7 @@ function OpportunityCard({ opp, onAction }: { opp: any; onAction: (id: string, a
               {stat.label}
             </Badge>
             <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
-              {opp.platform === "x" ? "𝕏" : "🧵"} {opp.platform}
+              {opp.platform === "x" ? "𝕏" : opp.platform === "reddit" ? "🤖" : "🧵"} {opp.platform}
             </Badge>
             <span className="text-xs text-muted-foreground">Score: {opp.relevance_score}</span>
           </div>
