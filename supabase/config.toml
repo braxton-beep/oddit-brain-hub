@@ -91,3 +91,7 @@ verify_jwt = false
 [functions.pipeline-auto-setup]
 verify_jwt = false
 
+[functions.extract-design-dna]
+verify_jwt = false
+
+
