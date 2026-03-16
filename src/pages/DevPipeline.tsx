@@ -89,13 +89,14 @@ async function fetchProjects(): Promise<PipelineProject[]> {
 }
 
 async function createProject(payload: { client: string; page: string }) {
-  const { error } = await supabase.from("pipeline_projects").insert({
+  const { data, error } = await supabase.from("pipeline_projects").insert({
     client: payload.client,
     page: payload.page,
     stages: DEFAULT_STAGES as unknown as import("@/integrations/supabase/types").Json,
     last_update: "Just now",
-  });
+  }).select("id").single();
   if (error) throw error;
+  return data;
 }
 
 async function updateProjectStages(id: string, stages: PipelineStage[]) {
