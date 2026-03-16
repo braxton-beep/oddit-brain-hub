@@ -7,8 +7,6 @@ const corsHeaders = {
 }
 
 const BATCH_SIZE = 50
-const DELAY_MS = 350 // ~170 RPM, well under standard limits
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -43,50 +41,71 @@ serve(async (req) => {
     })
   }
 
+  // Build texts for batch embedding
+  const texts: string[] = []
+  const validTranscripts: typeof transcripts = []
+
+  for (const t of transcripts) {
+    const text = [
+      t.title ? `Title: ${t.title}` : null,
+      t.organizer_email ? `Client/Organizer: ${t.organizer_email}` : null,
+      t.summary ? `Summary: ${t.summary}` : null,
+      t.transcript_text ? `Transcript excerpt: ${t.transcript_text.slice(0, 4000)}` : null,
+    ].filter(Boolean).join('\n\n')
+
+    if (text.trim()) {
+      texts.push(text)
+      validTranscripts.push(t)
+    }
+  }
+
+  if (!texts.length) {
+    return new Response(JSON.stringify({ message: 'No valid text to embed', processed: 0 }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  console.log(`Sending ${texts.length} texts to Voyage API in single batch...`)
+
+  // Single batch API call
+  const embeddingRes = await fetch('https://api.voyageai.com/v1/embeddings', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${VOYAGE_API_KEY}`,
+    },
+    body: JSON.stringify({ model: 'voyage-3-lite', input: texts }),
+  })
+
+  if (!embeddingRes.ok) {
+    const errText = await embeddingRes.text()
+    console.error(`Voyage API error ${embeddingRes.status}: ${errText}`)
+    return new Response(JSON.stringify({ error: `Voyage API ${embeddingRes.status}: ${errText}` }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+
+  const embeddingData = await embeddingRes.json()
+  const embeddings = embeddingData?.data
+
+  console.log(`Got ${embeddings?.length ?? 0} embeddings back`)
+
   const results = { processed: 0, failed: 0, errors: [] as string[] }
 
-  for (const transcript of transcripts) {
-    try {
-      const textToEmbed = [
-        transcript.title ? `Title: ${transcript.title}` : null,
-        transcript.organizer_email ? `Client/Organizer: ${transcript.organizer_email}` : null,
-        transcript.summary ? `Summary: ${transcript.summary}` : null,
-        transcript.transcript_text ? `Transcript excerpt: ${transcript.transcript_text.slice(0, 4000)}` : null,
-      ].filter(Boolean).join('\n\n')
+  for (let i = 0; i < validTranscripts.length; i++) {
+    const embedding = embeddings?.[i]?.embedding
+    if (!embedding?.length) { results.failed++; continue }
 
-      if (!textToEmbed.trim()) { results.failed++; continue }
+    const { error: updateError } = await supabase
+      .from('fireflies_transcripts')
+      .update({ embedding, embedding_updated_at: new Date().toISOString() })
+      .eq('id', validTranscripts[i].id)
 
-      const embeddingRes = await fetch('https://api.voyageai.com/v1/embeddings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${VOYAGE_API_KEY}`,
-        },
-        body: JSON.stringify({ model: 'voyage-3-lite', input: textToEmbed }),
-      })
-
-      if (!embeddingRes.ok) {
-        results.errors.push(`${transcript.id}: ${await embeddingRes.text()}`)
-        results.failed++; continue
-      }
-
-      const embedding = (await embeddingRes.json())?.data?.[0]?.embedding
-      if (!embedding?.length) { results.failed++; continue }
-
-      const { error: updateError } = await supabase
-        .from('fireflies_transcripts')
-        .update({ embedding, embedding_updated_at: new Date().toISOString() })
-        .eq('id', transcript.id)
-
-      if (updateError) { results.errors.push(`Update failed ${transcript.id}: ${updateError.message}`); results.failed++ }
-      else results.processed++
-
-      // Rate limit: small delay between requests
-      await sleep(DELAY_MS)
-
-    } catch (err) {
-      results.errors.push(`Exception ${transcript.id}: ${(err as Error).message}`)
+    if (updateError) {
+      results.errors.push(`Update ${validTranscripts[i].id}: ${updateError.message}`)
       results.failed++
+    } else {
+      results.processed++
     }
   }
 
@@ -94,6 +113,8 @@ serve(async (req) => {
     .from('fireflies_transcripts')
     .select('id', { count: 'exact', head: true })
     .is('embedding', null)
+
+  console.log(`Done: processed=${results.processed}, failed=${results.failed}, remaining=${remaining}`)
 
   return new Response(
     JSON.stringify({ ...results, remaining_after_this_run: remaining ?? 'unknown' }),
