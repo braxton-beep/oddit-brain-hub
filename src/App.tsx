@@ -23,6 +23,7 @@ import CroAgent from "./pages/CroAgent";
 import ShopifyConnect from "./pages/ShopifyConnect";
 import Wireframes from "./pages/Wireframes";
 import LeadGen from "./pages/LeadGen";
+import Demo from "./pages/Demo";
 import NotFound from "./pages/NotFound";
 import { WelcomeTour } from "./components/WelcomeTour";
 
