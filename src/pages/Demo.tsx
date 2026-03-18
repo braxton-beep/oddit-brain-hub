@@ -111,7 +111,7 @@ export default function Demo() {
         .not("recommendations", "is", null)
         .order("created_at", { ascending: false })
         .limit(20);
-      return (data || []) as CroAudit[];
+      return (data || []) as unknown as CroAudit[];
     },
   });
 

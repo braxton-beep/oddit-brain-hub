@@ -56,6 +56,7 @@ const App = () => (
           <Route path="/shopify-connect" element={<ShopifyConnect />} />
           <Route path="/wireframes" element={<Wireframes />} />
           <Route path="/lead-gen" element={<LeadGen />} />
+          <Route path="/demo" element={<Demo />} />
           <Route path="/portal/:token" element={<ClientPortal />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
