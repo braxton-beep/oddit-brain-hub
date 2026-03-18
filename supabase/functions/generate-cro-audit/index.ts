@@ -316,6 +316,12 @@ ${dossierContext ? `\n## FULL CLIENT DOSSIER\nBelow is the complete client histo
 
 8. **Reference the Design DNA.** When Figma design data and frame exports are provided, your recommendations MUST reference the client's existing brand colors, typography, and layout patterns. The mockup_prompt should specify exact color hex values and font families from the brand's design system — not generic values.
 
+9. **Before/After copy comparison.** For EVERY recommendation, provide the EXACT current copy/element as it appears on the site (before_copy) and your improved version (after_copy). This creates an instant visual comparison. e.g. before: "Shop Now" → after: "Get 20% Off Your First Order — Free Shipping"
+
+10. **Revenue impact estimation.** Estimate the monthly revenue impact for a store doing $500K/mo in revenue. Be specific: "+$4,200-$7,500/mo from 0.8-1.5% ATC uplift on hero CTA redesign." Base estimates on published conversion benchmarks from Baymard, NNGroup, CXL, or real brand case studies.
+
+11. **Difficulty classification.** Rate each recommendation as quick_win (< 2 hours, copy/config change), moderate (2-8 hours, design + dev), or complex (1-2 weeks, structural change). Quick wins should be prioritized first.
+
 ## RECOMMENDATION STRUCTURE
 
 For each of the 10 recommendations, think through:
@@ -324,6 +330,8 @@ For each of the 10 recommendations, think through:
 - A real DTC brand that does this well, with the specific pattern they use
 - The mobile-specific implementation (touch targets, scroll behavior, viewport stacking)
 - AIDA stage this maps to
+- The BEFORE copy/state vs AFTER copy/state side by side
+- Estimated monthly revenue impact for a $500K/mo store
 
 ## CSS SELECTOR RULES
 - Provide the most specific CSS selector you can infer from the markup
