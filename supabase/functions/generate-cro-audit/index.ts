@@ -316,6 +316,12 @@ ${dossierContext ? `\n## FULL CLIENT DOSSIER\nBelow is the complete client histo
 
 8. **Reference the Design DNA.** When Figma design data and frame exports are provided, your recommendations MUST reference the client's existing brand colors, typography, and layout patterns. The mockup_prompt should specify exact color hex values and font families from the brand's design system — not generic values.
 
+9. **Before/After copy comparison.** For EVERY recommendation, provide the EXACT current copy/element as it appears on the site (before_copy) and your improved version (after_copy). This creates an instant visual comparison. e.g. before: "Shop Now" → after: "Get 20% Off Your First Order — Free Shipping"
+
+10. **Revenue impact estimation.** Estimate the monthly revenue impact for a store doing $500K/mo in revenue. Be specific: "+$4,200-$7,500/mo from 0.8-1.5% ATC uplift on hero CTA redesign." Base estimates on published conversion benchmarks from Baymard, NNGroup, CXL, or real brand case studies.
+
+11. **Difficulty classification.** Rate each recommendation as quick_win (< 2 hours, copy/config change), moderate (2-8 hours, design + dev), or complex (1-2 weeks, structural change). Quick wins should be prioritized first.
+
 ## RECOMMENDATION STRUCTURE
 
 For each of the 10 recommendations, think through:
@@ -324,6 +330,8 @@ For each of the 10 recommendations, think through:
 - A real DTC brand that does this well, with the specific pattern they use
 - The mobile-specific implementation (touch targets, scroll behavior, viewport stacking)
 - AIDA stage this maps to
+- The BEFORE copy/state vs AFTER copy/state side by side
+- Estimated monthly revenue impact for a $500K/mo store
 
 ## CSS SELECTOR RULES
 - Provide the most specific CSS selector you can infer from the markup
@@ -362,8 +370,12 @@ For each of the 10 recommendations, think through:
                         aida_stage: { type: "string", enum: ["attention", "interest", "desire", "action"], description: "Where this sits in the AIDA funnel" },
                         current_issue: { type: "string", description: "What's broken and WHY it hurts conversions. Cite the psychological principle (Hick's Law, Fitts's Law, etc). Reference actual text/elements from the page." },
                         recommended_change: { type: "string", description: "The EXACT fix. Write actual copy, specify dimensions, describe the mobile experience. This should read like a design brief." },
+                        before_copy: { type: "string", description: "The EXACT current copy/element as it appears on the site right now. Quote it verbatim from the scraped content." },
+                        after_copy: { type: "string", description: "Your improved version of the copy/element. This is the 'after' state that the client will see side-by-side." },
                         competitor_reference: { type: "string", description: "A real DTC brand that does this well, with the specific pattern they use and any known conversion data." },
                         expected_impact: { type: "string", description: "Quantified impact with source. e.g. '+12-18% ATC rate (Baymard Institute mobile CTA study)'" },
+                        revenue_impact_estimate: { type: "string", description: "Monthly revenue impact estimate for a $500K/mo store. e.g. '+$4,200-$7,500/mo from 0.8-1.5% ATC uplift'. Base on published benchmarks." },
+                        difficulty: { type: "string", enum: ["quick_win", "moderate", "complex"], description: "quick_win: <2hrs, copy/config. moderate: 2-8hrs, design+dev. complex: 1-2 weeks, structural." },
                         mockup_prompt: { type: "string", description: "A complete design brief: grid layout, spacing in px, font sizes, color palette, image aspect ratios, component hierarchy. A designer could build from this alone." },
                         css_selector: { type: "string" },
                         scroll_percentage: { type: "number" },
@@ -372,7 +384,7 @@ For each of the 10 recommendations, think through:
                         implementation_spec: { type: "string", description: "Step-by-step technical implementation spec. Include exact CSS changes, component structure, copy strings, asset requirements, and responsive breakpoints. A developer should be able to build this without asking questions." },
                         priority_score: { type: "number", description: "1-100 priority score based on (impact × ease of implementation). 90+ = quick wins with massive impact. 50-89 = important but moderate effort. Below 50 = nice-to-have or complex." },
                       },
-                      required: ["id", "section", "severity", "aida_stage", "current_issue", "recommended_change", "competitor_reference", "expected_impact", "mockup_prompt", "css_selector", "scroll_percentage", "cro_rationale", "reference_examples", "implementation_spec", "priority_score"],
+                      required: ["id", "section", "severity", "aida_stage", "current_issue", "recommended_change", "before_copy", "after_copy", "competitor_reference", "expected_impact", "revenue_impact_estimate", "difficulty", "mockup_prompt", "css_selector", "scroll_percentage", "cro_rationale", "reference_examples", "implementation_spec", "priority_score"],
                       additionalProperties: false,
                     },
                   },

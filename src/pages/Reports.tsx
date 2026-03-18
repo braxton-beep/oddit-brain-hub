@@ -49,12 +49,16 @@ interface Recommendation {
   aida_stage?: "attention" | "interest" | "desire" | "action";
   current_issue: string;
   recommended_change: string;
+  before_copy?: string;
+  after_copy?: string;
   competitor_reference?: string;
   expected_impact: string;
+  revenue_impact_estimate?: string;
+  difficulty?: "quick_win" | "moderate" | "complex";
   mockup_prompt: string;
   mockup_url?: string;
   mockup_variants?: string[];
-  mockup_rating?: number; // 1-5 star rating for reference library
+  mockup_rating?: number;
   section_screenshot_url?: string;
   scroll_percentage?: number;
   cro_rationale: string;
