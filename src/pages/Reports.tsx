@@ -504,59 +504,23 @@ const Reports = () => {
                 const isCodeLoading = generatingCode.has(rec.id);
                 const diff = rec.difficulty ? difficultyStyles[rec.difficulty] : null;
                 const aida = rec.aida_stage ? aidaStyles[rec.aida_stage] : null;
+                const beforeFocusPct = typeof rec.section_screenshot_focus_pct === "number"
+                  ? Math.max(0, Math.min(100, rec.section_screenshot_focus_pct))
+                  : typeof rec.scroll_percentage === "number"
+                    ? Math.max(0, Math.min(100, rec.scroll_percentage))
+                    : 50;
+                const beforeObjectPosition = `50% ${beforeFocusPct}%`;
 
                 return (
                   <div key={rec.id} className={`rounded-2xl border bg-card overflow-hidden transition-all ${isExpanded ? "border-primary/30 shadow-lg shadow-primary/5" : "border-border hover:border-primary/10"}`}>
-                    {/* Header row */}
-                    <button onClick={() => setActiveRecId(isExpanded ? null : rec.id)} className="w-full flex items-center gap-3 p-4 lg:p-5 text-left hover:bg-muted/30 transition-colors">
-                      <div className={`flex items-center justify-center h-8 w-8 rounded-lg text-sm font-black shrink-0 ${sev.bg}`}>
-                        {rec.id}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-base font-bold text-cream truncate">{rec.section}</p>
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">{rec.current_issue.slice(0, 100)}...</p>
-                      </div>
-                      {/* Badges */}
-                      <div className="hidden sm:flex items-center gap-2 shrink-0">
-                        {diff && (
-                          <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${diff.color}`}>
-                            <diff.icon className="h-3 w-3" /> {diff.label}
-                          </span>
-                        )}
-                        {aida && (
-                          <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${aida.color}`}>
-                            {aida.label}
-                          </span>
-                        )}
-                        {typeof rec.priority_score === "number" && (
-                          <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-bold tabular-nums ${
-                            rec.priority_score >= 80 ? "text-accent bg-accent/10 border-accent/30" :
-                            rec.priority_score >= 50 ? "text-yellow-400 bg-yellow-400/10 border-yellow-400/30" :
-                            "text-muted-foreground bg-muted/10 border-border"
-                          }`}>
-                            P{rec.priority_score}
-                          </span>
-                        )}
-                        {rec.mockup_url && <Sparkles className="h-4 w-4 text-accent" />}
-                      </div>
-                      {isExpanded ? <ChevronUp className="h-5 w-5 text-muted-foreground shrink-0" /> : <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />}
-                    </button>
-
-                    {/* Expanded Content */}
-                    {isExpanded && (
-                      <div className="px-4 lg:px-6 pb-6 space-y-6">
-
-                        {/* ═══ VISUAL: Before / After ═══ */}
-                        <div>
-                          <h3 className="text-sm font-bold text-cream uppercase tracking-wider mb-3 flex items-center gap-2">
-                            <Eye className="h-4 w-4 text-primary" /> Visual Comparison
-                          </h3>
+...
                           {rec.section_screenshot_url && rec.mockup_url ? (
                             <BeforeAfterSlider
                               beforeSrc={rec.section_screenshot_url}
                               afterSrc={rec.mockup_variants && rec.mockup_variants.length > 1 ? rec.mockup_variants[selectedVariants[rec.id] ?? 0] : rec.mockup_url}
                               beforeLabel="Current"
                               afterLabel="AI Concept"
+                              beforeObjectPosition={beforeObjectPosition}
                               className="max-h-[500px] rounded-xl overflow-hidden"
                             />
                           ) : (
@@ -567,7 +531,7 @@ const Reports = () => {
                                   <AlertTriangle className="h-3.5 w-3.5" /> Before — Current State
                                 </p>
                                 {rec.section_screenshot_url ? (
-                                  <img src={rec.section_screenshot_url} alt="" className="w-full rounded-xl border border-destructive/20 object-cover max-h-80 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullscreenImage(rec.section_screenshot_url!)} />
+                                  <img src={rec.section_screenshot_url} alt="" style={{ objectPosition: beforeObjectPosition }} className="w-full rounded-xl border border-destructive/20 object-cover max-h-80 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullscreenImage(rec.section_screenshot_url!)} />
                                 ) : (
                                   <div className="w-full h-48 rounded-xl border border-dashed border-destructive/20 bg-destructive/5 flex items-center justify-center text-sm text-muted-foreground">No screenshot captured</div>
                                 )}
