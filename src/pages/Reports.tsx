@@ -147,10 +147,18 @@ const Reports = () => {
       .select("*")
       .order("created_at", { ascending: false });
     if (!error && data) {
-      setAudits(data.map((d: any) => ({
-        ...d,
-        recommendations: (d.recommendations || []) as unknown as Recommendation[],
-      })));
+      const STALE_MS = 5 * 60 * 1000; // 5 minutes
+      const now = Date.now();
+      setAudits(data.map((d: any) => {
+        const isProcessing = ["scraping", "analyzing", "screenshotting", "generating"].includes(d.status);
+        const age = now - new Date(d.created_at).getTime();
+        const isStale = isProcessing && age > STALE_MS;
+        return {
+          ...d,
+          status: isStale ? "failed" : d.status,
+          recommendations: (d.recommendations || []) as unknown as Recommendation[],
+        };
+      }));
     }
     setLoading(false);
   };
