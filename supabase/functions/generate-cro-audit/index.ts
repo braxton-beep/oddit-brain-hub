@@ -145,13 +145,13 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         url: formattedUrl,
-        formats: ["markdown", "screenshot"],
+        // Full-page capture enables section-focused previews in the report UI
+        formats: ["markdown", "screenshot@fullPage"],
         waitFor: 3000,
         actions: [
           { type: "wait", milliseconds: 2000 },
           { type: "executeJavascript", script: dismissPopupsScript },
           { type: "wait", milliseconds: 1500 },
-          { type: "screenshot" },
         ],
       }),
     });
@@ -520,144 +520,26 @@ For each of the 10 recommendations, think through:
       }
     }
 
-    // Step 3: Capture targeted section screenshots per recommendation
+    // Step 3: Attach section-focused metadata for report rendering
+    // We use the full-page screenshot + per-recommendation focus percentage.
+    // This is faster and avoids repeated viewport captures that can look identical.
     if (recommendations.length > 0) {
-      console.log("Capturing targeted section screenshots...");
+      console.log("Applying section focus mapping...");
       await supabase.from("cro_audits").update({ status: "screenshotting" }).eq("id", auditId);
 
-      // Use Firecrawl's actions API to scroll to each section before screenshotting
-      // We batch by deduped scroll positions to reduce API calls (within 10% proximity = same shot)
-      const screenshotPromises = recommendations.map(async (rec: any) => {
-        const selector = rec.css_selector || "";
-        const scrollPct = typeof rec.scroll_percentage === "number"
+      recommendations = recommendations.map((rec: any) => {
+        const focusPct = typeof rec.scroll_percentage === "number"
           ? Math.max(0, Math.min(100, rec.scroll_percentage))
-          : 0;
+          : 50;
 
-        try {
-          // Build JS that dismisses popups, then scrolls to the target section
-          const scrollJs = `
-            (function() {
-              // Dismiss popups/overlays first
-              var popupSels = ['[class*="cookie"]','[class*="consent"]','[class*="popup"]','[class*="modal"]','[class*="overlay"]','[role="dialog"]','[role="alertdialog"]','[class*="klaviyo"]','[class*="privy"]','[class*="justuno"]','#onetrust-banner-sdk'];
-              popupSels.forEach(function(sel) {
-                try { document.querySelectorAll(sel).forEach(function(el) {
-                  var s = getComputedStyle(el);
-                  if (s.position === 'fixed' || s.position === 'sticky' || parseInt(s.zIndex) > 100) el.remove();
-                }); } catch(e) {}
-              });
-              document.body.style.overflow = 'auto';
-              document.documentElement.style.overflow = 'auto';
-
-              // Hide all fixed/sticky elements
-              document.querySelectorAll('*').forEach(function(node) {
-                try {
-                  var s = getComputedStyle(node);
-                  if (s.position === 'fixed' || s.position === 'sticky') {
-                    node.style.setProperty('visibility', 'hidden', 'important');
-                  }
-                } catch(e) {}
-              });
-
-              // Find element
-              var el = null;
-              try { el = document.querySelector('${selector.replace(/'/g, "\\'")}'); } catch(e) {}
-              if (!el) {
-                var candidates = ['section', 'div', 'header', 'footer', 'main', 'article', 'aside'];
-                for (var i = 0; i < candidates.length; i++) {
-                  var all = document.querySelectorAll(candidates[i]);
-                  for (var j = 0; j < all.length; j++) {
-                    var text = (all[j].className || '') + ' ' + (all[j].id || '');
-                    if (text.toLowerCase().includes('${(rec.section || "").toLowerCase().split(" ")[0].replace(/'/g, "\\'")}')) {
-                      el = all[j]; break;
-                    }
-                  }
-                  if (el) break;
-                }
-              }
-              if (el) {
-                el.scrollIntoView({ block: 'center', behavior: 'instant' });
-                return 'found';
-              }
-              window.scrollTo(0, document.body.scrollHeight * ${scrollPct / 100});
-              return 'fallback';
-            })()
-          `;
-
-          const scrapePayload: any = {
-            url: formattedUrl,
-            formats: ["screenshot"],
-            waitFor: 2000,
-            actions: [
-              { type: "wait", milliseconds: 2000 },
-              { type: "executeJavascript", script: scrollJs },
-              { type: "wait", milliseconds: 1500 },
-              { type: "screenshot" },
-            ],
-          };
-
-          const resp = await fetch("https://api.firecrawl.dev/v1/scrape", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(scrapePayload),
-          });
-
-          if (!resp.ok) {
-            console.warn(`Section screenshot failed for rec ${rec.id}: ${resp.status}`);
-            return { recId: rec.id, url: null };
-          }
-
-          const data = await resp.json();
-          const screenshotData = data.data?.screenshot || data.screenshot || "";
-          if (!screenshotData) return { recId: rec.id, url: null };
-
-          const filePath = `screenshots/${auditId}/rec-${rec.id}.png`;
-          let binary: Uint8Array;
-
-          if (screenshotData.startsWith("http://") || screenshotData.startsWith("https://")) {
-            // It's a URL — download then upload
-            const imgResp = await fetch(screenshotData);
-            if (!imgResp.ok) return { recId: rec.id, url: screenshotData };
-            binary = new Uint8Array(await imgResp.arrayBuffer());
-          } else {
-            const cleanBase64 = screenshotData.replace(/^data:image\/\w+;base64,/, "");
-            binary = Uint8Array.from(atob(cleanBase64), (c) => c.charCodeAt(0));
-          }
-
-          const { error: upErr } = await supabase.storage
-            .from("audit-assets")
-            .upload(filePath, binary, { contentType: "image/png", upsert: true });
-
-          if (upErr) {
-            console.warn(`Upload failed for rec ${rec.id}:`, upErr.message);
-            return { recId: rec.id, url: null };
-          }
-
-          const { data: urlData } = supabase.storage.from("audit-assets").getPublicUrl(filePath);
-          return { recId: rec.id, url: urlData.publicUrl };
-        } catch (e) {
-          console.warn(`Section screenshot error for rec ${rec.id}:`, e);
-          return { recId: rec.id, url: null };
-        }
+        return {
+          ...rec,
+          section_screenshot_url: screenshotUrl || null,
+          section_screenshot_focus_pct: focusPct,
+        };
       });
 
-      // Run up to 3 at a time to avoid hammering Firecrawl
-      const results: { recId: number; url: string | null }[] = [];
-      for (let i = 0; i < screenshotPromises.length; i += 3) {
-        const batch = await Promise.all(screenshotPromises.slice(i, i + 3));
-        results.push(...batch);
-      }
-
-      // Attach section_screenshot_url to each recommendation
-      const screenshotMap = new Map(results.map((r) => [r.recId, r.url]));
-      recommendations = recommendations.map((rec: any) => ({
-        ...rec,
-        section_screenshot_url: screenshotMap.get(rec.id) || null,
-      }));
-
-      console.log(`Section screenshots done: ${results.filter((r) => r.url).length}/${results.length} successful`);
+      console.log(`Section focus mapping done for ${recommendations.length} recommendations`);
     }
 
     // Save recommendations to DB

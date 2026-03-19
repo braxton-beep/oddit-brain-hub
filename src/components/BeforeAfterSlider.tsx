@@ -6,6 +6,7 @@ interface BeforeAfterSliderProps {
   afterSrc: string;
   beforeLabel?: string;
   afterLabel?: string;
+  beforeObjectPosition?: string;
   className?: string;
 }
 
@@ -14,6 +15,7 @@ export function BeforeAfterSlider({
   afterSrc,
   beforeLabel = "Before",
   afterLabel = "After",
+  beforeObjectPosition,
   className = "",
 }: BeforeAfterSliderProps) {
   const [position, setPosition] = useState(50);
@@ -69,7 +71,7 @@ export function BeforeAfterSlider({
           src={beforeSrc}
           alt={beforeLabel}
           className="block w-full h-full object-cover pointer-events-none"
-          style={{ width: `${containerRef.current?.offsetWidth ?? 0}px`, maxWidth: "none" }}
+          style={{ width: `${containerRef.current?.offsetWidth ?? 0}px`, maxWidth: "none", objectPosition: beforeObjectPosition || "50% 50%" }}
           draggable={false}
         />
       </div>
