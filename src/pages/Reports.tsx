@@ -141,13 +141,21 @@ const Reports = () => {
 
   useEffect(() => { loadAudits(); }, []);
 
+  // Poll for in-progress audits every 5 seconds
+  useEffect(() => {
+    const hasProcessing = audits.some(a => ["scraping", "analyzing", "screenshotting", "generating"].includes(a.status));
+    if (!hasProcessing && !generating) return;
+    const interval = setInterval(() => { loadAudits(); }, 5000);
+    return () => clearInterval(interval);
+  }, [audits, generating]);
+
   const loadAudits = async () => {
     const { data, error } = await supabase
       .from("cro_audits")
       .select("*")
       .order("created_at", { ascending: false });
     if (!error && data) {
-      const STALE_MS = 5 * 60 * 1000; // 5 minutes
+      const STALE_MS = 5 * 60 * 1000;
       const now = Date.now();
       setAudits(data.map((d: any) => {
         const isProcessing = ["scraping", "analyzing", "screenshotting", "generating"].includes(d.status);
