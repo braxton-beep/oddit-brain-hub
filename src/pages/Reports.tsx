@@ -176,27 +176,36 @@ const Reports = () => {
     setGenerating(true);
     setShowNewAudit(false);
     const toastId = `audit-${Date.now()}`;
-    toast.loading("Scraping website & analyzing with AI...", { id: toastId, description: "This takes 30-60 seconds" });
-    try {
-      const resp = await fetch(GENERATE_AUDIT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
-        body: JSON.stringify({ url: newUrl, clientName: newClientName }),
-      });
-      if (!resp.ok) { const err = await resp.json().catch(() => ({ error: "Request failed" })); throw new Error(err.error || `Error ${resp.status}`); }
-      const result = await resp.json();
-      toast.success(`Audit complete! ${result.recommendations?.length || 0} recommendations found`, { id: toastId });
-      setNewUrl(""); setNewClientName("");
-      await loadAudits();
-      if (result.auditId) {
-        const { data: newAudit } = await supabase.from("cro_audits").select("*").eq("id", result.auditId).single();
-        if (newAudit) {
-          setViewingAudit({ ...newAudit, recommendations: (newAudit.recommendations || []) as unknown as Recommendation[] });
-          setActiveRecId(null);
+    toast.loading("Scraping website & analyzing with AI...", { id: toastId, description: "This takes 60-90 seconds. The page will auto-update." });
+
+    // Fire the request but don't block on it — polling will pick up the result
+    fetch(GENERATE_AUDIT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+      body: JSON.stringify({ url: newUrl, clientName: newClientName }),
+    })
+      .then(async (resp) => {
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ error: "Request failed" }));
+          throw new Error(err.error || `Error ${resp.status}`);
         }
-      }
-    } catch (e: any) { toast.error("Audit failed", { id: toastId, description: e.message }); }
-    finally { setGenerating(false); }
+        const result = await resp.json();
+        toast.success(`Audit complete! ${result.recommendations?.length || 0} recommendations found`, { id: toastId });
+        await loadAudits();
+        if (result.auditId) {
+          const { data: newAudit } = await supabase.from("cro_audits").select("*").eq("id", result.auditId).single();
+          if (newAudit) {
+            setViewingAudit({ ...newAudit, recommendations: (newAudit.recommendations || []) as unknown as Recommendation[] });
+            setActiveRecId(null);
+          }
+        }
+      })
+      .catch((e: any) => { toast.error("Audit failed", { id: toastId, description: e.message }); })
+      .finally(() => { setGenerating(false); });
+
+    setNewUrl(""); setNewClientName("");
+    // Initial load to show the "scraping" status immediately
+    setTimeout(() => loadAudits(), 2000);
   };
 
   const handleGenerateMockup = async (audit: CroAudit, rec: Recommendation, variantCount = 2, refinementNotes?: string) => {
