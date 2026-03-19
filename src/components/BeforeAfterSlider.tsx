@@ -6,6 +6,7 @@ interface BeforeAfterSliderProps {
   afterSrc: string;
   beforeLabel?: string;
   afterLabel?: string;
+  beforeObjectPosition?: string;
   className?: string;
 }
 
@@ -14,6 +15,7 @@ export function BeforeAfterSlider({
   afterSrc,
   beforeLabel = "Before",
   afterLabel = "After",
+  beforeObjectPosition,
   className = "",
 }: BeforeAfterSliderProps) {
   const [position, setPosition] = useState(50);
