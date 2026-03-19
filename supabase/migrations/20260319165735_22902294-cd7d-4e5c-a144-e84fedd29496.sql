@@ -1,0 +1,1 @@
+UPDATE cro_audits SET status = 'failed' WHERE id = 'b36ce95a-cc73-46d4-88c5-871a89d84321' AND status = 'analyzing';
