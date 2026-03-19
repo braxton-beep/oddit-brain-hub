@@ -72,6 +72,70 @@ serve(async (req) => {
     const auditId = audit.id;
 
     // Step 1: Scrape with Firecrawl (screenshot + markdown)
+    // Dismiss cookie banners, popups, and overlays before screenshotting
+    const dismissPopupsScript = `
+      (function() {
+        // Common cookie banner / popup selectors
+        const selectors = [
+          '[class*="cookie"]', '[id*="cookie"]',
+          '[class*="consent"]', '[id*="consent"]',
+          '[class*="popup"]', '[class*="modal"]',
+          '[class*="overlay"]', '[class*="banner"]',
+          '[class*="gdpr"]', '[id*="gdpr"]',
+          '[class*="newsletter"]', '[class*="subscribe"]',
+          '[class*="onetrust"]', '#onetrust-banner-sdk',
+          '.shopify-section-announcement-bar',
+          '[class*="klaviyo"]', '[class*="privy"]',
+          '[class*="justuno"]', '[class*="optinmonster"]',
+          '[aria-label*="cookie"]', '[aria-label*="consent"]',
+          '[role="dialog"]', '[role="alertdialog"]',
+        ];
+        // Try clicking accept/dismiss buttons first
+        const buttonSelectors = [
+          'button[class*="accept"]', 'button[class*="agree"]',
+          'button[class*="allow"]', 'button[class*="close"]',
+          'button[class*="dismiss"]', 'button[class*="got-it"]',
+          'a[class*="accept"]', 'a[class*="close"]',
+          '[data-action="accept"]', '[data-testid*="accept"]',
+        ];
+        for (const sel of buttonSelectors) {
+          try {
+            const btn = document.querySelector(sel);
+            if (btn) { btn.click(); }
+          } catch(e) {}
+        }
+        // Remove remaining overlays
+        setTimeout(function() {
+          for (const sel of selectors) {
+            try {
+              document.querySelectorAll(sel).forEach(function(el) {
+                const style = getComputedStyle(el);
+                if (style.position === 'fixed' || style.position === 'sticky' || style.zIndex > 999) {
+                  el.remove();
+                }
+              });
+            } catch(e) {}
+          }
+          // Remove any remaining fixed/sticky overlays
+          document.querySelectorAll('*').forEach(function(el) {
+            try {
+              const style = getComputedStyle(el);
+              if ((style.position === 'fixed' || style.position === 'sticky') && parseInt(style.zIndex) > 100) {
+                const rect = el.getBoundingClientRect();
+                // Remove large overlays (>50% viewport width or height)
+                if (rect.width > window.innerWidth * 0.5 || rect.height > window.innerHeight * 0.5) {
+                  el.remove();
+                }
+              }
+            } catch(e) {}
+          });
+          // Restore body scroll
+          document.body.style.overflow = 'auto';
+          document.documentElement.style.overflow = 'auto';
+        }, 500);
+        return 'popups_dismissed';
+      })()
+    `;
     console.log("Scraping:", formattedUrl);
     const scrapeResp = await fetch("https://api.firecrawl.dev/v1/scrape", {
       method: "POST",
@@ -83,6 +147,12 @@ serve(async (req) => {
         url: formattedUrl,
         formats: ["markdown", "screenshot"],
         waitFor: 3000,
+        actions: [
+          { type: "wait", milliseconds: 2000 },
+          { type: "executeJavascript", script: dismissPopupsScript },
+          { type: "wait", milliseconds: 1500 },
+          { type: "screenshot" },
+        ],
       }),
     });
 
@@ -464,53 +534,63 @@ For each of the 10 recommendations, think through:
           : 0;
 
         try {
-          // Build JS that scrolls the target element into the center of the viewport
-          // and optionally hides sticky headers/footers for a clean crop
-          const scrollJs = selector
-            ? `
-              (function() {
-                // Try to find the element with the AI-provided selector
-                let el = document.querySelector('${selector.replace(/'/g, "\\'")}');
-                // Fallback: try partial matches on common patterns
-                if (!el) {
-                  const candidates = ['section', 'div', 'header', 'footer', 'main', 'article', 'aside'];
-                  for (const tag of candidates) {
-                    const all = document.querySelectorAll(tag);
-                    for (const c of all) {
-                      const text = (c.className || '') + ' ' + (c.id || '');
-                      if (text.toLowerCase().includes('${rec.section.toLowerCase().split(" ")[0].replace(/'/g, "\\'")}')) {
-                        el = c; break;
-                      }
-                    }
-                    if (el) break;
+          // Build JS that dismisses popups, then scrolls to the target section
+          const scrollJs = `
+            (function() {
+              // Dismiss popups/overlays first
+              var popupSels = ['[class*="cookie"]','[class*="consent"]','[class*="popup"]','[class*="modal"]','[class*="overlay"]','[role="dialog"]','[role="alertdialog"]','[class*="klaviyo"]','[class*="privy"]','[class*="justuno"]','#onetrust-banner-sdk'];
+              popupSels.forEach(function(sel) {
+                try { document.querySelectorAll(sel).forEach(function(el) {
+                  var s = getComputedStyle(el);
+                  if (s.position === 'fixed' || s.position === 'sticky' || parseInt(s.zIndex) > 100) el.remove();
+                }); } catch(e) {}
+              });
+              document.body.style.overflow = 'auto';
+              document.documentElement.style.overflow = 'auto';
+
+              // Hide all fixed/sticky elements
+              document.querySelectorAll('*').forEach(function(node) {
+                try {
+                  var s = getComputedStyle(node);
+                  if (s.position === 'fixed' || s.position === 'sticky') {
+                    node.style.setProperty('visibility', 'hidden', 'important');
                   }
-                }
-                if (el) {
-                  // Hide sticky/fixed elements that overlay the section
-                  document.querySelectorAll('*').forEach(function(node) {
-                    const s = getComputedStyle(node);
-                    if (s.position === 'fixed' || s.position === 'sticky') {
-                      node.style.setProperty('visibility', 'hidden', 'important');
+                } catch(e) {}
+              });
+
+              // Find element
+              var el = null;
+              try { el = document.querySelector('${selector.replace(/'/g, "\\'")}'); } catch(e) {}
+              if (!el) {
+                var candidates = ['section', 'div', 'header', 'footer', 'main', 'article', 'aside'];
+                for (var i = 0; i < candidates.length; i++) {
+                  var all = document.querySelectorAll(candidates[i]);
+                  for (var j = 0; j < all.length; j++) {
+                    var text = (all[j].className || '') + ' ' + (all[j].id || '');
+                    if (text.toLowerCase().includes('${(rec.section || "").toLowerCase().split(" ")[0].replace(/'/g, "\\'")}')) {
+                      el = all[j]; break;
                     }
-                  });
-                  el.scrollIntoView({ block: 'center', behavior: 'instant' });
-                  return 'found';
+                  }
+                  if (el) break;
                 }
-                // Fallback: scroll by percentage
-                window.scrollTo(0, document.body.scrollHeight * ${scrollPct / 100});
-                return 'fallback';
-              })()
-            `
-            : `window.scrollTo(0, document.body.scrollHeight * ${scrollPct / 100}); 'fallback'`;
+              }
+              if (el) {
+                el.scrollIntoView({ block: 'center', behavior: 'instant' });
+                return 'found';
+              }
+              window.scrollTo(0, document.body.scrollHeight * ${scrollPct / 100});
+              return 'fallback';
+            })()
+          `;
 
           const scrapePayload: any = {
             url: formattedUrl,
             formats: ["screenshot"],
             waitFor: 2000,
             actions: [
-              { type: "wait", milliseconds: 1500 },
+              { type: "wait", milliseconds: 2000 },
               { type: "executeJavascript", script: scrollJs },
-              { type: "wait", milliseconds: 1000 },
+              { type: "wait", milliseconds: 1500 },
               { type: "screenshot" },
             ],
           };
