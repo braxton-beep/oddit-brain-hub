@@ -145,13 +145,13 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         url: formattedUrl,
-        formats: ["markdown", "screenshot"],
+        // Full-page capture enables section-focused previews in the report UI
+        formats: ["markdown", "screenshot@fullPage"],
         waitFor: 3000,
         actions: [
           { type: "wait", milliseconds: 2000 },
           { type: "executeJavascript", script: dismissPopupsScript },
           { type: "wait", milliseconds: 1500 },
-          { type: "screenshot" },
         ],
       }),
     });
