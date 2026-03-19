@@ -72,6 +72,70 @@ serve(async (req) => {
     const auditId = audit.id;
 
     // Step 1: Scrape with Firecrawl (screenshot + markdown)
+    // Dismiss cookie banners, popups, and overlays before screenshotting
+    const dismissPopupsScript = `
+      (function() {
+        // Common cookie banner / popup selectors
+        const selectors = [
+          '[class*="cookie"]', '[id*="cookie"]',
+          '[class*="consent"]', '[id*="consent"]',
+          '[class*="popup"]', '[class*="modal"]',
+          '[class*="overlay"]', '[class*="banner"]',
+          '[class*="gdpr"]', '[id*="gdpr"]',
+          '[class*="newsletter"]', '[class*="subscribe"]',
+          '[class*="onetrust"]', '#onetrust-banner-sdk',
+          '.shopify-section-announcement-bar',
+          '[class*="klaviyo"]', '[class*="privy"]',
+          '[class*="justuno"]', '[class*="optinmonster"]',
+          '[aria-label*="cookie"]', '[aria-label*="consent"]',
+          '[role="dialog"]', '[role="alertdialog"]',
+        ];
+        // Try clicking accept/dismiss buttons first
+        const buttonSelectors = [
+          'button[class*="accept"]', 'button[class*="agree"]',
+          'button[class*="allow"]', 'button[class*="close"]',
+          'button[class*="dismiss"]', 'button[class*="got-it"]',
+          'a[class*="accept"]', 'a[class*="close"]',
+          '[data-action="accept"]', '[data-testid*="accept"]',
+        ];
+        for (const sel of buttonSelectors) {
+          try {
+            const btn = document.querySelector(sel);
+            if (btn) { btn.click(); }
+          } catch(e) {}
+        }
+        // Remove remaining overlays
+        setTimeout(function() {
+          for (const sel of selectors) {
+            try {
+              document.querySelectorAll(sel).forEach(function(el) {
+                const style = getComputedStyle(el);
+                if (style.position === 'fixed' || style.position === 'sticky' || style.zIndex > 999) {
+                  el.remove();
+                }
+              });
+            } catch(e) {}
+          }
+          // Remove any remaining fixed/sticky overlays
+          document.querySelectorAll('*').forEach(function(el) {
+            try {
+              const style = getComputedStyle(el);
+              if ((style.position === 'fixed' || style.position === 'sticky') && parseInt(style.zIndex) > 100) {
+                const rect = el.getBoundingClientRect();
+                // Remove large overlays (>50% viewport width or height)
+                if (rect.width > window.innerWidth * 0.5 || rect.height > window.innerHeight * 0.5) {
+                  el.remove();
+                }
+              }
+            } catch(e) {}
+          });
+          // Restore body scroll
+          document.body.style.overflow = 'auto';
+          document.documentElement.style.overflow = 'auto';
+        }, 500);
+        return 'popups_dismissed';
+      })()
+    `;
     console.log("Scraping:", formattedUrl);
     const scrapeResp = await fetch("https://api.firecrawl.dev/v1/scrape", {
       method: "POST",
@@ -83,6 +147,12 @@ serve(async (req) => {
         url: formattedUrl,
         formats: ["markdown", "screenshot"],
         waitFor: 3000,
+        actions: [
+          { type: "wait", milliseconds: 2000 },
+          { type: "executeJavascript", script: dismissPopupsScript },
+          { type: "wait", milliseconds: 1500 },
+          { type: "screenshot" },
+        ],
       }),
     });
 
