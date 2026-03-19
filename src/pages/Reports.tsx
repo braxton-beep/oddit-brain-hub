@@ -36,6 +36,7 @@ interface Recommendation {
   mockup_variants?: string[];
   mockup_rating?: number;
   section_screenshot_url?: string;
+  section_screenshot_focus_pct?: number;
   scroll_percentage?: number;
   cro_rationale: string;
   reference_examples: string;
