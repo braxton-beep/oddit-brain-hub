@@ -330,7 +330,7 @@ PHOTOREALISM RULES:
 8. **Color accuracy.** When brand colors are provided from Design DNA, use EXACTLY those hex values. Don't approximate — match precisely.
 ${numVariants > 1 ? `9. Create variant #\${VARIANT_NUM} — vary the layout approach while keeping the same recommendation intent.` : ""}
 ${starredMockupUrls.length > 0 ? "10. REFERENCE MOCKUPS are provided — study their quality level, composition, and polish. Your output should match or exceed this standard." : ""}
-${competitorContext}${templateContext}
+${competitorContext}${templateContext}${designProfileContext}
 ${refinementContext}`;
 
     // ── Build user message with visual inputs ──────────────────────────
