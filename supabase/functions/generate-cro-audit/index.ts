@@ -7,6 +7,30 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const readPngDimensions = (bytes: Uint8Array): { width: number; height: number } | null => {
+  if (bytes.length < 24) return null;
+  const pngSig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  for (let i = 0; i < pngSig.length; i++) {
+    if (bytes[i] !== pngSig[i]) return null;
+  }
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = dv.getUint32(16);
+  const height = dv.getUint32(20);
+  if (!width || !height) return null;
+  return { width, height };
+};
+
+const screenshotToBytes = async (rawScreenshot: string): Promise<Uint8Array | null> => {
+  if (!rawScreenshot) return null;
+  if (rawScreenshot.startsWith("http://") || rawScreenshot.startsWith("https://")) {
+    const imgResp = await fetch(rawScreenshot);
+    if (!imgResp.ok) return null;
+    return new Uint8Array(await imgResp.arrayBuffer());
+  }
+  const base64Data = rawScreenshot.replace(/^data:image\/\w+;base64,/, "");
+  return Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -167,44 +191,54 @@ serve(async (req) => {
     }
 
     const markdown = scrapeData.data?.markdown || scrapeData.markdown || "";
-    const screenshotBase64 = scrapeData.data?.screenshot || scrapeData.screenshot || "";
+    let screenshotRaw = scrapeData.data?.screenshot || scrapeData.screenshot || "";
+
+    // If Firecrawl unexpectedly returns a viewport shot, retry once for true full-page.
+    try {
+      const maybeBytes = await screenshotToBytes(screenshotRaw);
+      const dims = maybeBytes ? readPngDimensions(maybeBytes) : null;
+      if (dims && dims.height <= 1400) {
+        console.warn(`Screenshot appears viewport-sized (${dims.width}x${dims.height}); retrying full-page capture...`);
+        const retryResp = await fetch("https://api.firecrawl.dev/v1/scrape", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${FIRECRAWL_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            url: formattedUrl,
+            formats: ["screenshot@fullPage"],
+            waitFor: 4000,
+            actions: [
+              { type: "wait", milliseconds: 2000 },
+              { type: "executeJavascript", script: dismissPopupsScript },
+              { type: "wait", milliseconds: 1500 },
+            ],
+          }),
+        });
+        if (retryResp.ok) {
+          const retryData = await retryResp.json();
+          const retryScreenshot = retryData.data?.screenshot || retryData.screenshot || "";
+          if (retryScreenshot) screenshotRaw = retryScreenshot;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not validate screenshot dimensions; continuing with initial capture.", e);
+    }
 
     // Upload screenshot to storage if available
     let screenshotUrl = "";
-    if (screenshotBase64) {
+    if (screenshotRaw) {
       try {
-        // Firecrawl may return a URL or base64 data
-        if (screenshotBase64.startsWith("http://") || screenshotBase64.startsWith("https://")) {
-          // It's a URL — download it then upload to storage
-          const imgResp = await fetch(screenshotBase64);
-          if (imgResp.ok) {
-            const imgBuffer = new Uint8Array(await imgResp.arrayBuffer());
-            const { error: uploadError } = await supabase.storage
-              .from("audit-assets")
-              .upload(`screenshots/${auditId}.png`, imgBuffer, {
-                contentType: "image/png",
-                upsert: true,
-              });
-            if (!uploadError) {
-              const { data: urlData } = supabase.storage
-                .from("audit-assets")
-                .getPublicUrl(`screenshots/${auditId}.png`);
-              screenshotUrl = urlData.publicUrl;
-            }
-          } else {
-            // Fall back to using the URL directly
-            screenshotUrl = screenshotBase64;
-          }
-        } else {
-          // Base64 data — decode and upload
-          const base64Data = screenshotBase64.replace(/^data:image\/\w+;base64,/, "");
-          const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+        const binaryData = await screenshotToBytes(screenshotRaw);
+        if (binaryData) {
           const { error: uploadError } = await supabase.storage
             .from("audit-assets")
             .upload(`screenshots/${auditId}.png`, binaryData, {
               contentType: "image/png",
               upsert: true,
             });
+
           if (!uploadError) {
             const { data: urlData } = supabase.storage
               .from("audit-assets")
@@ -212,10 +246,15 @@ serve(async (req) => {
             screenshotUrl = urlData.publicUrl;
           }
         }
+
+        if (!screenshotUrl && (screenshotRaw.startsWith("http://") || screenshotRaw.startsWith("https://"))) {
+          screenshotUrl = screenshotRaw;
+        }
       } catch (e) {
         console.error("Screenshot upload error:", e);
-        // If everything fails but we have a URL, use it directly
-        if (screenshotBase64.startsWith("http")) screenshotUrl = screenshotBase64;
+        if (screenshotRaw.startsWith("http://") || screenshotRaw.startsWith("https://")) {
+          screenshotUrl = screenshotRaw;
+        }
       }
     }
 
@@ -528,8 +567,13 @@ For each of the 10 recommendations, think through:
       await supabase.from("cro_audits").update({ status: "screenshotting" }).eq("id", auditId);
 
       recommendations = recommendations.map((rec: any) => {
-        const focusPct = typeof rec.scroll_percentage === "number"
-          ? Math.max(0, Math.min(100, rec.scroll_percentage))
+        const parsedFocus = typeof rec.section_screenshot_focus_pct === "number"
+          ? rec.section_screenshot_focus_pct
+          : typeof rec.scroll_percentage === "number"
+            ? rec.scroll_percentage
+            : Number(rec.scroll_percentage);
+        const focusPct = Number.isFinite(parsedFocus)
+          ? Math.max(0, Math.min(100, parsedFocus))
           : 50;
 
         return {
