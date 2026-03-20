@@ -25,6 +25,7 @@ import Wireframes from "./pages/Wireframes";
 import LeadGen from "./pages/LeadGen";
 import Demo from "./pages/Demo";
 import NotFound from "./pages/NotFound";
+import SystemHealth from "./pages/SystemHealth";
 import { WelcomeTour } from "./components/WelcomeTour";
 
 const queryClient = new QueryClient();

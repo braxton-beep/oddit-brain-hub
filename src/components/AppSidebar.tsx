@@ -62,6 +62,7 @@ const toolsNav = [
 ];
 
 const systemNav = [
+  { title: "System Health", url: "/system-health", icon: Activity },
   { title: "Shopify Connect", url: "/shopify-connect", icon: Store },
   { title: "Integrations", url: "/integrations", icon: Link2 },
   { title: "Vision", url: "/vision", icon: Rocket },
