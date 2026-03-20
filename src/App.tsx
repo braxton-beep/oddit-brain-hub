@@ -58,6 +58,7 @@ const App = () => (
           <Route path="/wireframes" element={<Wireframes />} />
           <Route path="/lead-gen" element={<LeadGen />} />
           <Route path="/demo" element={<Demo />} />
+          <Route path="/system-health" element={<SystemHealth />} />
           <Route path="/portal/:token" element={<ClientPortal />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
