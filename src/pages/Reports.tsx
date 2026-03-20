@@ -504,12 +504,21 @@ const Reports = () => {
                 const isCodeLoading = generatingCode.has(rec.id);
                 const diff = rec.difficulty ? difficultyStyles[rec.difficulty] : null;
                 const aida = rec.aida_stage ? aidaStyles[rec.aida_stage] : null;
-                const beforeFocusPct = typeof rec.section_screenshot_focus_pct === "number"
-                  ? Math.max(0, Math.min(100, rec.section_screenshot_focus_pct))
-                  : typeof rec.scroll_percentage === "number"
-                    ? Math.max(0, Math.min(100, rec.scroll_percentage))
-                    : 50;
+                const parseNumeric = (value: unknown): number | null => {
+                  if (typeof value === "number" && Number.isFinite(value)) return value;
+                  if (typeof value === "string") {
+                    const parsed = Number(value);
+                    return Number.isFinite(parsed) ? parsed : null;
+                  }
+                  return null;
+                };
+                const beforeFocusRaw =
+                  parseNumeric(rec.section_screenshot_focus_pct) ??
+                  parseNumeric(rec.scroll_percentage) ??
+                  50;
+                const beforeFocusPct = Math.max(0, Math.min(100, beforeFocusRaw));
                 const beforeObjectPosition = `50% ${beforeFocusPct}%`;
+                const beforeImageSrc = viewingAudit.screenshot_url || rec.section_screenshot_url || null;
 
                 return (
                   <div key={rec.id} className={`rounded-2xl border bg-card overflow-hidden transition-all ${isExpanded ? "border-primary/30 shadow-lg shadow-primary/5" : "border-border hover:border-primary/10"}`}>
@@ -553,14 +562,14 @@ const Reports = () => {
                           <h3 className="text-sm font-bold text-cream uppercase tracking-wider mb-3 flex items-center gap-2">
                             <Eye className="h-4 w-4 text-primary" /> Visual Comparison
                           </h3>
-                          {rec.section_screenshot_url && rec.mockup_url ? (
+                          {beforeImageSrc && rec.mockup_url ? (
                             <BeforeAfterSlider
-                              beforeSrc={rec.section_screenshot_url}
+                              beforeSrc={beforeImageSrc}
                               afterSrc={rec.mockup_variants && rec.mockup_variants.length > 1 ? rec.mockup_variants[selectedVariants[rec.id] ?? 0] : rec.mockup_url}
                               beforeLabel="Current"
                               afterLabel="AI Concept"
                               beforeObjectPosition={beforeObjectPosition}
-                              className="max-h-[500px] rounded-xl overflow-hidden"
+                              className="h-[340px] md:h-[500px] rounded-xl overflow-hidden"
                             />
                           ) : (
                             <div className="grid gap-4 lg:grid-cols-2">
@@ -569,8 +578,8 @@ const Reports = () => {
                                 <p className="text-xs font-bold text-destructive uppercase tracking-wider mb-2 flex items-center gap-1.5">
                                   <AlertTriangle className="h-3.5 w-3.5" /> Before — Current State
                                 </p>
-                                {rec.section_screenshot_url ? (
-                                  <img src={rec.section_screenshot_url} alt="" style={{ objectPosition: beforeObjectPosition }} className="w-full rounded-xl border border-destructive/20 object-cover max-h-80 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullscreenImage(rec.section_screenshot_url!)} />
+                                {beforeImageSrc ? (
+                                  <img src={beforeImageSrc} alt="" style={{ objectPosition: beforeObjectPosition }} className="h-64 md:h-80 w-full rounded-xl border border-destructive/20 object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setFullscreenImage(beforeImageSrc)} />
                                 ) : (
                                   <div className="w-full h-48 rounded-xl border border-dashed border-destructive/20 bg-destructive/5 flex items-center justify-center text-sm text-muted-foreground">No screenshot captured</div>
                                 )}
