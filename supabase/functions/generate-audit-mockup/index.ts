@@ -399,7 +399,7 @@ DESIGN BRIEF:
 ${mockupPrompt}`,
     });
 
-    console.log(`Generating ${numVariants} ${useProModel ? "FINAL" : "draft"} mockup(s) for audit ${auditId}, rec ${recommendationId}. Model: ${modelId}. Starred refs: ${starredMockupUrls.length}, Figma: ${figmaImageUrls.length}, Competitor: ${!!competitorContext}`);
+    console.log(`Generating ${numVariants} ${useProModel ? "FINAL" : "draft"} mockup(s) for audit ${auditId}, rec ${recommendationId}. Model: ${modelId}. Starred refs: ${starredMockupUrls.length}, Figma: ${figmaImageUrls.length}, Competitor: ${!!competitorContext}, DesignProfiles: ${!!designProfileContext}, EffectivenessPatterns: ${!!templateContext}`);
 
     // ── Generate variants ──────────────────────────
     const variants: { url: string; variantIndex: number }[] = [];
