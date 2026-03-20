@@ -30,7 +30,7 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Fetch audit with all context
+    // Fetch audit
     const { data: audit } = await supabase
       .from("cro_audits")
       .select("client_name, recommendations, screenshot_url, shop_url")
@@ -46,35 +46,11 @@ serve(async (req) => {
     const recs = (audit.recommendations as any[]) || [];
     const targetRec = recs.find((r: any) => r.id === recommendationId);
 
-    // ── Parallel context fetches ──────────────────────────
+    // ── Parallel context fetches (lightweight) ──────────────────────────
     const contextPromises: Record<string, Promise<any>> = {};
 
-    // Oddit Score
-    contextPromises.odditScore = supabase
-      .from("oddit_scores")
-      .select("*")
-      .eq("cro_audit_id", auditId)
-      .limit(1);
-
-    // Brand assets + Figma Design DNA (need client lookup first)
+    // Section screenshots for this client
     if (audit.client_name) {
-      contextPromises.clientLookup = supabase
-        .from("clients")
-        .select("id")
-        .ilike("name", audit.client_name)
-        .limit(1);
-
-      // Figma Design DNA — extract from figma_files with design_data
-      contextPromises.figmaDesignDNA = supabase
-        .from("figma_files")
-        .select("name, design_type, design_data, figma_url, thumbnail_url")
-        .ilike("client_name", audit.client_name)
-        .eq("enabled", true)
-        .not("design_data", "eq", "{}")
-        .order("last_modified", { ascending: false })
-        .limit(10);
-
-      // Section screenshots for this client
       contextPromises.sectionScreenshots = supabase
         .from("setup_screenshots")
         .select("section_name, device_type, storage_url, full_screenshot_url, y_start_pct, y_end_pct")
@@ -82,333 +58,147 @@ serve(async (req) => {
         .eq("device_type", "desktop")
         .order("section_order", { ascending: true });
 
-      // Competitor intel for visual references (#3)
-      contextPromises.competitorIntel = supabase
-        .from("competitive_intel")
-        .select("competitor_url, findings")
+      // Figma Design DNA — only colors + typography for brand matching
+      contextPromises.figmaDesignDNA = supabase
+        .from("figma_files")
+        .select("design_data")
         .ilike("client_name", audit.client_name)
-        .eq("status", "completed")
-        .order("created_at", { ascending: false })
-        .limit(3);
+        .eq("enabled", true)
+        .not("design_data", "eq", "{}")
+        .order("last_modified", { ascending: false })
+        .limit(5);
     }
 
-    // Recommendation insights — effectiveness-weighted (converted > implemented > frequency)
+    // Top effectiveness patterns (small set)
     if (targetRec) {
       contextPromises.recTemplates = supabase
         .from("recommendation_insights")
-        .select("recommendation_text, template_content, category, frequency_count, effectiveness_score, converted_count, implemented_count, skipped_count")
+        .select("recommendation_text, category, effectiveness_score, converted_count")
         .order("effectiveness_score", { ascending: false })
-        .limit(30);
+        .limit(10);
     }
-
-    // Design language profiles for same-client + same-industry files
-    if (audit.client_name) {
-      contextPromises.designProfiles = supabase
-        .from("figma_files")
-        .select("name, client_name, design_type, design_data")
-        .eq("enabled", true)
-        .not("design_data->design_language_profile", "is", null)
-        .order("last_modified", { ascending: false })
-        .limit(20);
-    }
-
-    // Starred mockup references — find high-rated mockups from past audits
-    contextPromises.starredMockups = supabase
-      .from("cro_audits")
-      .select("recommendations")
-      .eq("status", "completed")
-      .neq("id", auditId)
-      .order("created_at", { ascending: false })
-      .limit(20);
 
     const resolved = await Promise.all(
       Object.entries(contextPromises).map(async ([key, promise]) => [key, await promise] as const)
     );
     const ctx: Record<string, any> = Object.fromEntries(resolved);
 
-    // ── Build Oddit Score context ──────────────────────────
-    let odditScoreContext = "";
-    if (ctx.odditScore?.data?.length) {
-      const s = ctx.odditScore.data[0];
-      odditScoreContext = `\nOddit Score: ${s.total_score}/100 — Visual Hierarchy: ${s.visual_hierarchy}, Clarity: ${s.clarity_value_prop}, Trust: ${s.trust_signals}, Social Proof: ${s.social_proof}, Mobile UX: ${s.mobile_ux}, Copy: ${s.copy_strength}, Funnel: ${s.funnel_logic}, Speed: ${s.speed_perception}`;
+    // ── Find the section screenshot to use as edit base ──────────────────────────
+    let baseImageUrl: string | null = null;
+    let editMode = false;
+
+    // Priority 1: Refinement mode — edit previous mockup
+    if (previousMockupUrl && refinementNotes) {
+      baseImageUrl = previousMockupUrl;
+      editMode = true;
     }
 
-    // ── Brand assets context ──────────────────────────
-    let brandAssetContext = "";
-    if (ctx.clientLookup?.data?.length) {
-      const clientId = ctx.clientLookup.data[0].id;
-      const { data: assets } = await supabase
-        .from("client_brand_assets")
-        .select("file_url, asset_type, file_name")
-        .eq("client_id", clientId)
-        .order("asset_type");
-
-      if (assets?.length) {
-        brandAssetContext = "\n\nBRAND ASSETS — You MUST incorporate these into the design to match the client's actual brand identity:\n" +
-          assets.map((a: any) => `  [${a.asset_type}] ${a.file_name}: ${a.file_url}`).join("\n");
-      }
-    }
-
-    // ── Figma Design DNA context (#4) ──────────────────────────
-    let designDNAContext = "";
-    const figmaImageUrls: string[] = [];
-    if (ctx.figmaDesignDNA?.data?.length) {
-      const files = ctx.figmaDesignDNA.data;
-      const allColors: string[] = [];
-      const allTypography: string[] = [];
-
-      for (const f of files) {
-        const dd = f.design_data as any;
-        if (!dd) continue;
-
-        // Support both property naming conventions (color_palette vs styles.colors)
-        const colors = dd.color_palette || dd.styles?.colors || [];
-        for (const c of colors) {
-          allColors.push(`${c.name}: ${c.hex || c.rgba}`);
-        }
-        const typography = dd.typography || dd.styles?.typography || [];
-        for (const t of typography) {
-          allTypography.push(`${t.name}: ${t.fontFamily} ${t.fontWeight} ${t.fontSize}px`);
-        }
-        // Collect frame export URLs for visual reference (support both formats)
-        const frameExports = dd.frame_exports || dd.frameExports || {};
-        if (Array.isArray(frameExports)) {
-          for (const fe of frameExports.slice(0, 3)) {
-            if (fe.url) figmaImageUrls.push(fe.url);
-          }
-        } else if (typeof frameExports === "object") {
-          const urls = Object.values(frameExports) as string[];
-          for (const url of urls.slice(0, 3)) {
-            if (url) figmaImageUrls.push(url);
-          }
-        }
-      }
-
-      if (allColors.length || allTypography.length) {
-        designDNAContext = "\n\nDESIGN DNA FROM PAST FIGMA FILES — Use these exact colors and typography to match the brand:\n";
-        if (allColors.length) {
-          const unique = [...new Set(allColors)].slice(0, 20);
-          designDNAContext += `  Colors: ${unique.join(", ")}\n`;
-        }
-        if (allTypography.length) {
-          const unique = [...new Set(allTypography)].slice(0, 10);
-          designDNAContext += `  Typography: ${unique.join(", ")}\n`;
-        }
-      }
-    }
-
-    // ── Section screenshot context (#2) ──────────────────────────
-    let matchedSectionScreenshotUrl: string | null = null;
-    if (ctx.sectionScreenshots?.data?.length && targetRec) {
+    // Priority 2: Matched section screenshot from setup_screenshots
+    if (!baseImageUrl && ctx.sectionScreenshots?.data?.length && targetRec) {
       const sections = ctx.sectionScreenshots.data;
-      // Try to match by section name
       const sectionName = (targetRec.section || "").toLowerCase();
       const match = sections.find((s: any) =>
         sectionName.includes(s.section_name.toLowerCase()) ||
         s.section_name.toLowerCase().includes(sectionName.split(" ")[0])
       );
       if (match?.storage_url) {
-        matchedSectionScreenshotUrl = match.storage_url;
+        baseImageUrl = match.storage_url;
+        editMode = true;
       }
     }
 
-    // ── Build section context ──────────────────────────
-    let sectionContext = "";
-    if (targetRec) {
-      sectionContext = `
-SECTION CONTEXT:
-- Page Section: ${targetRec.section}
-- Severity: ${targetRec.severity} priority
-- AIDA Stage: ${targetRec.aida_stage || "unknown"}
-- Priority Score: ${targetRec.priority_score || "N/A"}/100
-- Scroll Position: ~${targetRec.scroll_percentage ?? 0}% down the page
-- Current Issue: ${targetRec.current_issue}
-- Recommended Change: ${targetRec.recommended_change}
-- CRO Rationale: ${targetRec.cro_rationale || ""}
-- Competitor Reference: ${targetRec.competitor_reference || ""}
-- Expected Impact: ${targetRec.expected_impact || ""}`;
+    // Priority 3: Recommendation-level screenshot
+    if (!baseImageUrl && targetRec?.section_screenshot_url) {
+      baseImageUrl = targetRec.section_screenshot_url;
+      editMode = true;
     }
 
-    // ── Competitor context ──────────────────────────
-    let competitorContext = "";
-    if (ctx.competitorIntel?.data?.length) {
-      const insights: string[] = [];
-      for (const ci of ctx.competitorIntel.data) {
-        const f = ci.findings as any;
-        if (!f) continue;
-        const patterns = f.design_patterns || f.designPatterns || [];
-        const copy = f.copy_frameworks || f.copyFrameworks || [];
-        if (patterns.length || copy.length) {
-          insights.push(`Competitor ${ci.competitor_url}: Design patterns: ${(patterns as string[]).slice(0, 5).join(", ")}. Copy: ${(copy as string[]).slice(0, 3).join(", ")}`);
+    // Priority 4: Full homepage screenshot (will generate from scratch with reference)
+    if (!baseImageUrl && audit.screenshot_url) {
+      baseImageUrl = audit.screenshot_url;
+      editMode = true; // Still edit — crop/modify the relevant area
+    }
+
+    // ── Extract brand colors from Design DNA (compact) ──────────────────────────
+    let brandColors = "";
+    if (ctx.figmaDesignDNA?.data?.length) {
+      const allColors: string[] = [];
+      for (const f of ctx.figmaDesignDNA.data) {
+        const dd = f.design_data as any;
+        if (!dd) continue;
+        const colors = dd.color_palette || dd.styles?.colors || [];
+        for (const c of colors) {
+          allColors.push(c.hex || c.rgba);
         }
       }
-      if (insights.length) {
-        competitorContext = "\n\nCOMPETITOR BEST PRACTICES — Reference these patterns from top performers in the same vertical:\n" + insights.join("\n");
-      }
+      const unique = [...new Set(allColors)].filter(Boolean).slice(0, 8);
+      if (unique.length) brandColors = `Brand colors: ${unique.join(", ")}. `;
     }
 
-    // ── Effectiveness-weighted recommendation patterns ──────────────────────────
-    let templateContext = "";
+    // ── Find relevant proven patterns (1-2 sentences max) ──────────────────────────
+    let patternHint = "";
     if (ctx.recTemplates?.data?.length && targetRec) {
       const recText = (targetRec.recommended_change || "").toLowerCase();
       const sectionName = (targetRec.section || "").toLowerCase();
-      // Score each insight by relevance × effectiveness
-      const scored = ctx.recTemplates.data
-        .map((t: any) => {
-          let relevance = 0;
-          if (sectionName.includes(t.category.toLowerCase())) relevance += 3;
+      const best = ctx.recTemplates.data
+        .filter((t: any) => {
+          if (sectionName.includes(t.category.toLowerCase())) return true;
           const words = t.recommendation_text.toLowerCase().split(/\s+/);
-          for (const w of words) if (w.length > 4 && recText.includes(w)) relevance++;
-          return { ...t, relevance };
+          return words.some((w: string) => w.length > 4 && recText.includes(w));
         })
-        .filter((t: any) => t.relevance > 0)
-        .sort((a: any, b: any) => (b.effectiveness_score * b.relevance) - (a.effectiveness_score * a.relevance))
-        .slice(0, 3);
-
-      if (scored.length) {
-        templateContext = "\n\nPROVEN CRO PATTERNS (ranked by real-world effectiveness — converted/implemented ratio):\n" +
-          scored.map((t: any) => {
-            const convRate = t.converted_count > 0 ? ` | ${t.converted_count} converted` : "";
-            const implRate = t.implemented_count > 0 ? ` | ${t.implemented_count} implemented` : "";
-            return `  • [${t.category}] (effectiveness: ${t.effectiveness_score}${convRate}${implRate}): ${t.recommendation_text}${t.template_content ? `\n    Template: ${t.template_content.slice(0, 300)}` : ""}`;
-          }).join("\n");
+        .slice(0, 2);
+      if (best.length) {
+        patternHint = `Proven patterns: ${best.map((b: any) => b.recommendation_text).join("; ")}. `;
       }
     }
 
-    // ── Design language profiles ──────────────────────────
-    let designProfileContext = "";
-    if (ctx.designProfiles?.data?.length && audit.client_name) {
-      const clientLower = audit.client_name.toLowerCase();
-      // Prioritize same-client profiles, then same-industry
-      const sameClient = ctx.designProfiles.data.filter((f: any) =>
-        (f.client_name || "").toLowerCase().includes(clientLower)
-      );
-      const others = ctx.designProfiles.data.filter((f: any) =>
-        !(f.client_name || "").toLowerCase().includes(clientLower)
-      );
-      const topProfiles = [...sameClient.slice(0, 2), ...others.slice(0, 1)];
-      if (topProfiles.length) {
-        designProfileContext = "\n\nDESIGN LANGUAGE PROFILES — These describe the client's visual language semantically. Your mockup MUST embody these attributes:\n" +
-          topProfiles.map((f: any) => {
-            const profile = (f.design_data as any)?.design_language_profile;
-            return `  • "${f.name}" (${f.design_type}): ${JSON.stringify(profile).slice(0, 500)}`;
-          }).join("\n");
-      }
-    }
+    // ── Build the edit instruction — SHORT and focused ──────────────────────────
+    const changeDescription = targetRec
+      ? `${targetRec.recommended_change}. Current issue: ${targetRec.current_issue}.`
+      : mockupPrompt;
 
-    // ── Starred mockup references ──────────────────────────
-    const starredMockupUrls: string[] = [];
-    if (ctx.starredMockups?.data?.length) {
-      for (const a of ctx.starredMockups.data) {
-        const aRecs = (a.recommendations as any[]) || [];
-        for (const r of aRecs) {
-          if (r.mockup_rating >= 4 && r.mockup_url) {
-            starredMockupUrls.push(r.mockup_url);
-          }
-        }
-        if (starredMockupUrls.length >= 5) break;
-      }
-    }
-    let refinementContext = "";
-    if (refinementNotes && previousMockupUrl) {
-      refinementContext = `\n\nITERATIVE REFINEMENT — A previous mockup was generated and the designer wants changes:
-Designer feedback: "${refinementNotes}"
-You MUST use the previous mockup as your starting point and apply ONLY the requested changes. Do not redesign from scratch.`;
-    }
+    const editInstruction = refinementNotes
+      ? `Apply these refinements to the mockup: ${refinementNotes}`
+      : `Modify this screenshot of a ${audit.client_name || ""} Shopify store section ("${targetRec?.section || "page"}") to implement this CRO improvement:
 
-    // ── System prompt ──────────────────────────
-    const systemPrompt = `You are a world-class e-commerce UI/UX designer creating PHOTOREALISTIC high-fidelity mockup concepts for CRO recommendations. Your output must look indistinguishable from a real, polished Shopify store — not a wireframe, not a template, not a flat design.
+${changeDescription}
 
-PHOTOREALISM RULES:
-1. **Match the EXISTING site's aesthetic PRECISELY.** Study the homepage screenshot: its color palette, typography hierarchy, spacing rhythm, shadow depth, border-radius patterns, gradient angles, and image treatment. Your mockup must look like the store's own design team made it.
-2. **Use REAL visual fidelity.** Include subtle shadows (box-shadow with 2-4 layers), proper line-height, anti-aliased text, realistic product photography placeholders, hover state indicators, proper padding/margin rhythm, and micro-interactions cues.
-3. **Section-specific focus.** Design ONLY the section being improved. Show it at the correct viewport width (1440px desktop or 390px mobile). Include 40px of neighboring sections above and below for context.
-4. **REALISTIC content.** Use plausible brand copy (not lorem ipsum), realistic price points ($24-$198 range), actual-looking star ratings (4.7/5), review counts (2,847 reviews), and product names that feel authentic.
-5. **Mobile-first precision.** 48px min tap targets, proper safe areas, readable 16px+ body text, natural thumb-zone placement for CTAs.
-6. **Show the AFTER state only** — this is the improved, conversion-optimized version.
-7. **Typography must be sharp.** Use clear font weight hierarchy: 700-800 for headlines, 600 for subheads, 400 for body. Ensure proper contrast ratios (4.5:1 min for body text).
-8. **Color accuracy.** When brand colors are provided from Design DNA, use EXACTLY those hex values. Don't approximate — match precisely.
-${numVariants > 1 ? `9. Create variant #\${VARIANT_NUM} — vary the layout approach while keeping the same recommendation intent.` : ""}
-${starredMockupUrls.length > 0 ? "10. REFERENCE MOCKUPS are provided — study their quality level, composition, and polish. Your output should match or exceed this standard." : ""}
-${competitorContext}${templateContext}${designProfileContext}
-${refinementContext}`;
+${brandColors}${patternHint}
 
-    // ── Build user message with visual inputs ──────────────────────────
-    const userContent: any[] = [];
+RULES:
+- Keep the existing layout structure, fonts, and brand identity intact
+- Only change what's needed to implement the recommendation
+- Maintain realistic e-commerce styling — this should look like a real store
+- Use real-looking copy, not placeholder text
+- Keep surrounding elements exactly as they are
+- The result should look like a polished, production-ready store section`;
 
-    // Previous mockup as visual input for refinement (#3)
-    if (previousMockupUrl && refinementNotes) {
-      userContent.push(
-        { type: "image_url", image_url: { url: previousMockupUrl } },
-        { type: "text", text: "Above is the PREVIOUS mockup. Apply the designer's refinement feedback to improve it. Keep the same general approach but incorporate the requested changes." }
-      );
-    }
-
-    // Homepage screenshot
-    if (audit.screenshot_url) {
-      userContent.push(
-        { type: "image_url", image_url: { url: audit.screenshot_url } },
-        { type: "text", text: "Above is the CURRENT homepage of the store. Study its design language, color palette, typography, and visual style. Your mockup must look like it belongs on this same site." }
-      );
-    }
-
-    // Section screenshot from setup_screenshots (#2)
-    if (matchedSectionScreenshotUrl) {
-      userContent.push(
-        { type: "image_url", image_url: { url: matchedSectionScreenshotUrl } },
-        { type: "text", text: `Above is the CURRENT state of the "${targetRec?.section}" section captured from the live site. Your mockup should show the IMPROVED version of this exact section.` }
-      );
-    } else if (targetRec?.section_screenshot_url) {
-      // Fallback to recommendation-level screenshot
-      userContent.push(
-        { type: "image_url", image_url: { url: targetRec.section_screenshot_url } },
-        { type: "text", text: `Above is the CURRENT state of the "${targetRec.section}" section. Your mockup should show the IMPROVED version of this exact section.` }
-      );
-    }
-
-    // Figma Design DNA frame exports as visual reference (#4)
-    for (const imgUrl of figmaImageUrls.slice(0, 4)) {
-      userContent.push(
-        { type: "image_url", image_url: { url: imgUrl } },
-      );
-    }
-    if (figmaImageUrls.length > 0) {
-      userContent.push({
-        type: "text",
-        text: `Above are ${figmaImageUrls.length} frame exports from past Figma designs for this client. Match their visual style, layout patterns, and design language.`,
-      });
-    }
-
-    // Starred reference mockups as visual quality benchmarks (#1)
-    for (const starUrl of starredMockupUrls.slice(0, 3)) {
-      userContent.push({ type: "image_url", image_url: { url: starUrl } });
-    }
-    if (starredMockupUrls.length > 0) {
-      userContent.push({
-        type: "text",
-        text: `Above are ${starredMockupUrls.length} STARRED reference mockups rated as top quality by the design team. Match this level of polish, composition, and detail.`,
-      });
-    }
-
-    // Text context
-    userContent.push({
-      type: "text",
-      text: `Store: ${audit.shop_url} | Client: ${audit.client_name}${odditScoreContext}${sectionContext}${brandAssetContext}${designDNAContext}
-
-DESIGN BRIEF:
-${mockupPrompt}`,
-    });
-
-    console.log(`Generating ${numVariants} ${useProModel ? "FINAL" : "draft"} mockup(s) for audit ${auditId}, rec ${recommendationId}. Model: ${modelId}. Starred refs: ${starredMockupUrls.length}, Figma: ${figmaImageUrls.length}, Competitor: ${!!competitorContext}, DesignProfiles: ${!!designProfileContext}, EffectivenessPatterns: ${!!templateContext}`);
+    console.log(`Generating ${numVariants} ${useProModel ? "FINAL" : "draft"} mockup(s) for audit ${auditId}, rec ${recommendationId}. Model: ${modelId}. Edit mode: ${editMode}. Base image: ${!!baseImageUrl}`);
 
     // ── Generate variants ──────────────────────────
     const variants: { url: string; variantIndex: number }[] = [];
 
     for (let v = 0; v < numVariants; v++) {
-      const variantPrompt = numVariants > 1
-        ? systemPrompt.replace("${VARIANT_NUM}", String(v + 1)) +
-          `\n\nThis is variant ${v + 1} of ${numVariants}. ${v === 0 ? "Use the most conventional layout approach." : v === 1 ? "Try a bolder, more experimental layout." : "Try a minimal, clean alternative."}`
-        : systemPrompt;
+      const variantSuffix = numVariants > 1
+        ? `\n\nThis is variant ${v + 1} of ${numVariants}. ${v === 0 ? "Use the most conventional approach." : v === 1 ? "Try a bolder layout variation." : "Try a minimal alternative."}`
+        : "";
+
+      // Build message content
+      const userContent: any[] = [];
+
+      if (editMode && baseImageUrl) {
+        // IMAGE EDIT MODE: pass base image + edit instruction
+        userContent.push(
+          { type: "image_url", image_url: { url: baseImageUrl } },
+          { type: "text", text: editInstruction + variantSuffix }
+        );
+      } else {
+        // FALLBACK: generate from scratch (no base image available)
+        userContent.push({
+          type: "text",
+          text: `Create a photorealistic mockup of a Shopify store section for ${audit.client_name || audit.shop_url}.\n\n${editInstruction}${variantSuffix}`,
+        });
+      }
 
       const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -419,7 +209,10 @@ ${mockupPrompt}`,
         body: JSON.stringify({
           model: modelId,
           messages: [
-            { role: "system", content: variantPrompt },
+            {
+              role: "system",
+              content: "You are an expert e-commerce UI designer. Edit the provided screenshot to implement the requested change. Keep the existing design language, colors, and layout intact. Only modify what's necessary. Output should look like a real, polished Shopify store — not a wireframe or template.",
+            },
             { role: "user", content: userContent },
           ],
           modalities: ["image", "text"],
@@ -486,7 +279,6 @@ ${mockupPrompt}`,
             ...r,
             mockup_url: primaryUrl,
             mockup_variants: variants.map((v) => v.url),
-            // Keep history for refinement
             mockup_history: [
               ...((r.mockup_history as string[]) || []),
               ...(r.mockup_url && !refinementNotes ? [] : r.mockup_url ? [r.mockup_url] : []),
@@ -496,14 +288,14 @@ ${mockupPrompt}`,
     );
     await supabase.from("cro_audits").update({ recommendations: updatedRecs }).eq("id", auditId);
 
-    console.log(`Generated ${variants.length} mockup variant(s) for rec ${recommendationId}`);
+    console.log(`Generated ${variants.length} mockup variant(s) for rec ${recommendationId}. Edit mode: ${editMode}`);
 
     return new Response(
       JSON.stringify({
         mockupUrl: primaryUrl,
         variants: variants.map((v) => v.url),
-        figmaImagesUsed: figmaImageUrls.length,
-        sectionScreenshotUsed: !!matchedSectionScreenshotUrl,
+        editMode,
+        baseImageUsed: !!baseImageUrl,
         isRefinement: !!refinementNotes,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
