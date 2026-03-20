@@ -247,16 +247,52 @@ SECTION CONTEXT:
       }
     }
 
-    // ── Recommendation prompt templates ──────────────────────────
+    // ── Effectiveness-weighted recommendation patterns ──────────────────────────
     let templateContext = "";
     if (ctx.recTemplates?.data?.length && targetRec) {
       const recText = (targetRec.recommended_change || "").toLowerCase();
-      const match = ctx.recTemplates.data.find((t: any) =>
-        recText.includes(t.category.toLowerCase()) ||
-        t.recommendation_text.toLowerCase().split(" ").some((word: string) => word.length > 4 && recText.includes(word))
+      const sectionName = (targetRec.section || "").toLowerCase();
+      // Score each insight by relevance × effectiveness
+      const scored = ctx.recTemplates.data
+        .map((t: any) => {
+          let relevance = 0;
+          if (sectionName.includes(t.category.toLowerCase())) relevance += 3;
+          const words = t.recommendation_text.toLowerCase().split(/\s+/);
+          for (const w of words) if (w.length > 4 && recText.includes(w)) relevance++;
+          return { ...t, relevance };
+        })
+        .filter((t: any) => t.relevance > 0)
+        .sort((a: any, b: any) => (b.effectiveness_score * b.relevance) - (a.effectiveness_score * a.relevance))
+        .slice(0, 3);
+
+      if (scored.length) {
+        templateContext = "\n\nPROVEN CRO PATTERNS (ranked by real-world effectiveness — converted/implemented ratio):\n" +
+          scored.map((t: any) => {
+            const convRate = t.converted_count > 0 ? ` | ${t.converted_count} converted` : "";
+            const implRate = t.implemented_count > 0 ? ` | ${t.implemented_count} implemented` : "";
+            return `  • [${t.category}] (effectiveness: ${t.effectiveness_score}${convRate}${implRate}): ${t.recommendation_text}${t.template_content ? `\n    Template: ${t.template_content.slice(0, 300)}` : ""}`;
+          }).join("\n");
+      }
+    }
+
+    // ── Design language profiles ──────────────────────────
+    let designProfileContext = "";
+    if (ctx.designProfiles?.data?.length && audit.client_name) {
+      const clientLower = audit.client_name.toLowerCase();
+      // Prioritize same-client profiles, then same-industry
+      const sameClient = ctx.designProfiles.data.filter((f: any) =>
+        (f.client_name || "").toLowerCase().includes(clientLower)
       );
-      if (match?.template_content) {
-        templateContext = `\n\nPROVEN TEMPLATE (used ${match.frequency_count}x across clients):\n${match.template_content}`;
+      const others = ctx.designProfiles.data.filter((f: any) =>
+        !(f.client_name || "").toLowerCase().includes(clientLower)
+      );
+      const topProfiles = [...sameClient.slice(0, 2), ...others.slice(0, 1)];
+      if (topProfiles.length) {
+        designProfileContext = "\n\nDESIGN LANGUAGE PROFILES — These describe the client's visual language semantically. Your mockup MUST embody these attributes:\n" +
+          topProfiles.map((f: any) => {
+            const profile = (f.design_data as any)?.design_language_profile;
+            return `  • "${f.name}" (${f.design_type}): ${JSON.stringify(profile).slice(0, 500)}`;
+          }).join("\n");
       }
     }
 
