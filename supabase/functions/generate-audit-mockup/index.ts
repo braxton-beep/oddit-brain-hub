@@ -92,17 +92,27 @@ serve(async (req) => {
         .limit(3);
     }
 
-    // Recommendation prompt templates from insights (#4)
+    // Recommendation insights — effectiveness-weighted (converted > implemented > frequency)
     if (targetRec) {
-      const category = (targetRec.section || "").toLowerCase();
       contextPromises.recTemplates = supabase
         .from("recommendation_insights")
-        .select("recommendation_text, template_content, category, frequency_count")
-        .order("frequency_count", { ascending: false })
+        .select("recommendation_text, template_content, category, frequency_count, effectiveness_score, converted_count, implemented_count, skipped_count")
+        .order("effectiveness_score", { ascending: false })
+        .limit(30);
+    }
+
+    // Design language profiles for same-client + same-industry files
+    if (audit.client_name) {
+      contextPromises.designProfiles = supabase
+        .from("figma_files")
+        .select("name, client_name, design_type, design_data")
+        .eq("enabled", true)
+        .not("design_data->design_language_profile", "is", null)
+        .order("last_modified", { ascending: false })
         .limit(20);
     }
 
-    // Starred mockup references — find high-rated mockups from past audits (#1)
+    // Starred mockup references — find high-rated mockups from past audits
     contextPromises.starredMockups = supabase
       .from("cro_audits")
       .select("recommendations")
